@@ -1,0 +1,1200 @@
+diff --git a/base/app/build.gradle.kts b/base/app/build.gradle.kts
+index 6ba7e50..39b29e3 100644
+--- a/base/app/build.gradle.kts
++++ b/base/app/build.gradle.kts
+@@ -25,8 +25,8 @@ android {
+     val version = (findProperty("appVersionName") as String?) ?: "2.0.1"
+     val beta = findProperty("appVersionName") == null || version.contains("-")
+     defaultConfig {
+-        applicationId = if (beta) "app.myspoti" else "app.myspoti.stable"
+-        manifestPlaceholders["appLabel"] = if (beta) "Myspoti Beta" else "Myspoti"
++        applicationId = "app.myspoti.hangul"
++        manifestPlaceholders["appLabel"] = "Myspoti 한글"
+         // The adb command line (com.music.spotui.cli): betas and debug builds only.
+         manifestPlaceholders["cliEnabled"] = beta.toString()
+         minSdk = 29
+@@ -95,6 +95,9 @@ android {
+             if (!beta) proguardFiles("proguard-strip-logs.pro")
+         }
+     }
++    packaging {
++        resources.merges += listOf("META-INF/CONTRIBUTORS.md", "META-INF/LICENSE*", "META-INF/NOTICE*")
++    }
+     compileOptions {
+         sourceCompatibility = JavaVersion.VERSION_17
+         targetCompatibility = JavaVersion.VERSION_17
+@@ -103,6 +106,8 @@ android {
+ 
+ dependencies {
+     implementation(project(":host-android"))
++    implementation("org.jsoup:jsoup:1.21.2")
++    implementation("com.atilika.kuromoji:kuromoji-ipadic:0.9.0")
+     // Third-party extensions: the sandbox (Rhino), manifests, packages and catalogues.
+     implementation(project(":extensions"))
+     // Jam: scan the invite QR code (Google code scanner, no camera permission).
+diff --git a/base/app/proguard-rules.pro b/base/app/proguard-rules.pro
+index 318e340..5970a19 100644
+--- a/base/app/proguard-rules.pro
++++ b/base/app/proguard-rules.pro
+@@ -52,6 +52,10 @@
+     <init>();
+ }
+ 
++# Kuromoji locates its dictionary resources and token factory through class names.
++-keep class com.atilika.kuromoji.** { *; }
++-keep class com.music.spotui.data.api.HangulReadingEngine { *; }
++
+ # Native UI (Spotui port) + Spotify data layer
+ -keep class com.metrolist.spotify.models.** { *; }
+ -keep class com.music.spotui.data.entity.** { *; }
+diff --git a/base/app/src/main/java/com/music/spotui/data/api/HangulReadingEngine.java b/base/app/src/main/java/com/music/spotui/data/api/HangulReadingEngine.java
+new file mode 100644
+index 0000000..1742365
+--- /dev/null
++++ b/base/app/src/main/java/com/music/spotui/data/api/HangulReadingEngine.java
+@@ -0,0 +1,545 @@
++// @file HangulReadingEngine.java
++// @author: ForUltraplayer
++// @brief Match existing Korean readings to original Japanese lyrics, including covers.
++package com.music.spotui.data.api;
++
++import com.atilika.kuromoji.ipadic.Token;
++import com.atilika.kuromoji.ipadic.Tokenizer;
++import org.jsoup.Jsoup;
++import org.jsoup.nodes.Document;
++import org.jsoup.nodes.Element;
++import org.jsoup.nodes.Node;
++import org.jsoup.nodes.TextNode;
++
++import java.io.ByteArrayOutputStream;
++import java.io.IOException;
++import java.io.InputStream;
++import java.net.HttpURLConnection;
++import java.net.URI;
++import java.net.URLEncoder;
++import java.text.Normalizer;
++import java.util.ArrayDeque;
++import java.util.ArrayList;
++import java.util.Arrays;
++import java.util.HashMap;
++import java.util.HashSet;
++import java.util.LinkedHashMap;
++import java.util.LinkedHashSet;
++import java.util.List;
++import java.util.Locale;
++import java.util.Map;
++import java.util.Set;
++import java.util.function.Function;
++import java.util.regex.Pattern;
++
++final class HangulReadingEngine {
++    static final String MISSING = "(발음 자료 없음)";
++    private static final Pattern JAPANESE = Pattern.compile("[\\u3040-\\u30ff\\u3400-\\u9fff]");
++    private static final Pattern HANGUL = Pattern.compile("[가-힣]");
++    private static final Pattern COVER = Pattern.compile("(?i)\\bcover(?:ed)?\\b|歌ってみた|カバー|커버(?:곡)?");
++    private static final Set<String> BLOCKS = new HashSet<>(Arrays.asList(
++            "br", "p", "div", "tr", "li", "h1", "h2", "h3", "h4", "hr", "table", "td", "th"));
++    private static final String OLD = "歸拂戾敎隱殘當氣會黑變淸顏淚體廣聲實覺繼續戀惡發邊點國區滿亂從專兩應眞樂處戰爭爲橫樣噓";
++    private static final String NEW = "帰払戻教隠残当気会黒変清顔涙体広声実覚継続恋悪発辺点国区満乱従専両応真楽処戦争為横様嘘";
++    private Tokenizer tokenizer;
++    private static final ThreadLocal<Long> requestDeadline = new ThreadLocal<>();
++    private final Map<String, String> kanaCache = new LinkedHashMap<String, String>(256, .75f, true) {
++        @Override protected boolean removeEldestEntry(Map.Entry<String, String> e) { return size() > 4096; }
++    };
++
++    interface Fetcher { String get(String url) throws IOException; }
++
++    static final class Page {
++        final List<String> lines;
++        final List<String> links;
++        final String title;
++        Page(List<String> lines, List<String> links, String title) {
++            this.lines = lines; this.links = links; this.title = title;
++        }
++    }
++
++    static final class Pair {
++        final String original, reading;
++        Pair(String original, String reading) { this.original = original; this.reading = cleanReading(reading); }
++    }
++
++    static final class Result {
++        final List<String> readings;
++        final int matched, total;
++        final String source;
++        Result(List<String> readings, int matched, int total, String source) {
++            this.readings = readings; this.matched = matched; this.total = total; this.source = source;
++        }
++        boolean valid() { return total >= 3 && matched >= Math.min(5, total) && matched >= .85 * total; }
++    }
++
++    static boolean japanese(String text) { return text != null && JAPANESE.matcher(text).find(); }
++    static String clean(String text) {
++        return text.replace("\u200b", "").replaceAll("\\[\\d+\\]", "").replaceAll("\\s+", " ").trim();
++    }
++    static String cleanReading(String text) {
++        return text.replaceFirst("^\\s*(?:〔문장\\s*전체〕|\\[문장\\s*전체\\])\\s*", "");
++    }
++    static String normalize(String text) {
++        String value = Normalizer.normalize(clean(text), Normalizer.Form.NFKC).toLowerCase(Locale.ROOT);
++        StringBuilder out = new StringBuilder();
++        for (char c : value.toCharArray()) {
++            int old = OLD.indexOf(c);
++            if (old >= 0) c = NEW.charAt(old);
++            if (c >= 'ァ' && c <= 'ヶ') c -= 0x60;
++            if (Character.isLetterOrDigit(c)) out.append(c);
++        }
++        return out.toString().replace("匂い", "におい").replaceAll("([か-もや-ろ])\\1+(?=っ)", "$1");
++    }
++
++    static String checkedUrl(String url) throws IOException {
++        try {
++            URI uri = URI.create(url);
++            String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
++            if (!"https".equals(uri.getScheme()) || uri.getUserInfo() != null
++                    || (uri.getPort() != -1 && uri.getPort() != 443)
++                    || !(host.equals("namu.wiki") || host.endsWith(".tistory.com")
++                    || (host.equals("haneum.site") && uri.getPath().matches("/songs(?:/[^/]+)?")))) {
++                throw new IOException("한음, 나무위키 또는 티스토리 HTTPS 가사 주소를 입력해 주세요.");
++            }
++            return new URI(uri.getScheme(), uri.getAuthority(), uri.getPath(), uri.getQuery(), null).toASCIIString();
++        } catch (IllegalArgumentException | java.net.URISyntaxException e) {
++            throw new IOException("문서 주소를 확인해 주세요.");
++        }
++    }
++
++    static String fetch(String input) throws IOException {
++        String url = checkedUrl(input);
++        for (int redirects = 0; redirects <= 3; redirects++) {
++            if (Thread.currentThread().isInterrupted()) throw new IOException("조회 취소");
++            HttpURLConnection connection = (HttpURLConnection) URI.create(url).toURL().openConnection();
++            try {
++                connection.setInstanceFollowRedirects(false);
++                connection.setConnectTimeout(remainingTimeout());
++                connection.setReadTimeout(remainingTimeout());
++                connection.setRequestProperty("User-Agent", "ivLyricsHangul/0.1 (personal lyric reader)");
++                connection.setRequestProperty("Accept", "text/html");
++                connection.setRequestProperty("Accept-Encoding", "identity");
++                int status = connection.getResponseCode();
++                if (status >= 300 && status < 400) {
++                    String location = connection.getHeaderField("Location");
++                    if (location == null) throw new IOException("문서 이동 주소 없음");
++                    url = checkedUrl(URI.create(url).resolve(location).toString());
++                    continue;
++                }
++                if (status != 200) throw new IOException("문서 조회 HTTP " + status);
++                String type = connection.getContentType();
++                if (type == null || !(type.startsWith("text/html") || type.startsWith("application/xhtml+xml")))
++                    throw new IOException("HTML 문서가 아닙니다.");
++                try (InputStream in = connection.getInputStream(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
++                    byte[] buffer = new byte[8192];
++                    int count;
++                    while ((count = in.read(buffer)) != -1) {
++                        if (Thread.currentThread().isInterrupted()) throw new IOException("조회 취소");
++                        remainingTimeout();
++                        if (out.size() + count > 3_000_000) throw new IOException("문서 크기 제한 초과");
++                        out.write(buffer, 0, count);
++                    }
++                    return out.toString("UTF-8");
++                }
++            } finally { connection.disconnect(); }
++        }
++        throw new IOException("문서 이동 횟수 초과");
++    }
++
++    private static int remainingTimeout() throws IOException {
++        Long deadline = requestDeadline.get();
++        long remaining = deadline == null ? 6500 : (deadline - System.nanoTime()) / 1_000_000;
++        if (remaining <= 0 || Thread.currentThread().isInterrupted()) throw new IOException("조회 취소 또는 시간 초과");
++        return (int)Math.min(6500, remaining);
++    }
++
++    static Page parse(String html) {
++        Document doc = Jsoup.parse(html);
++        String title = doc.title();
++        doc.select("script,style,rt,rp,sup,nav,footer,noscript,a[href^=\"#fn\"],a[href^=\"#rfn\"],a[href^=\"#footnote\"]").remove();
++        List<String> links = new ArrayList<>();
++        for (Element a : doc.select("a[href^=\"/w/\"],a[href^=\"/songs/\"]")) {
++            String href = a.attr("href").split("#", 2)[0];
++            if (!links.contains(href)) links.add(href);
++        }
++        List<String> haneum = new ArrayList<>();
++        for (Element row : doc.select("div.border-b")) {
++            List<String> columns = new ArrayList<>();
++            for (Element child : row.children()) if (child.normalName().equals("p")) columns.add(clean(child.text()));
++            if (columns.size() == 3) {
++                haneum.add(columns.get(1)); haneum.add(columns.get(0)); haneum.add(columns.get(2));
++            }
++        }
++        if (!haneum.isEmpty()) return new Page(haneum, links, title);
++        StringBuilder body = new StringBuilder();
++        appendVisible(doc.body(), body);
++        List<String> lines = new ArrayList<>();
++        for (String line : body.toString().split("\n")) if (!clean(line).isEmpty() && !clean(line).matches("[xX×]\\s*\\d{1,3}")) lines.add(clean(line));
++        return new Page(lines, links, title);
++    }
++
++    private static void appendVisible(Node node, StringBuilder out) {
++        if (node instanceof TextNode) {
++            String text = ((TextNode) node).getWholeText();
++            if (!clean(text).matches("[xX×]\\s*\\d{1,3}")) out.append(text);
++            return;
++        }
++        if (BLOCKS.contains(node.nodeName())) out.append('\n');
++        for (Node child : node.childNodes()) appendVisible(child, out);
++        if (BLOCKS.contains(node.nodeName())) out.append('\n');
++    }
++
++    List<Pair> pairs(Page page) {
++        List<Pair> pairs = new ArrayList<>();
++        for (int i = 0; i + 2 < page.lines.size(); i++) {
++            String original = page.lines.get(i), reading = page.lines.get(i + 1), translation = page.lines.get(i + 2);
++            if (!japanese(original) || HANGUL.matcher(original).find() || original.length() > 350
++                    || !HANGUL.matcher(reading).find() || japanese(reading) || reading.length() > 500
++                    || !HANGUL.matcher(translation).find() || japanese(translation) || normalize(original).length() < 2) continue;
++            if (readingSimilarity(original, reading) >= .45) pairs.add(new Pair(original, reading));
++        }
++        return pairs;
++    }
++
++    String kana(String text) {
++        if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
++        String key = normalize(text), cached = kanaCache.get(key);
++        if (cached != null) return cached;
++        if (tokenizer == null) tokenizer = new Tokenizer();
++        StringBuilder result = new StringBuilder();
++        for (Token token : tokenizer.tokenize(key)) {
++            String reading = token.getReading();
++            result.append(reading == null || "*".equals(reading) ? token.getSurface() : reading);
++        }
++        String value = normalize(result.toString());
++        kanaCache.put(key, value);
++        return value;
++    }
++
++    private static final Map<String, String> ROMAJI = new HashMap<>();
++    private static final Map<String, String> TITLE_HANGUL = new HashMap<>();
++    static {
++        String chars = "あいうえおかきくけこがぎぐげごさしすせそざじずぜぞたちつてとだぢづでどなにぬねのはひふへほばびぶべぼぱぴぷぺぽまみむめもやゆよらりるれろわをんぁぃぅぇぉゔ";
++        String[] sounds = ("a i u e o ka ki ku ke ko ga gi gu ge go sa shi su se so za ji zu ze zo ta chi tsu te to da ji zu de do na ni nu ne no ha hi fu he ho ba bi bu be bo pa pi pu pe po ma mi mu me mo ya yu yo ra ri ru re ro wa o n a i u e o vu").split(" ");
++        for (int i = 0; i < chars.length(); i++) ROMAJI.put(chars.substring(i, i + 1), sounds[i]);
++        String[] korean = ("아 이 우 에 오 카 키 쿠 케 코 가 기 구 게 고 사 시 스 세 소 자 지 즈 제 조 타 치 츠 테 토 다 지 즈 데 도 나 니 누 네 노 하 히 후 헤 호 바 비 부 베 보 파 피 푸 페 포 마 미 무 메 모 야 유 요 라 리 루 레 로 와 오 ㄴ 아 이 우 에 오 부").split(" ");
++        for (int i = 0; i < chars.length(); i++) TITLE_HANGUL.put(chars.substring(i,i+1),korean[i]);
++        String[] roots = "き ぎ し じ ち に ひ び ぴ み り".split(" ");
++        String[] stems = "ky gy sh j ch ny hy by py my ry".split(" ");
++        for (int i = 0; i < roots.length; i++) {
++            ROMAJI.put(roots[i] + "ゃ", stems[i] + "a");
++            ROMAJI.put(roots[i] + "ゅ", stems[i] + "u");
++            ROMAJI.put(roots[i] + "ょ", stems[i] + "o");
++        }
++        String[] joined = "캬 큐 쿄 갸 규 교 샤 슈 쇼 자 주 조 차 추 초 냐 뉴 뇨 햐 휴 효 뱌 뷰 뵤 퍄 퓨 표 먀 뮤 묘 랴 류 료".split(" ");
++        for (int i=0;i<roots.length;i++) for(int j=0;j<3;j++) TITLE_HANGUL.put(roots[i]+"ゃゅょ".charAt(j),joined[i*3+j]);
++        String[] foreign = "てぃ 티 でぃ 디 とぅ 투 どぅ 두 ふぁ 파 ふぃ 피 ふぇ 페 ふぉ 포 うぃ 위 うぇ 웨 うぉ 워 しぇ 셰 じぇ 제 ちぇ 체 ゔぁ 바 ゔぃ 비 ゔぇ 베 ゔぉ 보".split(" ");
++        for(int i=0;i<foreign.length;i+=2) TITLE_HANGUL.put(foreign[i],foreign[i+1]);
++    }
++
++    /** Search alias only: never used as the lyric reading shown to the user. */
++    static String koreanTitleAlias(String title) {
++        String text=normalize(title);
++        StringBuilder out=new StringBuilder();
++        for(int i=0;i<text.length();i++) {
++            char c=text.charAt(i);
++            if(c=='ー') continue;
++            if(c=='ん' || c=='っ') {
++                if(out.length()==0) return "";
++                char previous=out.charAt(out.length()-1);
++                if(previous<'가' || previous>'힣' || (previous-'가')%28!=0) return "";
++                out.setCharAt(out.length()-1,(char)(previous+(c=='ん'?4:19)));
++                continue;
++            }
++            String value=i+1<text.length()?TITLE_HANGUL.get(text.substring(i,i+2)):null;
++            if(value!=null) i++; else value=TITLE_HANGUL.get(String.valueOf(c));
++            if(value==null) return "";
++            out.append(value);
++        }
++        return out.toString();
++    }
++
++    static String romanize(String text) {
++        StringBuilder out = new StringBuilder();
++        boolean doubled = false;
++        for (int i = 0; i < text.length(); i++) {
++            char c = text.charAt(i);
++            if (c == 'っ') { doubled = true; continue; }
++            String sound = i + 1 < text.length() ? ROMAJI.get(text.substring(i, i + 2)) : null;
++            if (sound != null) i++;
++            else sound = ROMAJI.get(String.valueOf(c));
++            if (sound == null) sound = c < 128 && Character.isLetter(c) ? String.valueOf(c) : "";
++            if (doubled && !sound.isEmpty()) out.append(sound.charAt(0));
++            doubled = false;
++            out.append(sound);
++        }
++        return out.toString();
++    }
++
++    double readingSimilarity(String japanese, String korean) {
++        String[] onset = "g k n d t r m b p s s _ j j ch k t p h".split(" ");
++        String[] vowel = "a ae ya yae eo e yeo ye o wa wae oe yo u wo we wi yu eu ui i".split(" ");
++        String[] last = "_ k k k n n n t r k m p r r p r m p p t t n t t k t p h".split(" ");
++        StringBuilder latin = new StringBuilder();
++        for (char c : korean.toCharArray()) {
++            int value = c - 0xac00;
++            if (value >= 0 && value < 11172) latin.append(onset[value / 588]).append(vowel[value % 588 / 28]).append(last[value % 28]);
++            else if (c < 128 && Character.isLetter(c)) latin.append(Character.toLowerCase(c));
++        }
++        return similarity(soundKey(romanize(kana(japanese))), soundKey(latin.toString().replace("_", "")));
++    }
++
++    private static String soundKey(String value) {
++        String[][] replacements = {{"shi","si"},{"chi","ti"},{"tsu","cu"},{"cheu","cu"},{"fu","hu"},{"ji","zi"},
++                {"syo","sio"},{"sho","sio"},{"eu","u"},{"eo","o"},{"ou","o"}};
++        for (String[] pair : replacements) value = value.replace(pair[0], pair[1]);
++        return value.replace('g','k').replace('d','t').replace('b','p').replaceAll("(.)\\1+", "$1");
++    }
++
++    // SequenceMatcher-style ordered matching blocks. Bound CPU and memory for untrusted pages.
++    static int[] mapping(String a, String b) {
++        int[] map = new int[a.length()]; Arrays.fill(map, -1);
++        if (a.length() > 12000 || b.length() > 24000) return map;
++        ArrayDeque<int[]> work = new ArrayDeque<>(); work.add(new int[]{0, a.length(), 0, b.length()});
++        long budget = 80_000_000;
++        while (!work.isEmpty()) {
++            int[] part = work.removeFirst();
++            long cells = (long)(part[1]-part[0]) * (part[3]-part[2]);
++            if ((budget -= cells) < 0 || Thread.currentThread().isInterrupted()) break;
++            int width = part[3] - part[2], best = 0, ai = 0, bi = 0;
++            int[] previous = new int[width + 1], current = new int[width + 1];
++            for (int i = part[0]; i < part[1]; i++) {
++                Arrays.fill(current, 0);
++                for (int j = 0; j < width; j++) if (a.charAt(i) == b.charAt(part[2] + j)) {
++                    current[j + 1] = previous[j] + 1;
++                    if (current[j + 1] > best) { best = current[j + 1]; ai = i - best + 1; bi = part[2] + j - best + 1; }
++                }
++                int[] swap = previous; previous = current; current = swap;
++            }
++            if (best == 0) continue;
++            for (int i = 0; i < best; i++) map[ai + i] = bi + i;
++            if (part[0] < ai && part[2] < bi) work.add(new int[]{part[0], ai, part[2], bi});
++            if (ai + best < part[1] && bi + best < part[3]) work.add(new int[]{ai + best, part[1], bi + best, part[3]});
++        }
++        return map;
++    }
++
++    static double similarity(String a, String b) {
++        if (a.isEmpty() || b.isEmpty()) return 0;
++        int matches = 0; for (int n : mapping(a,b)) if (n >= 0) matches++;
++        return 2.0 * matches / (a.length() + b.length());
++    }
++
++    Result align(List<String> originals, List<Pair> pairs, String source, boolean byKana) {
++        Function<String,String> keyOf = byKana ? this::kana : HangulReadingEngine::normalize;
++        List<String> keys = new ArrayList<>();
++        Map<String,String> lookup = new LinkedHashMap<>();
++        StringBuilder page = new StringBuilder();
++        List<int[]> ranges = new ArrayList<>();
++        for (Pair pair : pairs) {
++            String key = keyOf.apply(pair.original); keys.add(key); lookup.putIfAbsent(key, pair.reading);
++            ranges.add(new int[]{page.length(), page.length() + key.length()}); page.append(key);
++        }
++        for (int width = 2; width <= 3; width++) for (int i = 0; i + width <= keys.size(); i++) {
++            StringBuilder key = new StringBuilder(), text = new StringBuilder();
++            for (int j = i; j < i + width; j++) { key.append(keys.get(j)); if (j > i) text.append(' '); text.append(pairs.get(j).reading); }
++            lookup.putIfAbsent(key.toString(), text.toString());
++        }
++        List<String> songKeys = new ArrayList<>(); StringBuilder song = new StringBuilder();
++        for (String row : originals) { String key = japanese(row) ? keyOf.apply(row) : ""; songKeys.add(key); song.append(key); }
++        int[] map = mapping(song.toString(), page.toString());
++        List<String> output = new ArrayList<>(); int position = 0, matched = 0, total = 0;
++        for (int index = 0; index < originals.size(); index++) {
++            String original = originals.get(index), key = songKeys.get(index);
++            if (!japanese(original)) { output.add(original); continue; }
++            total++;
++            String reading = lookup.get(key);
++            if (reading == null && key.length() >= 6) {
++                double best = .939999; String candidate = null; boolean ambiguous = false;
++                for (int j = 0; j < keys.size(); j++) {
++                    double size = 1.0 * keys.get(j).length() / key.length();
++                    if (size < .9 || size > 1.1) continue;
++                    double score = similarity(key, keys.get(j));
++                    if (score > best) { best = score; candidate = pairs.get(j).reading; ambiguous = false; }
++                    else if (score == best && candidate != null && !candidate.equals(pairs.get(j).reading)) ambiguous = true;
++                }
++                if (!ambiguous) reading = candidate;
++            }
++            if (reading == null && !key.isEmpty()) {
++                int first = Integer.MAX_VALUE, last = -1, count = 0;
++                for (int i = position; i < position + key.length(); i++) if (map[i] >= 0) { count++; first = Math.min(first,map[i]); last = Math.max(last,map[i]); }
++                if (count >= .94 * key.length() && last + 1 - first <= key.length() * 1.2) {
++                    List<String> selected = new ArrayList<>();
++                    for (int j = 0; j < ranges.size(); j++) if (ranges.get(j)[0] <= last && ranges.get(j)[1] > first) selected.add(pairs.get(j).reading);
++                    if (!selected.isEmpty() && selected.size() <= 3) reading = String.join(" ", selected);
++                }
++            }
++            position += key.length();
++            if (reading == null) output.add(MISSING); else { output.add(cleanReading(reading)); matched++; }
++        }
++        return new Result(output, matched, total, source);
++    }
++
++    Result match(List<String> originals, Page page, String source) {
++        List<Pair> pairs = pairs(page);
++        Result raw = align(originals, pairs, source, false);
++        if (raw.valid() || pairs.isEmpty()) return raw;
++        Result phonetic = align(originals, pairs, source, true);
++        return phonetic.matched > raw.matched ? phonetic : raw;
++    }
++
++    static List<String> titles(String title, String artist) {
++        LinkedHashSet<String> candidates = new LinkedHashSet<>();
++        String normalized = Normalizer.normalize(title, Normalizer.Form.NFKC).replace('【','[').replace('】',']').replace('「','[').replace('」',']');
++        String text = normalized.replaceAll("(?i)[\\[(][^\\])]*(?:cover|歌ってみた|カバー|커버)[^\\])]*[\\])]", " ");
++        text = text.replaceAll("(?i)\\s*[\\[(]\\s*(?:feat\\.?|ft\\.?)\\s+[^\\])]*[\\])]", "");
++        text = text.replaceAll("(?i)\\s*[-–—]\\s*(?:feat\\.?|ft\\.?)\\s+.*$", "");
++        text = text.replaceAll("(?i)^\\s*(?:cover(?:ed)?\\s+(?:of\\s+)?|カバー[:：\\s]+|커버[:：\\s]+)", "");
++        text = text.replaceAll("(?i)\\s*(?:[/|—–-]\\s*)?(?:covered\\s+by|cover\\s+by)\\b.*$", "");
++        text = text.replaceAll("(?i)\\s*[-(]\\s*(?:remaster|live|radio|instrumental|edit|acoustic).*", "");
++        text = text.replaceAll("(?i)\\s*(?:[/|—–-]\\s*)?(?:cover(?:\\s+ver(?:sion)?\\.?)?|歌ってみた|カバー|커버(?:곡)?)\\s*$", "");
++        List<String> pieces = Arrays.asList(text.split("\\s+[-–—|/]\\s*|\\s*[/／]\\s*"));
++        for (boolean japaneseFirst : new boolean[]{true,false}) for (String part : pieces) {
++            String value = part.trim(), key = normalize(value);
++            if (value.isEmpty() || COVER.matcher(value).matches() || normalize(artist).contains(key)
++                    || Arrays.asList("kenshiyonezu","米津玄師","요네즈켄시","yoasobi").contains(key)) continue;
++            if (!japaneseFirst || japanese(value)) candidates.add(value);
++        }
++        String koreanAlias=koreanTitleAlias(text.trim());
++        if(!koreanAlias.isEmpty()) candidates.add(koreanAlias);
++        candidates.add(text.trim()); candidates.add(title.trim()); candidates.remove("");
++        return new ArrayList<>(candidates).subList(0, Math.min(5,candidates.size()));
++    }
++
++    static String encode(String text) {
++        try { return URLEncoder.encode(text, "UTF-8").replace("+", "%20"); }
++        catch (java.io.UnsupportedEncodingException e) { throw new AssertionError(e); }
++    }
++
++    Result resolve(String title, String artist, List<String> originals, String sourceUrl, Fetcher fetcher) throws IOException {
++        return resolve(title, artist, originals, sourceUrl, "", fetcher);
++    }
++
++    Result resolve(String title, String artist, List<String> originals, String sourceUrl, String learnedUrl, Fetcher fetcher) throws IOException {
++        if (title.length() > 300 || artist.length() > 500 || String.join("\n", originals).length() > 40000)
++            throw new IOException("곡 정보 또는 가사 길이 제한 초과");
++        List<String> titles = titles(title, artist);
++        ArrayDeque<String> pending = new ArrayDeque<>();
++        boolean manual = sourceUrl != null && !sourceUrl.trim().isEmpty();
++        if (manual) pending.add(checkedUrl(sourceUrl.trim()));
++        else {
++            if (learnedUrl != null && !learnedUrl.isEmpty()) pending.add(checkedUrl(learnedUrl));
++            for (String name : titles.subList(0, Math.min(3,titles.size()))) {
++            pending.add("https://namu.wiki/w/" + encode(name));
++            if ((title + artist).toLowerCase(Locale.ROOT).matches(".*(?:kenshi|yonezu|米津玄師|요네즈).*"))
++                pending.add("https://namu.wiki/w/" + encode(name + "(요네즈 켄시)"));
++            }
++        }
++        List<String[]> searches = new ArrayList<>();
++        for (String name : titles.subList(0, Math.min(2,titles.size()))) searches.add(new String[]{"https://haneum.site/songs?q=" + encode(name), "haneum"});
++        if (!titles.isEmpty()) searches.add(new String[]{titles.get(0), "title"});
++        for (String name : titles.subList(0, Math.min(2,titles.size()))) searches.add(new String[]{name, "content"});
++        int fragments = 0;
++        for (String row : originals) if (japanese(row) && !HANGUL.matcher(row).find() && normalize(row).length() >= 10 && fragments++ < 2)
++            searches.add(new String[]{row.substring(0,Math.min(100,row.length())), "content"});
++        Set<String> visited = new HashSet<>();
++        long deadline = System.nanoTime() + 32_000_000_000L;
++        requestDeadline.set(deadline);
++        int search = 0;
++        try {
++        while (System.nanoTime() < deadline && !Thread.currentThread().isInterrupted() && visited.size() < 20) {
++            if (pending.isEmpty()) {
++                if (manual || search >= searches.size()) break;
++                String[] query = searches.get(search++);
++                boolean haneum = query[1].equals("haneum");
++                String url = haneum ? query[0] : "https://namu.wiki/Search?q=" + encode(query[0]) + "&namespace=" + encode("문서") + "&target=" + query[1];
++                if (!visited.add(url)) continue;
++                try {
++                    Page page = parse(fetcher.get(url)); int count = 0;
++                    for (String link : page.links) {
++                        if (haneum != link.startsWith("/songs/")) continue;
++                        pending.add((haneum ? "https://haneum.site" : "https://namu.wiki") + link);
++                        if (++count >= (haneum ? 4 : 5)) break;
++                    }
++                }
++                catch (IOException ignored) { }
++                continue;
++            }
++            String url = pending.removeFirst(); if (!visited.add(url)) continue;
++            try {
++                String markup = fetcher.get(url);
++                if (Thread.currentThread().isInterrupted()) throw new IOException("조회 취소");
++                Page page = parse(markup); Result result = match(originals, page, url);
++                if (Thread.currentThread().isInterrupted()) throw new IOException("조회 취소");
++                if (result.valid()) return result;
++                Set<String> names = new HashSet<>();
++                for (String candidate : titles) names.add(normalize(candidate));
++                names.add(normalize(page.title.replaceFirst("\\s*[-–]\\s*나무위키\\s*$", "").split("\\(", 2)[0]));
++                if (!manual) for (String link : page.links) {
++                    if (!link.startsWith("/w/")) continue;
++                    String name;
++                    try { name = java.net.URLDecoder.decode(link.substring(3), "UTF-8"); } catch (Exception e) { continue; }
++                    if (!name.contains("(")) continue;
++                    String base = normalize(name.substring(0,name.indexOf('(')));
++                    if (names.contains(base) && !visited.contains("https://namu.wiki"+link)) {
++                        if (pending.size() < 12) pending.addFirst("https://namu.wiki"+link);
++                    }
++                }
++            } catch (IOException ignored) { }
++        }
++        } finally { requestDeadline.remove(); }
++        throw new IOException("원문과 85% 이상 일치하는 한글 발음 자료를 찾지 못했습니다. 현재 곡 설정에서 자료 주소를 지정해 주세요.");
++    }
++
++    List<String> completeAutomatically(List<String> originals, List<String> authored) {
++        List<String> result = new ArrayList<>();
++        for (int row = 0; row < originals.size(); row++) {
++            String original = originals.get(row);
++            String existing = authored == null ? (japanese(original) ? MISSING : original) : authored.get(row);
++            if (!MISSING.equals(existing) || !japanese(original)) { result.add(existing); continue; }
++            if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
++            if (tokenizer == null) tokenizer = new Tokenizer();
++            StringBuilder output = new StringBuilder();
++            for (Token token : tokenizer.tokenize(original)) {
++                String reading = token.getReading();
++                if (reading == null || reading.equals("*")) reading = token.getSurface();
++                if (token.getSurface().equals("は") && token.getPartOfSpeechLevel1().equals("助詞")) reading = "ワ";
++                if (token.getSurface().equals("へ") && token.getPartOfSpeechLevel1().equals("助詞")) reading = "エ";
++                output.append(kanaToHangul(reading));
++            }
++            String value = output.toString();
++            result.add(HANGUL.matcher(value).find() ? value : MISSING);
++        }
++        return result;
++    }
++
++    static String kanaToHangul(String input) {
++        String text = Normalizer.normalize(input, Normalizer.Form.NFKC);
++        StringBuilder hiragana = new StringBuilder();
++        for (char c : text.toCharArray()) hiragana.append(c >= 'ァ' && c <= 'ヶ' ? (char)(c - 0x60) : c);
++        text = hiragana.toString();
++        StringBuilder result = new StringBuilder();
++        String[] vowels = {"아","애","아","애","어","에","어","에","오","아","애","에","오","우","어","에","이","우","으","이","이"};
++        for (int i = 0; i < text.length(); i++) {
++            char c = text.charAt(i), next = i + 1 < text.length() ? text.charAt(i + 1) : '\0';
++            if (c == 'っ' || c == 'ん') {
++                int batchim = c == 'ん' ? ("まみむめもばびぶべぼぱぴぷぺぽ".indexOf(next) >= 0 ? 16 : 4)
++                        : ("かきくけこがぎぐげご".indexOf(next) >= 0 ? 1 : "ぱぴぷぺぽばびぶべぼ".indexOf(next) >= 0 ? 17 : 19);
++                int last = result.length() - 1;
++                if (last >= 0 && result.charAt(last) >= '가' && result.charAt(last) <= '힣' && (result.charAt(last) - '가') % 28 == 0)
++                    result.setCharAt(last, (char)(result.charAt(last) + batchim));
++                else result.append(c == 'ん' ? "응" : "읏");
++            } else if (c == 'ー') {
++                int last = result.length() - 1, offset = last >= 0 ? result.charAt(last) - '가' : -1;
++                result.append(offset >= 0 && offset < 11172 ? vowels[offset % 588 / 28] : "ー");
++            } else {
++                String pair = i + 1 < text.length() ? TITLE_HANGUL.get(text.substring(i, i + 2)) : null;
++                if (pair != null) { result.append(pair); i++; }
++                else result.append(c == 'す' && next == 'ー' ? "수" : TITLE_HANGUL.getOrDefault(String.valueOf(c), String.valueOf(c)));
++            }
++        }
++        return result.toString();
++    }
++
++}
+diff --git a/base/app/src/main/java/com/music/spotui/data/api/HangulReadings.kt b/base/app/src/main/java/com/music/spotui/data/api/HangulReadings.kt
+new file mode 100644
+index 0000000..e38a6b6
+--- /dev/null
++++ b/base/app/src/main/java/com/music/spotui/data/api/HangulReadings.kt
+@@ -0,0 +1,112 @@
++// @file HangulReadings.kt
++// @author: ForUltraplayer
++// @brief Read authored Hangul lyrics with validated aliases and opt-in offline completion.
++package com.music.spotui.data.api
++
++import android.content.Context
++import com.music.spotui.data.entity.Lyrics
++import com.music.spotui.di.Graph
++import org.json.JSONArray
++import org.json.JSONObject
++import java.io.File
++import java.io.IOException
++import java.security.MessageDigest
++import java.util.concurrent.CancellationException
++import java.util.concurrent.locks.ReentrantLock
++
++object HangulReadings {
++    data class Result(val lines: List<String>, val source: String, val matched: Int, val total: Int, val generated: Int = 0)
++    private val engine by lazy { HangulReadingEngine() }
++    private val resolutionLock = ReentrantLock()
++    private val negative = object : LinkedHashMap<String, Long>() {
++        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?) = size > 100
++    }
++    private const val LIFETIME = 30L * 86400 * 1000
++    private fun prefs() = Graph.app.getSharedPreferences("hangul_readings", Context.MODE_PRIVATE)
++    fun enabled(): Boolean = prefs().getBoolean("enabled", true)
++    fun setEnabled(value: Boolean) { prefs().edit().putBoolean("enabled", value).apply() }
++    fun automaticEnabled(): Boolean = prefs().getBoolean("automatic", false)
++    fun setAutomatic(value: Boolean) { prefs().edit().putBoolean("automatic", value).apply() }
++    fun source(track: LyricsApi.Track): String = prefs().getString("source:${track.key}", "").orEmpty()
++    fun setSource(track: LyricsApi.Track, url: String) {
++        val value = if (url.isBlank()) "" else HangulReadingEngine.checkedUrl(url.trim())
++        prefs().edit().putString("source:${track.key}", value).apply()
++    }
++    fun japanese(lyrics: Lyrics): Boolean = lyrics.language?.substringBefore('-') == "ja"
++        || lyrics.lines.any { line -> line.text.any { it in '\u3040'..'\u30ff' } }
++    private fun digest(value: String) = MessageDigest.getInstance("SHA-256")
++        .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
++    private fun aliases() = runCatching { JSONObject(prefs().getString("aliases-v2", "{}").orEmpty()) }.getOrElse { JSONObject() }
++    private fun learnedSource(key: String): String = runCatching {
++        val entry = aliases().optJSONObject(key) ?: return@runCatching ""
++        if (System.currentTimeMillis() - entry.optLong("checkedAt") >= LIFETIME) return@runCatching ""
++        HangulReadingEngine.checkedUrl(entry.getString("url"))
++    }.getOrDefault("")
++    private fun rememberSource(key: String, url: String) {
++        if (!(url.startsWith("https://namu.wiki/w/") || url.startsWith("https://haneum.site/songs/"))) return
++        val entries = aliases().put(key, JSONObject().put("url", url).put("checkedAt", System.currentTimeMillis()))
++        while (entries.length() > 500) {
++            val oldest = entries.keys().asSequence().minByOrNull { entries.optJSONObject(it)?.optLong("checkedAt") ?: 0L } ?: break
++            entries.remove(oldest)
++        }
++        prefs().edit().putString("aliases-v2", entries.toString()).apply()
++    }
++    private fun complete(texts: List<String>, authored: Result): Result {
++        if (!automaticEnabled()) return authored
++        val lines = engine.completeAutomatically(texts, authored.lines)
++        val generated = texts.indices.count { authored.lines[it] == HangulReadingEngine.MISSING && lines[it] != HangulReadingEngine.MISSING }
++        return authored.copy(lines = lines, generated = generated)
++    }
++
++    /** The tokenizer and cache have one owner; cancelled waiters can leave immediately. */
++    fun resolve(track: LyricsApi.Track, lyrics: Lyrics, force: Boolean = false): Result {
++        resolutionLock.lockInterruptibly()
++        try { return resolveLocked(track, lyrics, force) }
++        finally { resolutionLock.unlock() }
++    }
++    private fun resolveLocked(track: LyricsApi.Track, lyrics: Lyrics, force: Boolean): Result {
++        val texts = lyrics.lines.map { it.text }
++        val url = source(track)
++        val key = digest(listOf("hangul-v2", track.title, track.artist, url, texts.joinToString("\n")).joinToString("|"))
++        val aliasTitle = HangulReadingEngine.titles(track.title, track.artist).firstOrNull().orEmpty()
++        val aliasKey = digest(HangulReadingEngine.normalize(aliasTitle) + "|" + HangulReadingEngine.normalize(track.artist))
++        val directory = File(Graph.app.filesDir, "hangul_readings_cache").apply { mkdirs() }
++        val file = File(directory, "$key.json")
++        if (!force && file.isFile && System.currentTimeMillis() - file.lastModified() < LIFETIME) {
++            val saved = runCatching {
++                val data = JSONObject(file.readText())
++                val rows = data.getJSONArray("lines")
++                require(rows.length() == texts.size)
++                Result(List(rows.length()) { rows.getString(it) }, data.getString("source"), data.getInt("matched"), data.getInt("total"))
++            }.getOrNull()
++            if (saved != null) return complete(texts, saved)
++        }
++        try {
++            if (Thread.currentThread().isInterrupted) throw InterruptedException()
++            if (!force && negative.getOrDefault(key, 0) > System.currentTimeMillis())
++                throw IOException("일치하는 기존 한글 발음 자료가 없습니다. 가사 메뉴에서 자료 주소를 지정해 주세요.")
++            val found = engine.resolve(track.title, track.artist, texts, url, learnedSource(aliasKey), HangulReadingEngine::fetch)
++            check(found.valid() && found.readings.size == texts.size)
++            val result = Result(found.readings, found.source, found.matched, found.total)
++            if (Thread.currentThread().isInterrupted) throw InterruptedException()
++            runCatching {
++                val data = JSONObject().put("lines", JSONArray(result.lines)).put("source", result.source)
++                    .put("matched", result.matched).put("total", result.total)
++                val temporary = File(directory, "$key.tmp")
++                temporary.writeText(data.toString())
++                if (!temporary.renameTo(file)) { file.writeText(data.toString()); temporary.delete() }
++                directory.listFiles()?.filter { it.extension == "json" }?.sortedByDescending { it.lastModified() }?.drop(500)?.forEach { it.delete() }
++                rememberSource(aliasKey, result.source)
++            }
++            negative.remove(key)
++            return complete(texts, result)
++        } catch (error: Exception) {
++            if (error is InterruptedException || error is CancellationException || Thread.currentThread().isInterrupted) throw error
++            if (error !is IOException) throw error
++            negative[key] = System.currentTimeMillis() + 600_000
++            if (!automaticEnabled()) throw error
++            val empty = Result(texts.map { if (HangulReadingEngine.japanese(it)) HangulReadingEngine.MISSING else it }, "", 0, texts.count(HangulReadingEngine::japanese))
++            return complete(texts, empty).also { if (it.generated == 0) throw error }
++        }
++    }
++}
+diff --git a/base/app/src/main/java/com/music/spotui/ui/screens/LyricsScreen.kt b/base/app/src/main/java/com/music/spotui/ui/screens/LyricsScreen.kt
+index 897778b..730aad2 100644
+--- a/base/app/src/main/java/com/music/spotui/ui/screens/LyricsScreen.kt
++++ b/base/app/src/main/java/com/music/spotui/ui/screens/LyricsScreen.kt
+@@ -258,6 +258,7 @@ private fun LyricLineText(
+     modifier: Modifier = Modifier,
+     annotated: Boolean = false,
+     onHold: (() -> Unit)? = null,
++    reading: String? = null,
+ ) {
+     val target = when (state) {
+         1 -> palette.text
+@@ -340,6 +341,15 @@ private fun LyricLineText(
+                 modifier = underline,
+             )
+         }
++        if (!reading.isNullOrBlank() && reading != line.text) {
++            Text(
++                text = reading,
++                color = color.copy(alpha = color.alpha * 0.85f),
++                fontSize = fontSize * 0.65f,
++                fontWeight = FontWeight.Medium,
++                modifier = Modifier.padding(top = 4.dp),
++            )
++        }
+         AnimatedVisibility(
+             visible = !translation.isNullOrBlank(),
+             enter = expandVertically(tween(260)) + fadeIn(tween(260)),
+@@ -387,6 +397,31 @@ fun LyricsScreen(
+     val context = LocalContext.current
+     val vm: LyricsViewModel = viewModel()
+     val state = rememberLyricsState(vm, title, artist)
++    var readingSourceDialog by remember { mutableStateOf(false) }
++    var readingSourceInput by remember { mutableStateOf("") }
++    var readingSourceError by remember { mutableStateOf<String?>(null) }
++    if (readingSourceDialog) {
++        androidx.compose.material3.AlertDialog(
++            onDismissRequest = { readingSourceDialog = false },
++            title = { Text("한글 발음 자료") },
++            text = { Column {
++                Text("기존 한글 발음을 가져옵니다. 빈 주소는 자동 검색입니다.")
++                androidx.compose.material3.OutlinedTextField(
++                    value = readingSourceInput,
++                    onValueChange = { readingSourceInput = it; readingSourceError = null },
++                    label = { Text("한음, 나무위키 또는 티스토리 HTTPS 주소") },
++                    isError = readingSourceError != null,
++                    modifier = Modifier.fillMaxWidth(),
++                )
++                readingSourceError?.let { Text(it) }
++            } },
++            confirmButton = { androidx.compose.material3.TextButton(onClick = {
++                val error = vm.setReadingSource(readingSourceInput)
++                if (error == null) readingSourceDialog = false else readingSourceError = error
++            }) { Text("저장하고 다시 조회") } },
++            dismissButton = { androidx.compose.material3.TextButton(onClick = { readingSourceDialog = false }) { Text("취소") } },
++        )
++    }
+     val lyrics = (state as? LyricsViewModel.State.Loaded)?.lyrics
+     val palette = paletteFor(lyrics, accentColor)
+     val bg by animateColorAsState(palette.background, tween(300), label = "lyricsBg")
+@@ -433,7 +468,11 @@ fun LyricsScreen(
+                 Icon(Icons.Default.KeyboardArrowDown, contentDescription = stringResource(R.string.lyrics_fullscreen_close_button_readout_value), tint = palette.highlight, modifier = Modifier.size(32.dp))
+             }
+             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+-                Text(title, color = palette.highlight, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
++                Text(title, color = palette.highlight, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
++                    modifier = Modifier.combinedClickable(onClick = {}, onLongClickLabel = "곡 제목 복사", onLongClick = {
++                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
++                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("곡 제목", title))
++                    }))
+                 Text(artist, color = palette.highlight.copy(alpha = 0.75f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+             }
+             meaning?.takeIf { !it.about.isNullOrBlank() }?.let { m ->
+@@ -460,6 +499,15 @@ fun LyricsScreen(
+                     expanded = menu,
+                     onDismiss = { menu = false },
+                     canTranslate = state is LyricsViewModel.State.Loaded,
++                    hangulEnabled = com.music.spotui.data.api.HangulReadings.enabled(),
++                    onHangulToggle = { vm.toggleHangul() },
++                    onHangulSource = { readingSourceInput = vm.readingSource(); readingSourceError = null; readingSourceDialog = true },
++                    automaticEnabled = com.music.spotui.data.api.HangulReadings.automaticEnabled(),
++                    onAutomaticToggle = { vm.toggleAutomaticReadings() },
++                    onCopyTitle = {
++                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
++                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("곡 제목", title))
++                    },
+                     translating = (state as? LyricsViewModel.State.Loaded)?.showTranslation == true,
+                     onTranslate = { vm.toggleTranslation(targetLanguage) },
+                     onReload = { SongPlayer.currentLyricsTrack()?.let { vm.load(it, force = true) } },
+@@ -529,6 +577,7 @@ fun LyricsScreen(
+                                 fontSize = 24.sp,
+                                 position = position,
+                                 translation = if (state.showTranslation) state.translations?.getOrNull(i) else null,
++                                reading = if (l == state.lyrics) state.readings?.getOrNull(i) else null,
+                                 onTap = if (l.synced) ({ jumpTo(line.timeMs) }) else null,
+                                 annotated = i in notes,
+                                 onHold = notes[i]?.let { n -> {
+@@ -539,6 +588,21 @@ fun LyricsScreen(
+                                 modifier = Modifier.revealIn(reveal, 0.35f + 0.045f * (i - staggerBase).coerceIn(0, 8), 22f),
+                             )
+                         }
++                        if (state.readingLoading) item(key="hangul-loading") {
++                            Text("기존 한글 발음 자료를 찾는 중",color=palette.highlight.copy(alpha=.8f),fontSize=12.sp)
++                        }
++                        state.readingError?.let { error -> item(key="hangul-error") {
++                            Text(error,color=palette.highlight.copy(alpha=.8f),fontSize=12.sp)
++                        } }
++                        if (state.readingGenerated > 0) item(key="hangul-automatic") {
++                            Text("기기 내부 자동 발음: ${state.readingGenerated}줄. 실제 노래의 읽기와 다를 수 있습니다.",
++                                color=palette.highlight.copy(alpha=.8f),fontSize=12.sp)
++                        }
++                        state.readingSource?.let { url -> item(key="hangul-source") {
++                            Text("한글 발음 출처: " + android.net.Uri.parse(url).host,
++                                color=palette.highlight.copy(alpha=.8f),fontSize=12.sp,
++                                modifier=Modifier.clickable { context.startActivity(Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url))) })
++                        } }
+                         l.provider?.let { p ->
+                             item {
+                                 Text(
+@@ -574,6 +638,12 @@ private fun LyricsMenu(
+     expanded: Boolean,
+     onDismiss: () -> Unit,
+     canTranslate: Boolean,
++    hangulEnabled: Boolean,
++    onHangulToggle: () -> Unit,
++    onHangulSource: () -> Unit,
++    automaticEnabled: Boolean,
++    onAutomaticToggle: () -> Unit,
++    onCopyTitle: () -> Unit,
+     translating: Boolean,
+     onTranslate: () -> Unit,
+     onReload: () -> Unit,
+@@ -582,6 +652,21 @@ private fun LyricsMenu(
+     var extra by remember { mutableStateOf(isLyricsExtraSources(context)) }
+     var words by remember { mutableStateOf(com.music.spotui.data.preferences.isLyricsWordSync(context)) }
+     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
++        DropdownMenuItem(text = { Text("곡 제목 복사") }, onClick = { onDismiss(); onCopyTitle() })
++        DropdownMenuItem(
++            text = { Text("기존 한글 발음 자동 조회") },
++            trailingIcon = { if (hangulEnabled) Icon(Icons.Default.Check, contentDescription = null) },
++            onClick = { onDismiss(); onHangulToggle() },
++        )
++        if (canTranslate) DropdownMenuItem(
++            text = { Text("한글 발음 자료 주소") },
++            onClick = { onDismiss(); onHangulSource() },
++        )
++        DropdownMenuItem(
++            text = { Text("누락 줄에 기기 내부 자동 발음 사용") },
++            trailingIcon = { if (automaticEnabled) Icon(Icons.Default.Check, contentDescription = null) },
++            onClick = { onDismiss(); onAutomaticToggle() },
++        )
+         // Word by word (karaoke) or line by line: the app then picks the source by itself.
+         DropdownMenuItem(
+             text = {
+@@ -791,6 +876,7 @@ fun InlineLyrics(
+                     fontSize = 22.sp,
+                     position = position,
+                     translation = null,
++                    reading = s.readings?.getOrNull(i),
+                     onTap = null,
+                 )
+             }
+diff --git a/base/app/src/main/java/com/music/spotui/ui/viewmodel/LyricsViewModel.kt b/base/app/src/main/java/com/music/spotui/ui/viewmodel/LyricsViewModel.kt
+index 9be3855..b94f929 100644
+--- a/base/app/src/main/java/com/music/spotui/ui/viewmodel/LyricsViewModel.kt
++++ b/base/app/src/main/java/com/music/spotui/ui/viewmodel/LyricsViewModel.kt
+@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
+ import androidx.lifecycle.viewModelScope
+ import com.music.spotui.data.api.LyricTranslate
+ import com.music.spotui.data.api.LyricsApi
++import com.music.spotui.data.api.HangulReadings
+ import com.music.spotui.data.entity.Lyrics
+ import kotlinx.coroutines.Dispatchers
+ import kotlinx.coroutines.flow.MutableStateFlow
+@@ -24,6 +25,11 @@ class LyricsViewModel constructor() : ViewModel() {
+             val translating: Boolean = false,
+             val translationChecked: Boolean = false,
+             val translationRequested: Boolean = false,
++            val readings: List<String>? = null,
++            val readingSource: String? = null,
++            val readingLoading: Boolean = false,
++            val readingError: String? = null,
++            val readingGenerated: Int = 0,
+         ) : State()
+         object NotFound : State()
+     }
+@@ -32,20 +38,27 @@ class LyricsViewModel constructor() : ViewModel() {
+     val state: StateFlow<State> = _state
+ 
+     private var loadedKey: String? = null
++    private var loadedTrack: LyricsApi.Track? = null
++    private var readingJob: kotlinx.coroutines.Job? = null
+ 
+     fun load(track: LyricsApi.Track, force: Boolean = false) {
+         val key = track.key
+         if (!force && loadedKey == key && _state.value !is State.NotFound) return
++        readingJob?.cancel()
+         loadedKey = key
++        loadedTrack = track
+         if (force) LyricsApi.forget(track)
+         // Already resolved (prefetched while the track started): no loading flash.
+-        LyricsApi.cached(track)?.let { _state.value = loadedState(it); return }
++        LyricsApi.cached(track)?.let { _state.value = loadedState(it); requestHangul(track,it,force); return }
+         // Read again (the setting changed): the lyrics shown stay until the new ones replace them.
+         if (!(force && _state.value is State.Loaded)) _state.value = State.Loading
+         // Spotify's own lines shown as soon as they are there; the word-timed ones replace them.
+         val earlyJob = viewModelScope.launch {
+             LyricsApi.early.collect { e ->
+-                if (e != null && e.first == key && loadedKey == key && _state.value is State.Loading) _state.value = loadedState(e.second)
++                if (e != null && e.first == key && loadedKey == key && _state.value is State.Loading) {
++                    _state.value = loadedState(e.second)
++                    requestHangul(track,e.second,force)
++                }
+             }
+         }
+         viewModelScope.launch(Dispatchers.IO) {
+@@ -60,6 +73,7 @@ class LyricsViewModel constructor() : ViewModel() {
+                     shown == lyrics -> _state.value
+                     else -> loadedState(lyrics)
+                 }
++                (_state.value as? State.Loaded)?.let { requestHangul(track,it.lyrics,force) }
+             }
+         }
+     }
+@@ -70,6 +84,55 @@ class LyricsViewModel constructor() : ViewModel() {
+         translationChecked = lyrics.language != null,
+     )
+ 
++    private fun requestHangul(track: LyricsApi.Track, lyrics: Lyrics, force: Boolean = false) {
++        readingJob?.cancel()
++        if (!HangulReadings.enabled() || !HangulReadings.japanese(lyrics)) return
++        val current = _state.value as? State.Loaded ?: return
++        _state.value = current.copy(readingLoading = true,readingError = null)
++        readingJob = viewModelScope.launch {
++            try {
++                val found = kotlinx.coroutines.runInterruptible(Dispatchers.IO) { HangulReadings.resolve(track,lyrics,force) }
++                val latest = _state.value as? State.Loaded ?: return@launch
++                if (loadedKey != track.key || latest.lyrics != lyrics) return@launch
++                _state.value = latest.copy(readings=found.lines,readingSource=found.source.takeIf { it.isNotBlank() },readingLoading=false,readingError=null,readingGenerated=found.generated)
++            } catch (error: kotlinx.coroutines.CancellationException) {
++                throw error
++            } catch (error: Exception) {
++                val latest = _state.value as? State.Loaded ?: return@launch
++                if (loadedKey != track.key || latest.lyrics != lyrics) return@launch
++                _state.value = latest.copy(readingLoading=false,readingError=if(error is java.io.IOException) error.message else "한글 발음 자료를 불러오지 못했습니다.")
++            }
++        }
++    }
++
++    fun toggleHangul() {
++        val enabled = !HangulReadings.enabled()
++        HangulReadings.setEnabled(enabled)
++        readingJob?.cancel()
++        val latest = _state.value as? State.Loaded ?: return
++        _state.value = latest.copy(readings=null,readingSource=null,readingLoading=false,readingError=null,readingGenerated=0)
++        if (enabled) loadedTrack?.let { requestHangul(it,latest.lyrics) }
++    }
++
++    fun readingSource(): String = loadedTrack?.let(HangulReadings::source).orEmpty()
++
++    fun toggleAutomaticReadings() {
++        HangulReadings.setAutomatic(!HangulReadings.automaticEnabled())
++        val latest = _state.value as? State.Loaded ?: return
++        _state.value = latest.copy(readings=null,readingSource=null,readingGenerated=0,readingLoading=false,readingError=null)
++        loadedTrack?.let { requestHangul(it, latest.lyrics) }
++    }
++
++    fun setReadingSource(url: String): String? {
++        val track = loadedTrack ?: return "재생 중인 곡이 없습니다."
++        return try {
++            HangulReadings.setSource(track,url)
++            HangulReadings.setEnabled(true)
++            (_state.value as? State.Loaded)?.let { requestHangul(track,it.lyrics,true) }
++            null
++        } catch (error: Exception) { "한음, 나무위키 또는 티스토리 HTTPS 가사 주소를 입력해 주세요." }
++    }
++
+     fun toggleTranslation(targetLang: String) {
+         val cur = _state.value as? State.Loaded ?: return
+         if (cur.showTranslation) {
+diff --git a/base/app/src/test/java/com/music/spotui/data/api/HangulReadingEngineTest.java b/base/app/src/test/java/com/music/spotui/data/api/HangulReadingEngineTest.java
+new file mode 100644
+index 0000000..44b9d9b
+--- /dev/null
++++ b/base/app/src/test/java/com/music/spotui/data/api/HangulReadingEngineTest.java
+@@ -0,0 +1,196 @@
++// @file HangulReadingEngineTest.java
++// @author: ForUltraplayer
++// @brief Regression checks for original-song readings, host detection and cover timing.
++package com.music.spotui.data.api;
++
++import org.junit.Test;
++import static org.junit.Assert.*;
++import java.io.IOException;
++import java.util.Arrays;
++import java.util.Collections;
++import java.util.List;
++
++public class HangulReadingEngineTest {
++    private final HangulReadingEngine engine = new HangulReadingEngine();
++    private static final List<String> LINES = Arrays.asList("青い空", "君の声", "夢の中", "明日の朝", "夜の風");
++    private static final String HTML = "<title>fixture</title><div>青い空<br>아오이 소라<br>푸른 하늘</div>"
++            + "<div>君の声<br>키미노 코에<br>너의 목소리</div>"
++            + "<div>夢の中<br>유메노 나카<br>꿈속에서</div>"
++            + "<div>明日の朝<br>아시타노 아사<br>내일 아침</div>"
++            + "<div>夜の風<br>요루노 카제<br>밤의 바람</div>";
++
++    @Test public void removesFeaturedArtistsFromTitleCandidates() {
++        assertTrue(HangulReadingEngine.titles("モニタリング (feat. 初音ミク)", "DECO*27").contains("モニタリング"));
++    }
++
++    @Test public void ignoresInlineAndSeparateRepeatAnnotations() {
++        String source = HTML.replace("青い空<br>", "青い空<span>X16</span><br>").replace("키미노 코에<br>", "키미노 코에<br>X19<br>");
++        assertEquals(5, engine.match(LINES, HangulReadingEngine.parse(source), "fixture").matched);
++        assertEquals(HangulReadingEngine.normalize("だって"), HangulReadingEngine.normalize("だだだって"));
++    }
++
++    @Test public void parsesHaneumDirectParagraphTriples() {
++        String source = "<div class='border-b'><p>아오이 소라</p><p>青い空</p><p>푸른 하늘</p></div>";
++        List<HangulReadingEngine.Pair> pairs = engine.pairs(HangulReadingEngine.parse(source));
++        assertEquals(1, pairs.size()); assertEquals("아오이 소라", pairs.get(0).reading);
++    }
++
++    @Test public void findsHaneumSearchAndValidatesItsOriginalLyrics() throws Exception {
++        HangulReadingEngine.Result result = engine.resolve("Fixture", "Artist", LINES, "", url -> {
++            if (url.startsWith("https://haneum.site/songs?")) return "<a href='/songs/fixture'>song</a>";
++            if (url.equals("https://haneum.site/songs/fixture")) return HTML;
++            throw new IOException("missing");
++        });
++        assertTrue(result.valid()); assertEquals("https://haneum.site/songs/fixture", result.source);
++    }
++
++    @Test public void retriesOriginalTitleAsContentForTranslatedDocumentNames() throws Exception {
++        HangulReadingEngine.Result result = engine.resolve("Execution Clap", "Artist", LINES, "", url -> {
++            if (url.contains("target=content") && url.contains("Execution%20Clap")) return "<a href='/w/처형박수'>song</a>";
++            if (url.equals("https://namu.wiki/w/처형박수")) return HTML;
++            throw new IOException("missing");
++        });
++        assertTrue(result.valid()); assertTrue(result.source.endsWith("처형박수"));
++    }
++
++    @Test public void followsTranslatedDisambiguationPageTitle() throws Exception {
++        HangulReadingEngine.Result result = engine.resolve("JapaneseTitle", "Artist", LINES, "", url -> {
++            if (url.endsWith("JapaneseTitle")) return "<title>한글곡 - 나무위키</title><a href='/w/한글곡(VOCALOID)'>song</a>";
++            if (url.endsWith("한글곡(VOCALOID)")) return HTML;
++            throw new IOException("missing");
++        });
++        assertTrue(result.valid()); assertTrue(result.source.endsWith("한글곡(VOCALOID)"));
++    }
++
++    @Test public void revalidatesLearnedAliasBeforeReturningIt() throws Exception {
++        final int[] calls = {0};
++        HangulReadingEngine.Result result = engine.resolve("Fixture", "Artist", LINES, "", "https://namu.wiki/w/Alias", url -> {
++            calls[0]++; return HTML;
++        });
++        assertTrue(result.valid()); assertEquals(1, calls[0]);
++        assertEquals("https://namu.wiki/w/Alias", result.source);
++        result = engine.resolve("Fixture", "Artist", LINES, "", "https://namu.wiki/w/Wrong", url -> {
++            if (url.endsWith("Wrong")) return "<p>別の曲</p>";
++            if (url.endsWith("Fixture")) return HTML;
++            throw new IOException("missing");
++        });
++        assertEquals("https://namu.wiki/w/Fixture", result.source);
++    }
++
++    @Test public void automaticCompletionPreservesAuthoredRowsAndEnglish() {
++        List<String> lines = engine.completeAutomatically(Arrays.asList("青い空", "君の声", "Hello world"),
++                Arrays.asList("기존 발음", HangulReadingEngine.MISSING, "Hello world"));
++        assertEquals("기존 발음", lines.get(0)); assertEquals("Hello world", lines.get(2));
++        assertTrue(lines.get(1).matches(".*[가-힣].*")); assertEquals(3, lines.size());
++        assertEquals("각코우", HangulReadingEngine.kanaToHangul("ガッコウ"));
++        assertEquals("수우파아", HangulReadingEngine.kanaToHangul("スーパー"));
++    }
++
++    @Test public void cancelledLookupDoesNotReturnAnOtherwiseValidDocument() throws Exception {
++        try {
++            engine.resolve("Fixture", "Artist", LINES, "https://namu.wiki/w/Fixture", url -> {
++                Thread.currentThread().interrupt(); return HTML;
++            });
++            fail("Cancellation must discard the result");
++        } catch (IOException expected) {
++            assertTrue(Thread.currentThread().isInterrupted());
++        } finally { Thread.interrupted(); }
++    }
++
++    @Test public void rejectsHaneumApiAndInsecureOrPrivateAddresses() throws Exception {
++        assertEquals("https://haneum.site/songs/123", HangulReadingEngine.checkedUrl("https://haneum.site/songs/123"));
++        for (String address : Arrays.asList("https://haneum.site/api/users", "http://namu.wiki/w/Song", "https://127.0.0.1/songs/1", "https://namu.wiki:444/w/Song")) {
++            try { HangulReadingEngine.checkedUrl(address); fail(address); } catch (IOException expected) { }
++        }
++    }
++
++    @Test public void retainsExistingAuthorReadings() {
++        HangulReadingEngine.Result result = engine.match(LINES, HangulReadingEngine.parse(HTML), "fixture");
++        assertTrue(result.valid()); assertEquals(5, result.matched);
++        assertEquals("아오이 소라", result.readings.get(0));
++        assertEquals("키미노 코에", result.readings.get(1));
++    }
++
++    @Test public void rejectsMeaningOnlySource() {
++        String fake = "<div>青い空<br>푸른 하늘<br>푸른 하늘</div>";
++        assertTrue(engine.pairs(HangulReadingEngine.parse(fake)).isEmpty());
++    }
++
++    @Test public void excludesFootnotesAndFurigana() {
++        HangulReadingEngine.Page page = HangulReadingEngine.parse(
++                "<p>青<ruby>空<rt>そら</rt></ruby><a href='#fn-1'>99</a><sup>note</sup><br>아오조라<br>푸른 하늘</p><script>bad</script>");
++        assertEquals("青空", page.lines.get(0));
++        assertFalse(page.lines.toString().contains("bad"));
++    }
++
++    @Test public void rejectsDifferentSong() {
++        assertFalse(engine.match(Arrays.asList("春の雨", "海の色", "星の音", "帰る道", "遠い山"),
++                HangulReadingEngine.parse(HTML), "fixture").valid());
++    }
++
++    @Test public void retainsEnglishHookAndMissingLine() {
++        List<String> source = Arrays.asList("青い空", "君の声", "夢の中", "明日の朝", "夜の風", "白い雪", "Hello world");
++        HangulReadingEngine.Result result = engine.match(source, HangulReadingEngine.parse(HTML), "fixture");
++        assertFalse(result.valid()); // 5 / 6 is below 85%.
++        assertEquals(HangulReadingEngine.MISSING, result.readings.get(5));
++        assertEquals("Hello world", result.readings.get(6));
++    }
++
++    @Test public void splitSentenceDoesNotInventHangulBoundaries() {
++        List<HangulReadingEngine.Pair> pairs = Arrays.asList(
++                new HangulReadingEngine.Pair("青い空に君の声が響く", "아오이 소라니 키미노 코에가 히비쿠"),
++                new HangulReadingEngine.Pair("夢の中", "유메노 나카"),
++                new HangulReadingEngine.Pair("明日の朝", "아시타노 아사"),
++                new HangulReadingEngine.Pair("夜の風", "요루노 카제"));
++        HangulReadingEngine.Result result = engine.align(Arrays.asList("青い空に", "君の声が響く", "夢の中", "明日の朝", "夜の風"), pairs, "fixture", false);
++        assertTrue(result.valid());
++        assertEquals(result.readings.get(0), result.readings.get(1));
++        assertFalse(result.readings.get(0).contains("문장 전체"));
++    }
++
++    @Test public void mergesSourceRowsAndPreservesOrder() {
++        HangulReadingEngine.Result result = engine.match(Arrays.asList("青い空 君の声", "夢の中", "明日の朝", "夜の風"),
++                HangulReadingEngine.parse(HTML), "fixture");
++        assertTrue(result.valid()); assertEquals("아오이 소라 키미노 코에", result.readings.get(0));
++    }
++
++    @Test public void acceptsKanaSpellingWithoutGeneratingReadings() {
++        HangulReadingEngine.Result result = engine.match(Arrays.asList("あおいそら", "きみのこえ", "ゆめのなか", "あしたのあさ", "よるのかぜ"),
++                HangulReadingEngine.parse(HTML), "fixture");
++        assertTrue(result.valid()); assertEquals("아시타노 아사", result.readings.get(3));
++    }
++
++    @Test public void resolvesOriginalDespiteCoverArtist() throws Exception {
++        List<String> visited = new java.util.ArrayList<>();
++        HangulReadingEngine.Result result = engine.resolve("Lemon (Cover by Other Artist)", "Other Artist", LINES, "", url -> {
++            visited.add(url); return HTML;
++        });
++        assertTrue(result.valid()); assertTrue(visited.get(0).endsWith("/Lemon"));
++    }
++
++    @Test public void followsDisambiguationSongLink() throws Exception {
++        HangulReadingEngine.Result result = engine.resolve("unravel", "Ado", LINES, "", url ->
++                url.endsWith("/unravel") ? "<a href='/w/unravel(%EB%85%B8%EB%9E%98)'>song</a>" : HTML);
++        assertTrue(result.valid()); assertTrue(result.source.contains("unravel("));
++    }
++
++    @Test public void validatesEverySourceAndRedirectTarget() throws Exception {
++        assertEquals("https://namu.wiki/w/Lemon", HangulReadingEngine.checkedUrl("https://namu.wiki/w/Lemon#x"));
++        for (String url : Arrays.asList("http://namu.wiki/w/x", "https://localhost/", "https://namu.wiki.evil.test/", "https://u:p@namu.wiki/w/x", "https://namu.wiki:444/w/x")) {
++            try { HangulReadingEngine.checkedUrl(url); fail(url); } catch (IOException expected) { }
++        }
++    }
++
++    @Test public void katakanaTitleAliasFindsKoreanNamedOriginal() throws Exception {
++        assertEquals("아이덴티티",HangulReadingEngine.koreanTitleAlias("アイデンティティ"));
++        assertEquals("루마",HangulReadingEngine.koreanTitleAlias("ルマ"));
++        assertEquals("",HangulReadingEngine.koreanTitleAlias("青い空"));
++        HangulReadingEngine.Result result=engine.resolve("アイデンティティ","宵崎奏",LINES,"",url -> {
++            if(url.contains(HangulReadingEngine.encode("아이덴티티"))) return HTML;
++            throw new IOException("not found");
++        });
++        assertTrue(result.valid());
++        assertTrue(result.source.contains(HangulReadingEngine.encode("아이덴티티")));
++    }
++
++}

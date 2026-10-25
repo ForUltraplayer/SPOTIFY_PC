@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/kota-zo/myspoti.git",
+  "commit": "d99d09db66a79b22643b7b87b30b00e4b8b232ce",
+  "license": "GPL-3.0",
+  "application_id": "app.myspoti.hangul",
+  "version_name": "2.0.1-hangul.3",
+  "version_code": 1085,
+  "requires_phone_for_build": false,
+  "device_validation": "pending"
+}

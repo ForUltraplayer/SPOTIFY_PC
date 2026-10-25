@@ -1,0 +1,21 @@
+# Generated and local state
+work/
+dist/
+__pycache__/
+*.py[cod]
+vendor/
+runtime/
+cache.json
+aliases.json
+python-path.txt
+start-error.txt
+*.lnk
+*.log
+.env
+.env.*
+.venv/
+*.jks
+*.p12
+*.keystore
+credentials.json
+local.properties
