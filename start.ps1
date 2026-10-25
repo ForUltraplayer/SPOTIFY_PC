@@ -26,6 +26,11 @@ if (-not $pythonWindowless) {
     }
 }
 $spotifyExe = Join-Path $env:APPDATA 'Spotify\Spotify.exe'
+$installationState = Join-Path $PSScriptRoot 'install-state.json'
+if (Test-Path -LiteralPath $installationState) {
+    $installedSpotify = (Get-Content -LiteralPath $installationState -Raw | ConvertFrom-Json).SpotifyExe
+    if ($installedSpotify -and (Test-Path -LiteralPath $installedSpotify)) { $spotifyExe = $installedSpotify }
+}
 if (-not (Test-Path -LiteralPath $spotifyExe)) { throw 'Spotify 실행 파일을 찾지 못했습니다.' }
 $bridgeHealthy = $false
 try {

@@ -19,3 +19,5 @@ start-error.txt
 *.keystore
 credentials.json
 local.properties
+install-state.json
+install.log

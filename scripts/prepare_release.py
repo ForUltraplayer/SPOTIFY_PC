@@ -17,6 +17,9 @@ FILES = (
     'licenses/Kuromoji-Apache-2.0.txt', 'licenses/Kuromoji-IPADIC-NOTICE.md',
     'android/README.md', 'android/PLAN.md', 'android/LICENSE', 'android/upstream.json',
     'android/patches/myspoti-hangul.patch',
+    'scripts/fetch_distribution_inputs.py', 'scripts/build_installer.py', 'scripts/audit_playlists.cjs',
+    'scripts/test_installer.ps1',
+    'installer/integrate.ps1', 'installer/setup.nsi',
 )
 
 
@@ -25,8 +28,8 @@ def prepare_release():
     version = release['version']
     if not re.fullmatch(r'\d+\.\d+\.\d+', version):
         raise ValueError('Invalid release version')
-    if release['channel'] != 'source-preview' or release['public_release_ready']:
-        raise ValueError('This builder only supports a source preview')
+    if release['channel'] not in ('source-preview', 'installer-beta'):
+        raise ValueError('Unsupported release channel')
     frontend = (ROOT / 'hangul-lyrics.js').read_text(encoding='utf-8-sig')
     helper = (ROOT / 'bridge.py').read_text(encoding='utf-8-sig')
     if f"version: '{version}'" not in frontend:

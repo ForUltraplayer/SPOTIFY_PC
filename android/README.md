@@ -1,5 +1,7 @@
 # Myspoti 한글 안드로이드 패치
 
+현재 개발과 배포는 [안드로이드 전용 저장소](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)에서 진행한다. 이 폴더는 저장소 분리 전의 패치 이력이다.
+
 기존 Myspoti 한글의 재생과 한글 가사를 한 앱에서 사용하는 방식을 유지한다. 이번 버전은 2.0.1-hangul.3이며 applicationId는 app.myspoti.hangul, versionCode는 1085다. 개발 계획과 휴대폰에서 확인할 항목은 [계획](PLAN.md)에 기록한다.
 
 ## 구현
@@ -32,4 +34,4 @@ Set-Location "$workspace\base"
 
 휴대폰 없이 Java 가사 엔진 검사 22 개, Kotlin·Compose 컴파일과 R8 최적화를 포함한 release APK 빌드를 통과했다. 실제 빌드된 APK 안에서 IPADIC의 NAIST 고지가 유지되는 것을 확인했다. 로컬 설치 후보는 기존 개인 서명 키로 다시 서명했고 이전 1084 APK와 서명자가 일치하며 새 버전 코드는 1085다.
 
-설치·로그인·기기 화면의 복사·재생 및 Spotify Connect 전환은 아직 검증하지 않았다. 사용자의 휴대폰 조작이 필요한 이 단계는 대기한다. 미검증 APK는 공개 GitHub 릴리스에 올리지 않으며 현재 PC의 dist 폴더에만 둔다.
+설치·로그인·기기 화면의 복사·재생 및 Spotify Connect 전환은 아직 검증하지 않았다. 사용자의 휴대폰 조작이 필요한 이 단계는 대기한다. 새 APK는 휴대폰 미검증 사실을 밝힌 베타로 전용 저장소의 릴리스에 배포한다. 이전의 로컬 전용 방침을 사용자 요청에 따라 변경했다.

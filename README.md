@@ -6,7 +6,7 @@
 | 발음 제공자 코드 | `web-hangul` |
 | 로컬 도우미 코드 | `ivLyricsHangul` |
 
-Windows Spotify의 ivLyrics에 웹에 작성된 일본어 노래의 한글 발음을 표시한다. 프로젝트 버전은 0.4.3이며 로컬 도우미 버전은 0.4.0이다. 현재 배포물은 소스 검토용 초안이다. 다른 PC의 자동 설치와 깨끗한 Windows 환경의 검증은 남아 있다. 자체 소스는 GPL-3.0-or-later로 공개하며 Myspoti 기반 안드로이드 패치는 해당 원본의 GPL-3.0 고지를 유지한다.
+Windows Spotify의 ivLyrics에 웹에 작성된 일본어 노래의 한글 발음을 표시한다. 버전 0.5.0은 설치 폴더를 선택하는 Windows x64용 EXE 베타 배포다. Python을 따로 설치할 필요가 없으며 실행 환경과 사전을 포함한다. 자체 소스에는 GPL-3.0-or-later를 적용한다. 깨끗한 다른 PC의 설치와 전체 곡의 발음 청취 검수는 남아 있다.
 
 ## 기능
 
@@ -20,11 +20,19 @@ Windows Spotify의 ivLyrics에 웹에 작성된 일본어 노래의 한글 발�
 
 ## 사용
 
-현재 설치된 PC에서는 바탕화면의 **Spotify 한글 가사** 바로가기를 실행하고 Spotify의 **ivLyrics** 화면을 연다. 이미 Spotify가 실행 중이어도 같은 바로가기를 사용할 수 있다. 프로필 메뉴의 **한글 발음 자료**에서 현재 곡의 자료 주소와 자동 발음을 설정한다.
+[배포 페이지](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)에서 `SpotifyHangul-0.5.0-Setup.exe`를 받는다. Spotify 데스크톱 버전을 설치하고 한 번 실행한 다음 설치 프로그램에서 전용 폴더를 선택한다. Spicetify와 ivLyrics는 설치본에 포함한다. 기존 ivLyrics가 있으면 유지한다. 설치 중 Spotify는 종료되므로 음악을 멈춘 뒤 진행한다.
+
+바탕화면의 **Spotify 한글 가사** 바로가기를 실행하고 Spotify의 **ivLyrics** 화면을 연다. 이미 Spotify가 실행 중이어도 같은 바로가기를 사용할 수 있다. 프로필 메뉴의 **한글 발음 자료**에서 현재 곡의 자료 주소와 자동 발음을 설정한다. 자동 발음은 기본값이 꺼짐이며 원하는 경우 직접 켠다.
 
 시작 스크립트는 환경 변수 `IVLYRICS_HANGUL_PYTHON`, `runtime/pythonw.exe`, `python-path.txt`, PATH의 실제 Python 순서로 찾는다. WindowsApps 앱 별칭은 제외한다. 실행에 실패하면 `start-error.txt`에 오류를 남기고 오류 창을 표시한다. `python-path.txt`는 설치 PC에서 만들며 배포물에는 넣지 않는다.
 
-다른 PC에 설치하기 위한 현재 수동 절차와 미완료 항목은 [배포 준비](docs/RELEASE.md), 실행 위치와 중지는 [운영 안내](docs/OPERATIONS.md)에 기록한다.
+설치 전제와 미완료 항목은 [배포 안내](docs/RELEASE.md), 실행 위치와 중지는 [운영 안내](docs/OPERATIONS.md)에 기록한다. 이 베타 설치 파일에는 코드 서명이 없다.
+
+## 캐시와 데이터 보존
+
+조회에 성공한 발음은 `%LOCALAPPDATA%\ivLyricsHangul\cache.json`, 원문과 일치한다고 확인한 자료 주소는 같은 폴더의 `aliases.json`에 저장한다. 각각 최대 500 곡과 30 일을 기준으로 관리한다. 조회 실패는 같은 도우미 프로세스 안에서 10 분 동안 기억한다. ivLyrics는 이와 별도로 Spotify 내부 IndexedDB의 `ivLyricsCache`에 원문과 발음 등의 결과를 저장한다. 확인한 기본 보관 기간은 365 일이다.
+
+설치 폴더와 개인 캐시는 분리한다. 업데이트와 프로그램 제거 시 위 개인 캐시를 지우지 않는다. 저장된 원문이 달라지거나 캐시가 만료되면 다시 대조할 수 있다. 한 번 저장했다고 모든 다른 가사 버전까지 영구히 재사용하는 구조는 아니다. 개인 캐시와 계정 정보는 배포물에 넣지 않는다.
 
 ## 개발과 검증
 
@@ -42,11 +50,18 @@ node --test test_extension.cjs
 python scripts/prepare_release.py
 ```
 
-생성 위치는 `dist/`이며 파일별 SHA-256 목록과 압축 파일의 해시를 함께 만든다. 실행 환경과 의존성을 포함한 설치 프로그램은 아직 제공하지 않는다. 다른 PC 검증 전에는 정식 설치 배포로 표시하지 않는다. 소스 공개와 설치 프로그램의 배포 준비 완료는 별개의 상태다.
+생성 위치는 `dist/`이며 파일별 SHA-256 목록과 압축 파일의 해시를 함께 만든다. 설치 프로그램을 빌드하려면 고정된 외부 배포 파일을 준비한 다음 다음 명령을 사용한다. 다운로드 입력은 공식 배포 주소와 SHA-256으로 기록한다.
+
+```powershell
+python scripts/fetch_distribution_inputs.py
+python scripts/build_installer.py
+```
+
+설치본은 CPython 3.13.17, Spicetify 2.46.3, ivLyrics 7.0.16과 원본 라이선스 및 대응 소스를 포함한다. 전체 검증 범위는 [검증 기록](docs/VERIFICATION.md)에 기록한다.
 
 ## 안드로이드
 
-기존 Myspoti 한글에 적용할 [개발 계획](android/PLAN.md), 기준 커밋과 수정 패치를 `android/`에 관리한다. 재생과 한글 가사를 같은 앱에서 제공하며 PC 서버에 연결하지 않는다. APK 빌드와 호스트 검사는 휴대폰 없이 진행한다. 설치·로그인·실제 재생 검증에는 휴대폰이 필요하다.
+개발과 APK 배포는 [안드로이드 전용 저장소](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)에서 관리한다. [베타 APK](https://github.com/ForUltraplayer/SPOTIFY_ANDROID/releases/tag/v2.0.1-hangul.3)는 Myspoti 기반으로 재생과 한글 가사를 같은 앱에서 제공하며 PC 서버에 연결하지 않는다. 호스트 검사와 APK 빌드 및 서명은 확인했고 새 APK의 휴대폰 설치와 실제 재생 검증은 대기한다. 이 저장소의 `android/` 패치는 분리 전 이력이며 새 개발의 기준은 전용 저장소다.
 
 ## 소스 구성
 
