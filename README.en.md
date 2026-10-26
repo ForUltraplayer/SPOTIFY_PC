@@ -5,9 +5,11 @@
 Shows the **Korean (Hangul) pronunciation of Japanese songs** in the lyrics view of the Spotify desktop app for Windows. It finds Hangul pronunciation written by people on the web, matches it line by line against Spotify's Japanese lyrics, and displays it alongside.
 
 > [!NOTE]
-> The current version is **0.6.0 beta**. A fresh install, uninstall and Hangul lyrics display have been confirmed on the current PC. Testing on another physical PC and a listening review of every song are still pending.
+> The current version is **0.6.1 beta**. A fresh install, uninstall and Hangul lyrics display have been confirmed on the current PC. The user also confirmed a successful 0.6.0 install on another PC. Version 0.6.1 adds bounded reading retries and GitHub self-updates; a listening review of every song is still pending.
 
-**[⬇ Download the installer (SpotifyHangul-0.6.0-Setup.exe)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.0)**
+**[⬇ Download the installer (SpotifyHangul-0.6.1-Setup.exe)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.1)**
+
+Existing users can close Spotify and run **SpotifyHangul-0.6.1-Update.exe** from the same release page. This small launcher finds the installed folder and downloads the full Setup.exe (about 65 MB).
 
 ## At a glance
 
@@ -51,6 +53,7 @@ The local helper is a small program that reads web pages Spotify cannot read dir
 - Checks title, artist, album and length to reject lyrics from a different recording (version tags such as Live are kept)
 - For covers, finds the original song from the title and matches its lyrics, while keeping the timing of the current recording
 - When a lyrics server is busy (429, 5xx), treats it as a temporary error and backs off only that server
+- Retries failed pronunciation lookups up to three extra times at two-second intervals, with a 60-second total budget; cancels when the track changes
 
 **Optional features**
 
@@ -63,7 +66,7 @@ The local helper is a small program that reads web pages Spotify cannot read dir
 
 **You do not need to install or run Spotify, SpotX or Python beforehand.** You only need an internet connection.
 
-1. Download `SpotifyHangul-0.6.0-Setup.exe` from the [0.6.0 release page](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.0) and run it.
+1. Download `SpotifyHangul-0.6.1-Setup.exe` from the [0.6.1 release page](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.1) and run it.
 2. Keep the default folder (`%LOCALAPPDATA%\Programs\SpotifyHangul`) or choose an empty dedicated folder. To update an existing installation, choose the same folder.
 3. The installer downloads the official Spotify x64 files (about 150 MB), checks their size, SHA-256 and Spotify AB signature, then sets up SpotX and the lyrics features.
 
@@ -83,7 +86,8 @@ Automatic updates of the integrated Spotify are blocked to keep the patches in p
 
 ### Updating and uninstalling
 
-- **Update**: install the new version into the same folder.
+- **First update for existing users**: close Spotify and run Update.exe, or install Setup.exe into the same folder.
+- **Automatic updates after 0.6.1**: the desktop shortcut checks GitHub at startup, at least eight hours apart, downloads a release in the background, verifies the repository URL, SHA-256, size and file version, and installs before a later launch once Spotify has fully closed. Offline checks do not block playback. The same failed installation is not retried forever. No Windows service or boot-time task is added.
 - **Changing the Spotify version**: the integrated Spotify does not update itself. Replace it with a new integrated installer. A new installer is also needed if the official download changes and the hash check fails.
 - **Uninstall**: remove **Spotify 한글 가사** from Windows **Settings > Apps > Installed apps**. This removes the integrated Spotify, Spicetify and ivLyrics in the install folder. Your existing Spotify, user profile and personal pronunciation cache are kept.
 
@@ -132,6 +136,7 @@ python -m unittest discover -s . -p test_bridge.py -v
 node --test test_extension.cjs
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_installer.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_bootstrap.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_auto_update.ps1
 ```
 
 The following commands create the source release and installer in `dist/`. External release files are pinned to official download URLs and SHA-256 hashes.

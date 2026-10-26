@@ -30,6 +30,20 @@ function Assert-Installation {
     }
 }
 
+function Get-InstalledVersion {
+    $installation=Join-Path $root 'install-state.json'
+    if (Test-Path -LiteralPath $installation) {
+        $record=Get-Content -LiteralPath $installation -Raw | ConvertFrom-Json
+        if ($record.Version -match '^\d+\.\d+\.\d+$') { return [version]$record.Version }
+    }
+    $registered=(Get-ItemProperty -LiteralPath 'HKCU:\Software\SpotifyHangul' -ErrorAction SilentlyContinue).InstallDir
+    if ($registered -and [IO.Path]::GetFullPath($registered).TrimEnd('\') -eq $root) {
+        $version=(Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\SpotifyHangul' -ErrorAction SilentlyContinue).DisplayVersion
+        if ($version -match '^\d+\.\d+\.\d+$') { return [version]$version }
+    }
+    return [version](Get-Content -LiteralPath (Join-Path $root 'release.json') -Raw | ConvertFrom-Json).version
+}
+
 function Select-UpdateAsset($Releases,[version]$CurrentVersion) {
     $candidates=@(foreach ($release in $Releases) {
         if ($release.draft -or [string]$release.tag_name -notmatch '^v(\d+\.\d+\.\d+)$') { continue }
@@ -63,8 +77,7 @@ function Write-UpdateState($Value) {
 
 try {
     Assert-Installation
-    $release=Get-Content -LiteralPath (Join-Path $root 'release.json') -Raw | ConvertFrom-Json
-    $current=[version]$release.version
+    $current=Get-InstalledVersion
     $algorithm=[Security.Cryptography.SHA256]::Create()
     try { $identity=[BitConverter]::ToString($algorithm.ComputeHash([Text.Encoding]::UTF8.GetBytes($root.ToLowerInvariant()))).Replace('-','').Substring(0,16) }
     finally { $algorithm.Dispose() }
@@ -97,8 +110,7 @@ try {
         $process=Start-Process -FilePath (Join-Path $cache $pending.name) -ArgumentList ('/S /D='+$root) -WindowStyle Hidden -PassThru
         Write-UpdateState @{status='installing';version=$pending.version;pid=$process.Id;checked_at=(Get-Date -Format o)}
         if (-not $process.WaitForExit(600000)) { exit 10 }
-        $installed=Get-Content -LiteralPath (Join-Path $root 'release.json') -Raw | ConvertFrom-Json
-        if ($process.ExitCode -ne 0 -or $installed.version -ne $pending.version) {
+        if ($process.ExitCode -ne 0 -or (Get-InstalledVersion) -ne [version]$pending.version) {
             Write-UpdateState @{status='install-failed';version=$pending.version;error=('설치 종료 코드: '+$process.ExitCode)}
             if ($Interactive) { exit 1 }; exit 0
         }

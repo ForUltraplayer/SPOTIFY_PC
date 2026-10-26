@@ -9,7 +9,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
 FILES = (
-    'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'release.json', 'requirements.txt',
+    'README.md', 'README.en.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'release.json', 'requirements.txt',
     'bridge.py', 'phonetics.py', 'hangul-lyrics.js', 'start.ps1', 'stop.ps1', 'auto-update.ps1',
     'test_bridge.py', 'test_extension.cjs', 'scripts/prepare_release.py',
     'docs/RELEASE.md', 'docs/OPERATIONS.md', 'docs/VERIFICATION.md', 'docs/LICENSE_REVIEW.md',
