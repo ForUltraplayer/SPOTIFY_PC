@@ -14,7 +14,7 @@ def load(path=None):
     data = json.loads(Path(path or ROOT / 'components.json').read_text(encoding='utf-8-sig'))
     if data.get('schema') != 1:
         raise ValueError('Unsupported component manifest')
-    for name, asset in data['artifacts'].items():
+    for name, asset in (data['artifacts'] | data.get('test_fixtures', {})).items():
         if not re.fullmatch(r'(?:wheels/)?[A-Za-z0-9_.-]+', name):
             raise ValueError('Invalid artifact path')
         if not re.fullmatch(r'[a-f0-9]{64}', asset['sha256']) or asset['bytes'] <= 0:

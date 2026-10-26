@@ -30,6 +30,8 @@ def main():
     try:
         for name, asset in data['artifacts'].items():
             verify(ROOT / 'work/downloads' / name, asset)
+        for name, asset in data.get('test_fixtures', {}).items():
+            verify(ROOT / 'work/downloads' / name, asset)
         iv = data['components']['ivlyrics']
         with tempfile.TemporaryDirectory(prefix='contracts-', dir=ROOT / 'work') as area:
             with zipfile.ZipFile(ROOT / 'work/downloads' / iv['source_artifact']) as archive:
@@ -55,7 +57,10 @@ def main():
         run([sys.executable, '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_dependencies.py'])
         run(['node', '--test', 'test_extension.cjs'])
         for name in ('test_installer.ps1', 'test_bootstrap.ps1', 'test_auto_update.ps1', 'test_managed_ivlyrics.ps1'):
-            run(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/'+name])
+            command = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/'+name]
+            if name == 'test_auto_update.ps1':
+                command += ['-VerifiedInstaller', str(ROOT/'work/downloads'/next(iter(data['test_fixtures'])))]
+            run(command)
         report['result'] = 'passed'
     finally:
         args.report.write_text(json.dumps(report, indent=2)+'\n', encoding='utf-8')

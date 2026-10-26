@@ -104,5 +104,12 @@
       "sha256": "64a7490b4746288dc561ac6086b63e991f9a3e49d9dae6e0b05a7e6882f21469",
       "bytes": 2184177
     }
+  },
+  "test_fixtures": {
+    "SpotifyHangul-0.6.0-Setup.exe": {
+      "url": "https://github.com/ForUltraplayer/SPOTIFY_PC/releases/download/v0.6.0/SpotifyHangul-0.6.0-Setup.exe",
+      "sha256": "9531aefd21edbdc12ad6fc7718a115ffd37cfe6214eb0e2623ff938106b322e9",
+      "bytes": 67323904
+    }
   }
 }

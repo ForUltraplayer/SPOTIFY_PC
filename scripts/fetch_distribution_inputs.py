@@ -36,8 +36,9 @@ def fetch(name, url, expected=None):
 
 def main():
     CACHE.mkdir(parents=True, exist_ok=True)
-    lock = load()['artifacts']
-    for name, metadata in lock.items():
+    manifest = load()
+    lock = manifest['artifacts']
+    for name, metadata in (lock | manifest.get('test_fixtures', {})).items():
         fetch(name, metadata['url'], metadata['sha256'])
         verify(CACHE / name, metadata)
     # A derived receipt for old tooling; this is never the authority for a build.

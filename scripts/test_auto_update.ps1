@@ -1,6 +1,7 @@
 ﻿# @file test_auto_update.ps1
 # @author: ForUltraplayer
 # @brief Verify release identity, integrity checks, offline behavior and deferred automatic application.
+param([string]$VerifiedInstaller)
 $ErrorActionPreference='Stop'
 $project=Split-Path -Parent $PSScriptRoot
 $updater=Join-Path $project 'auto-update.ps1'
@@ -16,7 +17,7 @@ $root=Join-Path $area '기존 설치'
 [void](New-Item -ItemType Directory -Path $root)
 '{"app":"SpotifyHangul"}' | Set-Content -LiteralPath (Join-Path $root 'install-marker.json') -Encoding UTF8
 '{"version":"0.5.1"}' | Set-Content -LiteralPath (Join-Path $root 'release.json') -Encoding UTF8
-$fixture=Join-Path $project 'dist\SpotifyHangul-0.6.0-Setup.exe'
+$fixture=if($VerifiedInstaller){$VerifiedInstaller}else{Join-Path $project 'dist\SpotifyHangul-0.6.0-Setup.exe'}
 if (-not (Test-Path -LiteralPath $fixture)) { throw 'The verified previous installer fixture is required.' }
 $release=[PSCustomObject]@{tag_name='v0.6.0';draft=$false;assets=@([PSCustomObject]@{
     name='SpotifyHangul-0.6.0-Setup.exe';browser_download_url='https://github.com/ForUltraplayer/SPOTIFY_PC/releases/download/v0.6.0/SpotifyHangul-0.6.0-Setup.exe';
