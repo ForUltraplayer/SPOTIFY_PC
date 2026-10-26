@@ -211,54 +211,98 @@
         };
     }
 
-    async function request(path, body) {
+    function supersededError() {
+        const error = new Error('새 곡의 발음 조회로 전환했습니다.');
+        error.name = 'AbortError'; error.superseded = true;
+        return error;
+    }
+    async function request(path, body, { signal, timeoutMs = 45000 } = {}) {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 45000);
-        const started = Date.now();
-        let busyRetries = 0;
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        const abort = () => controller.abort();
+        signal?.addEventListener('abort', abort, { once: true });
+        if (signal?.aborted) controller.abort();
         try {
-            while (true) {
-                const response = await fetch(BASE + path, {
+            const response = await fetch(BASE + path, {
                 method: body ? 'POST' : 'GET',
                 headers: body ? { 'Content-Type': 'application/json', 'X-Hangul-Lyrics-Client': 'ivlyrics' } : {},
                 body: body ? JSON.stringify(body) : undefined,
                 signal: controller.signal,
                 credentials: 'omit'
             });
-                const result = await response.json();
-                if (response.status === 409 && result.superseded) {
-                    const error = new Error(result.error);
-                    error.name = 'AbortError'; error.superseded = true;
-                    throw error;
-                }
-                if (response.status === 429 && path === '/resolve' && Date.now() - started < 36000) {
-                    if (body.foreground && body.track_id !== activeTrackId()) {
-                        const error = new Error('새 곡의 발음 조회로 전환했습니다.');
-                        error.name = 'AbortError'; error.superseded = true;
-                        throw error;
-                    }
-                    const delay = Math.min(1000, 250 * ++busyRetries);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    continue;
-                }
-                if (!response.ok) throw new Error(result.error || '발음 자료를 가져오지 못했습니다.');
-                return result;
+            const result = await response.json();
+            if ((response.status === 409 && result.superseded) ||
+                (body?.foreground && body.track_id !== activeTrackId())) throw supersededError();
+            if (!response.ok) {
+                const error = new Error(result.error || '발음 자료를 가져오지 못했습니다.');
+                error.retryable = response.status === 404 || response.status === 429 || response.status >= 500;
+                throw error;
             }
+            return result;
         } catch (error) {
+            if (signal?.aborted || (body?.foreground && body.track_id !== activeTrackId())) throw supersededError();
             if (error.superseded) throw error;
             if (error instanceof TypeError || error.name === 'AbortError') {
-                throw new Error('한글 발음 도우미에 연결하지 못했습니다. “Spotify 한글 가사” 바로가기로 실행해 주세요.');
+                const failure = new Error('한글 발음 도우미에 연결하지 못했습니다. “Spotify 한글 가사” 바로가기로 실행해 주세요.');
+                failure.retryable = true;
+                throw failure;
             }
+            if (error.name === 'SyntaxError') error.retryable = true;
             throw error;
         } finally {
             clearTimeout(timer);
+            signal?.removeEventListener('abort', abort);
         }
     }
 
+    function retryDelay(milliseconds, signal) {
+        return new Promise((resolve, reject) => {
+            const cleanup = () => signal.removeEventListener('abort', abort);
+            const timer = setTimeout(() => { cleanup(); resolve(); }, milliseconds);
+            const abort = () => { clearTimeout(timer); cleanup(); reject(supersededError()); };
+            signal.addEventListener('abort', abort, { once: true });
+            if (signal.aborted) abort();
+        });
+    }
     function resolveReadings(body) {
         const key = JSON.stringify(body);
         if (inflightLookups.has(key)) return inflightLookups.get(key);
-        const job = request('/resolve', body).finally(() => inflightLookups.delete(key));
+        const controller = new AbortController();
+        const checkTrack = () => {
+            if (body.foreground && body.track_id !== activeTrackId()) controller.abort();
+            if (controller.signal.aborted) throw supersededError();
+        };
+        const onSongChange = () => {
+            if (body.foreground && body.track_id !== activeTrackId()) controller.abort();
+        };
+        if (body.foreground) Spicetify.Player.addEventListener?.('songchange', onSongChange);
+        const deadline = Date.now() + 60000;
+        const job = (async () => {
+            const delays = body.foreground ? [0, 2000, 2000, 2000] : [0];
+            for (let attempt = 0; attempt < delays.length; attempt++) {
+                checkTrack();
+                try {
+                    const result = await request('/resolve', { ...body, retry_attempt: attempt }, {
+                        signal: controller.signal, timeoutMs: Math.max(1, Math.min(45000, deadline - Date.now()))
+                    });
+                    checkTrack();
+                    if (!result.valid || !Array.isArray(result.phonetic) || result.phonetic.length !== String(body.text).split('\n').length) {
+                        const error = new Error('발음 자료와 원문 가사의 줄을 맞추지 못했습니다.');
+                        error.retryable = true;
+                        throw error;
+                    }
+                    return { ...result, lookup_attempts: attempt + 1 };
+                } catch (error) {
+                    checkTrack();
+                    const delay = delays[attempt + 1];
+                    if (!error.retryable || !delay || Date.now() + delay >= deadline) throw error;
+                    await retryDelay(delay, controller.signal);
+                }
+            }
+        })().finally(() => {
+            if (body.foreground) Spicetify.Player.removeEventListener?.('songchange', onSongChange);
+            inflightLookups.delete(key);
+        });
         inflightLookups.set(key, job);
         return job;
     }
@@ -375,7 +419,7 @@
         id: ID,
         name: '기존 한글 발음 가사',
         author: 'ForUltraplayer',
-        version: '0.6.0',
+        version: '0.6.1',
         description: { ko: '웹에 작성된 한글 발음을 가져옵니다. AI·API 키·유료 호출 없이 원문과 대조합니다.',
             en: 'Existing web-authored Hangul readings; no AI or paid API.' },
         supports: { pronunciation: true, translate: false, metadata: false, tmi: false,

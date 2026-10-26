@@ -10,7 +10,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent.parent
 FILES = (
     'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'release.json', 'requirements.txt',
-    'bridge.py', 'phonetics.py', 'hangul-lyrics.js', 'start.ps1', 'stop.ps1',
+    'bridge.py', 'phonetics.py', 'hangul-lyrics.js', 'start.ps1', 'stop.ps1', 'auto-update.ps1',
     'test_bridge.py', 'test_extension.cjs', 'scripts/prepare_release.py',
     'docs/RELEASE.md', 'docs/OPERATIONS.md', 'docs/VERIFICATION.md', 'docs/LICENSE_REVIEW.md',
     'docs/SPOTX_INTEGRATION.md',
@@ -19,8 +19,9 @@ FILES = (
     'android/README.md', 'android/PLAN.md', 'android/LICENSE', 'android/upstream.json',
     'android/patches/myspoti-hangul.patch',
     'scripts/fetch_distribution_inputs.py', 'scripts/build_installer.py', 'scripts/audit_playlists.cjs',
-    'scripts/test_installer.ps1', 'scripts/test_bootstrap.ps1', '.gitattributes',
+    'scripts/test_installer.ps1', 'scripts/test_bootstrap.ps1', 'scripts/test_auto_update.ps1', '.gitattributes',
     'installer/integrate.ps1', 'installer/setup.nsi',
+    'installer/update-launcher.nsi',
     'installer/bootstrap.ps1', 'installer/spotx-patch.ps1', 'scripts/build_spotx_adapter.py',
     'third_party/spotx/upstream-run.ps1', 'third_party/spotx/patches.json', 'third_party/spotx/en.ps1',
     'third_party/spotx/LICENSE', 'third_party/spotx/upstream.json',

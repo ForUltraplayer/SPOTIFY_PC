@@ -3,9 +3,11 @@
 Windows용 Spotify 데스크톱 앱의 가사 화면에 **일본어 노래의 한글 발음**을 함께 표시합니다. 사람이 웹에 정리해 둔 한글 발음 자료를 찾아 Spotify의 일본어 가사와 줄 단위로 맞춘 뒤 보여 줍니다.
 
 > [!NOTE]
-> 현재 버전은 **0.6.0 베타**입니다. 현재 PC의 새 설치와 제거 및 한글 가사 표시를 확인했습니다. 다른 물리 PC와 전체 곡의 발음 청취 검수는 남아 있습니다.
+> 현재 버전은 **0.6.1 베타**입니다. 0.6.0의 새 설치와 제거 및 한글 가사 표시를 확인했으며 사용자의 다른 PC에서도 설치 성공을 확인받았습니다. 0.6.1에는 발음 자동 재시도와 GitHub 자동 업데이트를 추가했습니다. 전체 곡의 발음 청취 검수는 남아 있습니다.
 
-**[⬇ 설치 파일 받기 (SpotifyHangul-0.6.0-Setup.exe)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.0)**
+**[⬇ 설치 파일 받기 (SpotifyHangul-0.6.1-Setup.exe)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.1)**
+
+기존 설치자는 같은 배포 페이지의 **SpotifyHangul-0.6.1-Update.exe**를 사용할 수 있습니다. Spotify를 완전히 종료하고 실행하면 설치 위치를 자동으로 찾아 최신 통합 설치본을 내려받고 적용합니다.
 
 ## 한눈에 보기
 
@@ -49,6 +51,7 @@ Windows용 Spotify 데스크톱 앱의 가사 화면에 **일본어 노래의 �
 - 곡명, 가수, 앨범, 길이를 확인해 다른 녹음의 가사 배제 (Live 등 버전 표기는 유지)
 - 커버곡은 제목에서 원곡을 찾아 원곡 가사와 대조하고, 재생 시간은 현재 녹음 기준 유지
 - 가사 서버가 혼잡(429, 5xx)하면 일시 오류로 보고 해당 서버만 잠시 대기
+- 현재 곡의 발음 조회가 실패하면 2 초 간격으로 최대 3 회 추가 재시도, 전체 조회 시간은 최대 60 초로 제한하고 곡 변경 시 중단
 
 **선택 기능**
 
@@ -61,7 +64,7 @@ Windows용 Spotify 데스크톱 앱의 가사 화면에 **일본어 노래의 �
 
 **Spotify와 SpotX 및 Python을 미리 설치하거나 먼저 실행할 필요가 없습니다.** 인터넷 연결만 준비합니다.
 
-1. [0.6.0 배포 페이지](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.0)에서 `SpotifyHangul-0.6.0-Setup.exe`를 받아 실행합니다.
+1. [0.6.1 배포 페이지](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.1)에서 `SpotifyHangul-0.6.1-Setup.exe`를 받아 실행합니다.
 2. 기본값(`%LOCALAPPDATA%\Programs\SpotifyHangul`) 또는 비어 있는 전용 설치 폴더를 선택합니다. 기존 한글 가사 설치본을 업데이트하려면 같은 폴더를 선택합니다.
 3. 설치 프로그램이 공식 Spotify x64 파일 약 150 MB를 내려받고 크기와 SHA-256 및 Spotify AB 서명을 검사한 뒤 SpotX와 가사 기능을 연결합니다.
 
@@ -81,7 +84,8 @@ Windows용 Spotify 데스크톱 앱의 가사 화면에 **일본어 노래의 �
 
 ### 업데이트와 제거
 
-- **업데이트**: 새 버전 설치 파일을 같은 폴더에 다시 설치합니다.
+- **기존 설치자의 첫 업데이트**: Spotify를 종료하고 Update.exe를 실행합니다. 이 작은 실행 파일이 최신 Setup.exe 약 65 MB를 내려받아 기존 설치 폴더에 적용합니다. 기존 통합 Spotify는 재다운로드하지 않습니다. Setup.exe를 같은 폴더에 직접 설치해도 됩니다.
+- **0.6.1 이후 자동 업데이트**: 한글 가사 바로가기로 실행할 때 GitHub의 새 버전을 확인합니다. 확인 간격은 최소 8 시간이며, 새 설치본을 백그라운드에서 내려받아 크기와 SHA-256 및 파일 버전을 검사합니다. Spotify가 완전히 종료된 뒤 다음 실행 전에 적용합니다. 인터넷 오류는 음악 실행을 막지 않으며, 설치가 실패한 같은 버전을 무한 반복 적용하지 않습니다.
 - **Spotify 버전 교체**: 통합 Spotify는 자동 업데이트를 차단합니다. 새 통합 설치본으로 교체합니다. 공식 다운로드 파일이 바뀌어 해시 검사가 실패해도 새 설치본이 필요합니다.
 - **제거**: Windows **설정 > 앱 > 설치된 앱**에서 **Spotify 한글 가사**를 제거합니다. 설치 폴더의 통합 Spotify와 Spicetify 및 ivLyrics를 함께 제거합니다. 기존 Spotify와 사용자 프로필 및 개인 발음 캐시는 남깁니다.
 
@@ -130,6 +134,7 @@ python -m unittest discover -s . -p test_bridge.py -v
 node --test test_extension.cjs
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_installer.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_bootstrap.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_auto_update.ps1
 ```
 
 소스 배포 초안과 설치 프로그램은 다음 명령으로 `dist/`에 생성합니다. 외부 배포 파일은 공식 배포 주소와 SHA-256으로 고정합니다.

@@ -25,6 +25,54 @@ HANEUM_HTML = ''.join(f'<div class="border-b pb-5"><p>{reading}</p><p>{original}
 
 
 class ReaderTests(unittest.TestCase):
+    def test_foreground_retry_bypasses_a_miss_and_recovers_existing_readings(self):
+        calls = []
+        def fetch(url):
+            calls.append(url)
+            if len(calls) == 1:
+                raise OSError('temporary source failure')
+            return HTML, url
+        with tempfile.TemporaryDirectory() as directory:
+            reader = Reader(directory, fetch)
+            params = dict(title='Test', artist='Artist', text=TEXT, source_url='https://namu.wiki/w/Test',
+                          track_id='test', foreground=True)
+            with self.assertRaises(LookupError):
+                reader.resolve(params)
+            with self.assertRaises(LookupError):
+                reader.resolve(params)
+            self.assertEqual(len(calls), 1)
+            recovered = reader.resolve({**params, 'retry_attempt': 1})
+            self.assertEqual(recovered['phonetic'], [reading for _, reading in PAIRS])
+            self.assertEqual(len(calls), 2)
+            self.assertFalse(reader.negative)
+            self.assertTrue(reader.resolve(params)['cache'])
+            self.assertEqual(len(calls), 2)
+
+    def test_source_retries_are_bounded_even_if_the_ui_is_reopened(self):
+        fetch = Mock(return_value=('<html>No readings</html>', 'https://namu.wiki/w/Test'))
+        with tempfile.TemporaryDirectory() as directory:
+            reader = Reader(directory, fetch)
+            params = dict(title='Test', artist='Artist', text=TEXT, source_url='https://namu.wiki/w/Test',
+                          track_id='test', foreground=True)
+            for attempt in (0, 1, 2, 3, 0, 1, 2, 3):
+                with self.assertRaises(LookupError):
+                    reader.resolve({**params, 'retry_attempt': attempt})
+            self.assertEqual(fetch.call_count, 4)
+            for invalid in (True, -1, 4, '1'):
+                with self.assertRaises(ValueError):
+                    reader.resolve({**params, 'retry_attempt': invalid})
+            self.assertEqual(fetch.call_count, 4)
+
+    def test_prefetch_does_not_bypass_negative_reading_cache(self):
+        fetch = Mock(return_value=('<html>No readings</html>', 'https://namu.wiki/w/Test'))
+        with tempfile.TemporaryDirectory() as directory:
+            reader = Reader(directory, fetch)
+            params = dict(title='Test', artist='Artist', text=TEXT, source_url='https://namu.wiki/w/Test')
+            for attempt in (0, 1, 2):
+                with self.assertRaises(LookupError):
+                    reader.resolve({**params, 'retry_attempt': attempt})
+            self.assertEqual(fetch.call_count, 1)
+
     def test_extract_triples_and_ignore_furigana_footnotes(self):
         document = LyricDocument()
         document.feed(HTML.replace("月", "<ruby>月<rt>つき</rt></ruby>").replace("<br>", "<a href='#fn-1'>[1]</a><br>"))

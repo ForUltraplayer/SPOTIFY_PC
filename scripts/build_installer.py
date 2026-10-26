@@ -44,7 +44,7 @@ def main():
         shutil.rmtree(PAYLOAD)
     PAYLOAD.mkdir(parents=True)
     (PAYLOAD / '.builder-owned').write_text('SpotifyHangul build payload\n')
-    for name in ('bridge.py', 'phonetics.py', 'hangul-lyrics.js', 'start.ps1', 'stop.ps1',
+    for name in ('bridge.py', 'phonetics.py', 'hangul-lyrics.js', 'start.ps1', 'stop.ps1', 'auto-update.ps1',
                  'LICENSE', 'THIRD_PARTY_NOTICES.md', 'release.json'):
         shutil.copy2(ROOT / name, PAYLOAD / name)
     shutil.copytree(ROOT / 'installer', PAYLOAD / 'installer')
@@ -90,7 +90,13 @@ def main():
                  str(ROOT / 'installer' / 'setup.nsi')]
     subprocess.run(arguments, check=True)
     digest = hashlib.sha256(output.read_bytes()).hexdigest()
-    (ROOT / 'dist' / 'INSTALLER-SHA256SUMS.txt').write_text(f'{digest}  {output.name}\n', encoding='utf-8')
+    updater = ROOT / 'dist' / f'SpotifyHangul-{release["version"]}-Update.exe'
+    subprocess.run([str(TOOLS / 'nsis' / 'makensis.exe'), '/V2', '/INPUTCHARSET', 'UTF8',
+                    f'/DPAYLOAD_DIR={PAYLOAD}', f'/DOUTPUT_FILE={updater}', f'/DAPP_VERSION={release["version"]}',
+                    str(ROOT / 'installer' / 'update-launcher.nsi')], check=True)
+    updater_digest = hashlib.sha256(updater.read_bytes()).hexdigest()
+    (ROOT / 'dist' / 'INSTALLER-SHA256SUMS.txt').write_text(
+        f'{digest}  {output.name}\n{updater_digest}  {updater.name}\n', encoding='utf-8')
     print(json.dumps({'installer': str(output), 'bytes': output.stat().st_size, 'sha256': digest}))
 
 

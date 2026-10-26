@@ -1,6 +1,6 @@
 # 설치 배포 안내
 
-버전 0.6.0은 Windows x64용 통합 EXE 베타다. 사용자 지정 폴더에 Spotify와 SpotX, Spicetify 및 ivLyrics를 한 번에 구성한다. CPython 3.13.17과 사전을 포함하므로 별도 Python 설치가 필요하지 않다. 설치 중 공식 Spotify 파일 약 150 MB를 추가로 내려받는다. 다른 깨끗한 PC에서의 검증이 남아 있어 정식 배포 준비 완료로 표시하지 않는다.
+버전 0.6.1은 Windows x64용 통합 EXE 베타다. 사용자 지정 폴더에 Spotify와 SpotX, Spicetify 및 ivLyrics를 한 번에 구성한다. CPython 3.13.17과 사전을 포함하므로 별도 Python 설치가 필요하지 않다. 설치 중 공식 Spotify 파일 약 150 MB를 추가로 내려받는다. 다른 깨끗한 PC에서의 검증이 남아 있어 정식 배포 준비 완료로 표시하지 않는다.
 
 ## 설치와 제거
 

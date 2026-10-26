@@ -12,20 +12,27 @@ function loadExtension(record, response) {
     let saved = record;
     const values = new Map();
     const notices = [];
+    const listeners = new Map();
+    const delays = [];
     const cache = { async getTranslation() { assert.equal(this, cache); return saved; },
         async setTranslation(track, lang, phonetic, data) { assert.equal(this, cache); saved = data; return true; } };
     const api = { LocalStorage: { get: key => values.get(key), set: (key, value) => values.set(key, value) },
         Player: { data: { item: { uri: 'spotify:track:test' } } }, showNotification: value => notices.push(value) };
+    api.Player.addEventListener = (event, fn) => listeners.set(event, fn);
+    api.Player.removeEventListener = (event, fn) => { if (listeners.get(event) === fn) listeners.delete(event); };
     const window = { Spicetify: api, LyricsService: { cache, getTranslationCacheId: uri => uri?.replace(/^spotify:track:/, '') }, AIAddonManager: { register() {} } };
-    const context = { window, Spicetify: api, URL, setTimeout: (fn, ms) => ms <= 1000 ? setTimeout(fn, 0) : 0, clearTimeout, AbortController,
+    const context = { window, Spicetify: api, URL, setTimeout: (fn, ms) => {
+        if (ms <= 5000) { delays.push(ms); return setTimeout(fn, 0); }
+        return 0;
+    }, clearTimeout, AbortController,
         fetch: async (url, options) => {
             context.lastRequest = JSON.parse(options.body);
             context.requestCount = (context.requestCount || 0) + 1;
-            if (typeof response === 'function') return response(context.lastRequest, context.requestCount);
+            if (typeof response === 'function') return response(context.lastRequest, context.requestCount, options);
             return { ok: true, json: async () => response };
         } };
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'hangul-lyrics.js'), 'utf8'), context);
-    Object.defineProperty(cache, 'harness', { value: { context, values, notices, getSaved: () => saved } });
+    Object.defineProperty(cache, 'harness', { value: { context, values, notices, listeners, delays, getSaved: () => saved } });
     return cache;
 }
 
@@ -114,6 +121,99 @@ test('a busy helper is retried and its successful result reaches the caller', as
     const result=await cache.harness.context.window.HangulLyricsProvider.addon.translateLyrics(params);
     assert.equal(result.phonetic[0],'츠키노 미치');
     assert.equal(cache.harness.context.requestCount,2);
+});
+
+test('a missing pronunciation is searched again rather than accepted as the final result', async () => {
+    const attempts = [];
+    const cache = loadExtension(null, async (body, count) => {
+        attempts.push(body.retry_attempt);
+        return count < 4 ? { ok: false, status: 404, json: async () => ({ error: 'not found yet' }) }
+            : { ok: true, status: 200, json: async () => authored };
+    });
+    const result = await cache.harness.context.window.HangulLyricsProvider.addon.translateLyrics(params);
+    assert.deepEqual(attempts, [0, 1, 2, 3]);
+    assert.deepEqual(cache.harness.delays, [2000, 2000, 2000]);
+    assert.equal(result.hangulReading.lookup_attempts, 4);
+    assert.equal(cache.harness.notices.length, 0);
+    assert.equal(cache.harness.listeners.size, 0);
+});
+
+test('repeated failure stops after three extra attempts and remounts share the active job', async () => {
+    const cache = loadExtension(null, async () => ({ ok: false, status: 503, json: async () => ({ error: 'temporary' }) }));
+    const addon = cache.harness.context.window.HangulLyricsProvider.addon;
+    await assert.rejects(Promise.all([addon.translateLyrics(params), addon.translateLyrics(params)]));
+    assert.equal(cache.harness.context.requestCount, 4);
+    assert.equal(cache.harness.listeners.size, 0);
+});
+
+test('invalid input is not retried and a valid result does not wait', async () => {
+    const invalid = loadExtension(null, async () => ({ ok: false, status: 400, json: async () => ({ error: 'invalid' }) }));
+    await assert.rejects(invalid.harness.context.window.HangulLyricsProvider.addon.translateLyrics(params));
+    assert.equal(invalid.harness.context.requestCount, 1);
+    const good = loadExtension(null, authored);
+    await good.harness.context.window.HangulLyricsProvider.addon.translateLyrics(params);
+    assert.equal(good.harness.context.requestCount, 1);
+});
+
+test('prefetch misses do not launch repeated web searches', async () => {
+    const cache = loadExtension(null, async () => ({ ok: false, status: 404, json: async () => ({ error: 'missing' }) }));
+    await assert.rejects(cache.harness.context.window.HangulLyricsProvider.addon.translateLyrics({ ...params, trackId: 'next' }));
+    assert.equal(cache.harness.context.requestCount, 1);
+});
+
+test('changing the track aborts the HTTP request and releases the song listener', async () => {
+    let started;
+    const ready = new Promise(resolve => { started = resolve; });
+    const cache = loadExtension(null, async (_, count, options) => {
+        started();
+        return new Promise((resolve, reject) => options.signal.addEventListener('abort', () => {
+            const error = new Error('aborted'); error.name = 'AbortError'; reject(error);
+        }, { once: true }));
+    });
+    const pending = cache.harness.context.window.HangulLyricsProvider.addon.translateLyrics(params);
+    await ready;
+    cache.harness.context.Spicetify.Player.data.item.uri = 'spotify:track:next';
+    cache.harness.listeners.get('songchange')();
+    await assert.rejects(pending, error => error.superseded === true);
+    assert.equal(cache.harness.context.requestCount, 1);
+    assert.equal(cache.harness.listeners.size, 0);
+});
+
+test('a malformed successful response is retried before reaching the lyrics screen', async () => {
+    const cache = loadExtension(null, async (_, count) => ({ ok: true, status: 200,
+        json: async () => count === 1 ? { valid: false, phonetic: [] } : authored }));
+    const result = await cache.harness.context.window.HangulLyricsProvider.addon.translateLyrics(params);
+    assert.equal(result.phonetic[0], authored.phonetic[0]);
+    assert.equal(cache.harness.context.requestCount, 2);
+});
+
+test('the total lookup deadline prevents more source requests', async () => {
+    let now = 0;
+    const cache = loadExtension(null, async () => {
+        now = 59999;
+        return { ok: false, status: 503, json: async () => ({ error: 'temporary' }) };
+    });
+    cache.harness.context.Date = { now: () => now };
+    await assert.rejects(cache.harness.context.window.HangulLyricsProvider.addon.translateLyrics(params));
+    assert.equal(cache.harness.context.requestCount, 1);
+    assert.equal(cache.harness.listeners.size, 0);
+});
+
+test('changing tracks during the retry delay cancels its timer', async () => {
+    let waiting;
+    const ready = new Promise(resolve => { waiting = resolve; });
+    const cache = loadExtension(null, async () => ({ ok: false, status: 404, json: async () => ({ error: 'missing' }) }));
+    cache.harness.context.setTimeout = (fn, ms) => {
+        if (ms === 2000) { waiting(); return setTimeout(fn, 5000); }
+        return 0;
+    };
+    const pending = cache.harness.context.window.HangulLyricsProvider.addon.translateLyrics(params);
+    await ready;
+    cache.harness.context.Spicetify.Player.data.item.uri = 'spotify:track:next';
+    cache.harness.listeners.get('songchange')();
+    await assert.rejects(pending, error => error.superseded === true);
+    assert.equal(cache.harness.context.requestCount, 1);
+    assert.equal(cache.harness.listeners.size, 0);
 });
 
 test('an old foreground retry stops when Spotify Connect changes the current track', async () => {

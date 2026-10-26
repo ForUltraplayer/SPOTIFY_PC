@@ -34,7 +34,7 @@ _kana_converter = None
 _kana_lock = threading.Lock()
 _request_context = threading.local()
 
-VERSION = "0.5.0"
+VERSION = "0.6.1"
 MATCHING_VERSION = "0.3.1"  # Search changes do not invalidate compatible client pronunciation caches.
 PORT = 19643
 ORIGIN = "https://xpui.app.spotify.com"
@@ -448,6 +448,7 @@ class Reader:
         self.lock = threading.Lock()
         self.jobs = threading.BoundedSemaphore(2)
         self.negative = {}
+        self.retry_counts = {}
         self.last = None
         self.cache = {}
         self.aliases = {}
@@ -538,6 +539,9 @@ class Reader:
         foreground = params.get('foreground', False)
         if not isinstance(track_id, str) or len(track_id) > 200 or not isinstance(foreground, bool):
             raise ValueError('곡 식별 정보가 올바르지 않습니다.')
+        retry_attempt = params.get('retry_attempt', 0)
+        if type(retry_attempt) is not int or not 0 <= retry_attempt <= 3:
+            raise ValueError('자동 재조회 횟수가 올바르지 않습니다.')
         key = hashlib.sha256(json.dumps([title, artist, text, source_url], ensure_ascii=False).encode()).hexdigest()
         cached_result, refresh_cached, negative = None, None, False
         with self.lock:
@@ -551,6 +555,11 @@ class Reader:
                 if cached.get('coverage', 1) < 1 and cached.get('matching_version') != MATCHING_VERSION:
                     refresh_cached, cached_result = cached_result, None
             negative = self.negative.get(key, 0) > time.time()
+            if not negative:
+                self.retry_counts.pop(key, None)
+            retry_allowed = negative and foreground and retry_attempt > self.retry_counts.get(key, 0)
+            if retry_allowed:
+                negative = False
         if cached_result:
             self.last = with_offline_fallback(cached_result, text, automatic)
             return self.last
@@ -559,6 +568,15 @@ class Reader:
         if not self.jobs.acquire(blocking=False):
             raise RuntimeError("다른 곡의 발음 자료를 확인하고 있습니다. 잠시 후 다시 시도해 주세요.")
         try:
+            # Busy responses do not spend a source retry. Repeated UI mounts
+            # cannot turn the three extra attempts into unlimited cache bypasses.
+            with self.lock:
+                if retry_allowed:
+                    if retry_attempt <= self.retry_counts.get(key, 0):
+                        raise LookupError('이 곡의 자동 재조회 횟수를 모두 사용했습니다.')
+                    self.retry_counts[key] = retry_attempt
+                    if len(self.retry_counts) > 500:
+                        self.retry_counts.pop(next(iter(self.retry_counts)))
             def superseded():
                 return bool(track_id) and epoch != self.lookup_epoch and self.foreground_track != track_id
             def check_current():
@@ -616,6 +634,8 @@ class Reader:
             if selected:
                 with self.lock:
                     self.cache[key] = selected
+                    self.negative.pop(key, None)
+                    self.retry_counts.pop(key, None)
                     parsed = urllib.parse.urlsplit(selected['source_url'])
                     if parsed.hostname == 'namu.wiki' and parsed.path.startswith('/w/'):
                         self.aliases[self.alias_key(title, artist)] = {

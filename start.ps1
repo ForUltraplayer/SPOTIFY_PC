@@ -4,6 +4,17 @@
 param([switch]$NoErrorDialog)
 $ErrorActionPreference = 'Stop'
 try {
+$updater = Join-Path $PSScriptRoot 'auto-update.ps1'
+$nativePowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+if ((Test-Path -LiteralPath $updater) -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'install-marker.json'))) {
+    # Run a temporary copy: the installer may replace this application's files.
+    $updateRunner = Join-Path ([IO.Path]::GetTempPath()) ('SpotifyHangul-Update-' + [Guid]::NewGuid().ToString('N') + '.ps1')
+    Copy-Item -LiteralPath $updater -Destination $updateRunner
+    try {
+        & $nativePowerShell -NoProfile -ExecutionPolicy Bypass -File $updateRunner -Mode ApplyPending -InstallRoot $PSScriptRoot
+        if ($LASTEXITCODE -eq 10) { return }
+    } finally { Remove-Item -LiteralPath $updateRunner -ErrorAction SilentlyContinue }
+}
 $bridgeScript = Join-Path $PSScriptRoot 'bridge.py'
 $pythonWindowless = $env:IVLYRICS_HANGUL_PYTHON
 if (-not $pythonWindowless) {
@@ -67,6 +78,9 @@ if (-not $bridgeHealthy) {
     if (-not $bridgeHealthy) { throw '한글 발음 도우미를 시작하지 못했습니다.' }
 }
 Start-Process -FilePath $spotifyExe
+if (Test-Path -LiteralPath $updater) {
+    Start-Process -FilePath $nativePowerShell -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"'+$updater+'"'),'-Mode','Check','-InstallRoot',('"'+$PSScriptRoot+'"')) -WorkingDirectory $PSScriptRoot -WindowStyle Hidden
+}
 } catch {
     $message = $_.Exception.Message
     $errorFile = Join-Path $PSScriptRoot 'start-error.txt'
