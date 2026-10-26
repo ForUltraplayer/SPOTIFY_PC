@@ -7,4 +7,4 @@
 *.ps1 text eol=crlf
 *.patch text eol=lf
 # Preserve byte-pinned upstream inputs and generated patch digests.
-third_party/spotx/** -text
+third_party/spotx/** -text -whitespace
