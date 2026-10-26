@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from dependencies import load, fingerprint, verify
-from upstream_updates import check, promote
+from upstream_updates import check, promote, stage
 
 
 class DependenciesTest(unittest.TestCase):
@@ -47,6 +47,11 @@ class DependenciesTest(unittest.TestCase):
             for proof in ({'result': 'failed'}, {'result': 'passed', 'manifest': fingerprint(load()), 'baseline': 'old'}):
                 report.write_text(json.dumps(proof))
                 with self.assertRaises(ValueError): promote(candidate, report)
+
+    def test_older_candidate_is_rejected_before_network_access(self):
+        with patch('upstream_updates.api') as api:
+            with self.assertRaises(ValueError): stage('spicetify', 'v0.0.1', Path('unused'))
+            api.assert_not_called()
 
 
 if __name__ == '__main__': unittest.main()

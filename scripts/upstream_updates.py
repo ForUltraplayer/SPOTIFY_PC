@@ -83,11 +83,12 @@ def stage(component, tag, output):
     data = copy.deepcopy(load())
     item = data['components'][component]
     repo = item['repository']
+    version = tag.removeprefix('v')
+    if tuple(map(int, version.split('.'))) <= tuple(map(int, item['version'].split('.'))):
+        raise ValueError('Candidate must be newer than the selected version')
     release = api(repo+'/releases/tags/'+tag)
     if release['draft'] or release['prerelease']: raise ValueError('Not a stable release')
     revision = api(repo+'/commits/'+tag)['sha']
-    version = tag.removeprefix('v')
-    if version == item['version']: raise ValueError('This version is already selected')
     for key in ('artifact', 'source_artifact'):
         if key in item: data['artifacts'].pop(item[key])
     if component == 'spicetify':
