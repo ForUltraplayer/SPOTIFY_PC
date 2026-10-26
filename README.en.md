@@ -4,11 +4,11 @@
 
 Shows the Korean (Hangul) pronunciation of Japanese songs in the Spotify desktop lyrics view. Pronunciation is pulled from Haneum and Namuwiki and matched line by line against Spotify's lyrics.
 
-Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Public version: 0.6.1 beta.
+Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Public version: 0.6.3 beta.
 
-**[⬇ Download (v0.6.1)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.1)**
+**[⬇ Download (v0.6.3)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.3)**
 
-Version 0.6.2 is temporarily withdrawn while an update failure is investigated. A corrected build will be announced after validation.
+Version 0.6.3 fixes the update failure in 0.6.2. Users on 0.6.0 or 0.6.1 can upgrade directly without installing an intermediate version.
 
 Android version: [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)
 
@@ -16,7 +16,7 @@ Android version: [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_AND
 
 No need to install Spotify, SpotX or Python first.
 
-1. Download and run `SpotifyHangul-0.6.1-Setup.exe`.
+1. Download and run `SpotifyHangul-0.6.3-Setup.exe`.
 2. Pick an install folder (default: `%LOCALAPPDATA%\Programs\SpotifyHangul`).
 3. The installer downloads the official Spotify files (~150 MB).
 
@@ -44,11 +44,13 @@ Per-song source URLs and automatic pronunciation are under **한글 발음 자�
 
 ## Update / Uninstall
 
-- **0.6.1 and later**: the shortcut checks for new versions and updates automatically (every 8 hours, applied after Spotify closes).
-- **0.6.0 and earlier**: close Spotify and run `SpotifyHangul-0.6.1-Update.exe`, or reinstall Setup.exe into the same folder.
+- **0.6.1 and later**: the shortcut checks for and downloads new versions when launched, at least 8 hours after the previous check. Updates apply before the next launch after Spotify closes.
+- **Manual update / 0.6.0 and earlier**: close Spotify and run `SpotifyHangul-0.6.3-Update.exe`, or reinstall Setup.exe into the same folder. No intermediate version is needed.
 - **Uninstall**: Windows Settings > Apps > Installed apps > **Spotify 한글 가사**. Your existing Spotify and pronunciation cache are kept.
 
 Spotify's own auto-update is blocked to keep the patches. New Spotify versions come with new installer releases.
+
+The first migration to isolated preprocessing state in 0.6.3 downloads about 150 MB of official Spotify files again.
 
 ## Known issues
 
