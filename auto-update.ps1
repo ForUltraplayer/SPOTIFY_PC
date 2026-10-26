@@ -5,7 +5,8 @@ param([ValidateSet('Check','ApplyPending')][string]$Mode='Check',
       [Parameter(Mandatory=$true)][string]$InstallRoot,
       [switch]$IgnoreInterval,
       [switch]$Interactive,
-      [string]$ErrorFile)
+      [string]$ErrorFile,
+      [version]$RequestedVersion='0.0.0')
 $ErrorActionPreference='Stop'
 $env:PSModulePath=(Join-Path $PSHOME 'Modules')+[IO.Path]::PathSeparator+$env:PSModulePath
 $root=[IO.Path]::GetFullPath($InstallRoot).TrimEnd('\')
@@ -145,7 +146,27 @@ try {
     [Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     $releases=Invoke-RestMethod -Uri 'https://api.github.com/repos/ForUltraplayer/SPOTIFY_PC/releases?per_page=10' -Headers @{'User-Agent'='SpotifyHangul-Updater';'Accept'='application/vnd.github+json'} -TimeoutSec 15
     $asset=Select-UpdateAsset $releases $current
-    if (-not $asset) { Write-UpdateState @{status='up-to-date';checked_at=(Get-Date -Format o)}; exit 0 }
+    if (-not $asset) {
+        if ($pending -and [version]$pending.version -gt $current) {
+            $message='대기 중인 '+$pending.version+' 업데이트가 공개 배포 목록에 없습니다. 철회된 파일의 실행을 중단했습니다. 비공개 검증본은 해당 Setup.exe를 직접 실행해 주세요.'
+            $held=Join-Path $cache ('pending-withdrawn-'+[Guid]::NewGuid().ToString('N')+'.json')
+            Move-Item -LiteralPath $pendingPath -Destination $held
+            Write-UpdateState @{status='withdrawn';version=$pending.version;error=$message;checked_at=(Get-Date -Format o)}
+            Report-UpdateError $message
+            if ($Interactive) { exit 21 }; exit 0
+        }
+        if ($current -lt $RequestedVersion) {
+            $message='요청한 '+$RequestedVersion+' 버전이 아직 공개되지 않았습니다. 비공개 검증본은 Setup.exe를 직접 실행해 주세요.'
+            Write-UpdateState @{status='unavailable';version=$RequestedVersion.ToString();error=$message;checked_at=(Get-Date -Format o)}
+            Report-UpdateError $message
+            if ($Interactive) { exit 22 }; exit 0
+        }
+        Write-UpdateState @{status='up-to-date';checked_at=(Get-Date -Format o)}; exit 0
+    }
+    if ([version]$asset.version -lt $RequestedVersion) {
+        Report-UpdateError ('요청한 '+$RequestedVersion+' 버전은 아직 공개되지 않았습니다. 더 이전 버전으로 대신 업데이트하지 않습니다. 비공개 검증본의 Setup.exe를 직접 실행해 주세요.')
+        if ($Interactive) { exit 22 }; exit 0
+    }
     if (-not $Interactive -and $state.status -eq 'install-failed' -and $state.version -eq $asset.version) {
         Write-UpdateState @{status='install-failed';version=$state.version;error=$state.error;checked_at=(Get-Date -Format o)}
         exit 0

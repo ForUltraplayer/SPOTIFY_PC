@@ -44,11 +44,12 @@ $driver=Join-Path $area 'driver.ps1'
 # @file driver.ps1
 # @author: ForUltraplayer
 # @brief Isolate the update script from live network and installer execution.
-param($Updater,$Root,$Area,$Fixture,$Scenario,$Action,[switch]$Interactive)
+param($Updater,$Root,$Area,$Fixture,$Scenario,$Action,[switch]$Interactive,[string]$RequestedVersion='0.0.0')
 $env:LOCALAPPDATA=Join-Path $Area 'local'
 function Invoke-RestMethod {
     param($Uri,$Headers,$TimeoutSec)
     if ($Scenario -eq 'Offline') { throw 'controlled offline fixture' }
+    if ($Scenario -eq 'NoRelease') { return @() }
     return @(Get-Content -LiteralPath (Join-Path $Area 'release.json') -Raw | ConvertFrom-Json)
 }
 function Invoke-WebRequest { param($Uri,$OutFile,[switch]$UseBasicParsing,$TimeoutSec) Copy-Item -LiteralPath $Fixture -Destination $OutFile }
@@ -74,13 +75,13 @@ function Start-Process {
     $process | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value { param($Timeout) return (-not $this.TimedOut) }
     return $process
 }
-& $Updater -Mode $Action -InstallRoot $Root -IgnoreInterval -Interactive:$Interactive -ErrorFile (Join-Path $Area 'error.txt')
+& $Updater -Mode $Action -InstallRoot $Root -IgnoreInterval -Interactive:$Interactive -ErrorFile (Join-Path $Area 'error.txt') -RequestedVersion $RequestedVersion
 exit $LASTEXITCODE
 '@ | Set-Content -LiteralPath $driver -Encoding UTF8
 $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-function Invoke-Fixture($Scenario,$Action,[switch]$Interactive) {
+function Invoke-Fixture($Scenario,$Action,[switch]$Interactive,[string]$RequestedVersion='0.0.0') {
     Remove-Item -LiteralPath (Join-Path $area 'error.txt') -ErrorAction SilentlyContinue
-    $fixtureArguments=@('-NoProfile','-ExecutionPolicy','Bypass','-File',$driver,'-Updater',$updater,'-Root',$root,'-Area',$area,'-Fixture',$fixture,'-Scenario',$Scenario,'-Action',$Action)
+    $fixtureArguments=@('-NoProfile','-ExecutionPolicy','Bypass','-File',$driver,'-Updater',$updater,'-Root',$root,'-Area',$area,'-Fixture',$fixture,'-Scenario',$Scenario,'-Action',$Action,'-RequestedVersion',$RequestedVersion)
     if ($Interactive) { $fixtureArguments += '-Interactive' }
     & $powershell @fixtureArguments *>> (Join-Path $area 'driver.log')
     return $LASTEXITCODE
@@ -161,4 +162,14 @@ Copy-Item -LiteralPath (Join-Path $project 'start.ps1') -Destination (Join-Path 
 & $powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $startup 'start.ps1') -NoErrorDialog *> (Join-Path $area 'timeout-startup.log')
 if ($LASTEXITCODE -ne 0) { throw 'A timed-out installer must stop startup before trying to launch the missing helper/client.' }
 $passed++
+Reset-PendingFixture
+if ((Invoke-Fixture NoRelease Check -Interactive) -ne 21 -or (Test-Path -LiteralPath $pendingFile.FullName)) { throw 'Withdrawn cached release remains executable after a successful public check.' }
+if (-not (Test-Path -LiteralPath $download) -or @(Get-ChildItem -LiteralPath $pendingFile.DirectoryName -Filter 'pending-withdrawn-*.json').Count -lt 1) { throw 'Withdrawn update evidence was not preserved.' }; $passed++
+if ((Invoke-Fixture NoRelease Check -Interactive -RequestedVersion '0.6.3') -ne 22) { throw 'A private updater must not report an old public installation as successfully updated.' }; $passed++
+if ((Invoke-Fixture Download Check -Interactive -RequestedVersion '0.6.3') -ne 22 -or (Test-Path -LiteralPath $pendingFile.FullName)) { throw 'A private updater selected an older public release instead.' }; $passed++
+'{"Version":"0.6.3"}' | Set-Content -LiteralPath (Join-Path $root 'install-state.json') -Encoding UTF8
+if ((Invoke-Fixture NoRelease Check -Interactive -RequestedVersion '0.6.3') -ne 0) { throw 'An already installed private version should remain up to date.' }; $passed++
+'{"Version":"0.5.1"}' | Set-Content -LiteralPath (Join-Path $root 'install-state.json') -Encoding UTF8
+$release | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $area 'release.json') -Encoding UTF8
+if ((Invoke-Fixture Download Check -Interactive -RequestedVersion '0.6.0') -ne 0 -or -not (Test-Path -LiteralPath $pendingFile.FullName)) { throw 'A real published update could not be queued after withdrawal recovery.' }; $passed++
 [PSCustomObject]@{tests=$passed;foreignReleasesRejected=$true;corruptionRejected=$true;playbackProtected=$true;mockInstallerOnly=$true} | ConvertTo-Json

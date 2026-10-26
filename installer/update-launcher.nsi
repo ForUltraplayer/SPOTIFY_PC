@@ -52,7 +52,7 @@ Section
   SetOutPath "$PLUGINSDIR"
   File /oname=auto-update.ps1 "${PAYLOAD_DIR}\auto-update.ps1"
   Delete "$PLUGINSDIR\update-error.txt"
-  nsExec::ExecToLog /TIMEOUT=240000 '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\auto-update.ps1" -Mode Check -IgnoreInterval -Interactive -InstallRoot "$INSTDIR" -ErrorFile "$PLUGINSDIR\update-error.txt"'
+  nsExec::ExecToLog /TIMEOUT=240000 '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\auto-update.ps1" -Mode Check -IgnoreInterval -Interactive -InstallRoot "$INSTDIR" -ErrorFile "$PLUGINSDIR\update-error.txt" -RequestedVersion "${APP_VERSION}"'
   Pop $0
   ${If} $0 != 0
     Call ShowUpdateError
