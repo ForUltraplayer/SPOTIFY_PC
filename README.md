@@ -1,82 +1,165 @@
-# Spotify 한글 발음 가사
+# Spotify 한글 발음 가사 (Windows)
 
-| 표기 | 의미 |
+Windows용 Spotify 데스크톱 앱의 가사 화면에 **일본어 노래의 한글 발음**을 함께 표시합니다. 사람이 웹에 정리해 둔 한글 발음 자료를 찾아 Spotify의 일본어 가사와 줄 단위로 맞춘 뒤 보여 줍니다.
+
+> [!NOTE]
+> 현재 버전은 **0.6.0 베타**입니다. 현재 PC의 새 설치와 제거 및 한글 가사 표시를 확인했습니다. 다른 물리 PC와 전체 곡의 발음 청취 검수는 남아 있습니다.
+
+**[⬇ 설치 파일 받기 (SpotifyHangul-0.6.0-Setup.exe)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.0)**
+
+## 한눈에 보기
+
+| 항목 | 내용 |
 | --- | --- |
-| API | 프로그램 사이의 요청 인터페이스 |
-| 발음 제공자 코드 | `web-hangul` |
-| 로컬 도우미 코드 | `ivLyricsHangul` |
+| 하는 일 | Spotify 가사 화면에 일본어 원문과 한글 발음을 함께 표시 |
+| 발음 출처 | 한음, 나무위키에 사람이 작성한 기존 한글 발음 |
+| 대상 | Windows x64, Windows 11에서 검증 |
+| 기반 | [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) |
+| 설치 방식 | EXE 하나, Spotify와 SpotX 자동 구성, Python과 Spicetify 및 ivLyrics 포함 |
+| 비용 | 유료 API 키 없이 사용, Spotify 로그인 필요 |
+| 안드로이드 | 별도 앱 [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_ANDROID) |
 
-Windows Spotify의 ivLyrics에 웹에 작성된 일본어 노래의 한글 발음을 표시한다. 버전 0.6.0은 Spotify와 SpotX까지 한 번에 구성하는 Windows x64용 EXE 베타다. 설치 폴더를 선택할 수 있으며 Python과 Spotify를 미리 설치할 필요가 없다. 설치 중 공식 Spotify x64 파일 약 150 MB를 내려받아 SHA-256과 Spotify AB 서명을 검사한다. 자체 소스에는 GPL-3.0-or-later를 적용한다. 깨끗한 다른 PC의 설치와 전체 곡의 발음 청취 검수는 남아 있다.
+## 동작 구조
 
-## 기능
+공식 Spotify x64 파일을 내려받아 선택한 설치 폴더에 구성하고 SpotX를 먼저 적용합니다. 이어 Spicetify와 가사 앱 ivLyrics를 적용해 한글 발음을 공급합니다. 기존 Spotify 파일은 보존하며 통합본에는 별도 Spicetify 설정과 백업을 사용합니다.
 
-- 한음과 나무위키의 일본어 가사와 기존 한글 발음을 대조한다. 곡별 자료 주소로 티스토리를 지정할 수 있다.
-- 원문 가사 조회가 실패하면 제목의 feat. 표기를 제거하거나 공동 가수명의 대표 가수로 다시 찾는다. 곡명과 가수 및 확인 가능한 앨범·길이를 검증하고 Live 등 버전 표기는 유지한다.
-- 커버곡의 제목에서 원곡 후보를 찾고 현재 가사와 대조한다. 현재 녹음의 가사 재생 시간은 유지한다.
-- 가사 서버의 429와 5xx 응답은 일시 오류로 구분하고 해당 서버에 대기 시간을 적용한다. 상태는 한글 발음 자료 설정에서 확인하며 팝업 알림은 띄우지 않는다.
-- 원문의 일본어 줄 중 85% 이상과 최소 5 줄이 연결된 자료를 사용한다. 일본어가 3~4 줄인 곡은 모든 줄이 연결되어야 한다.
-- 선택 기능으로 누락 줄에 사전 기반 자동 발음을 사용한다. 기본값은 꺼짐이며 사용 알림은 띄우지 않는다. 자료 설정 화면에서 자동으로 만든 줄 수를 확인한다.
-- 하단 재생바의 현재 곡 제목은 우클릭 한 번으로 전체 제목을 복사한다. 기존 곡 메뉴의 곡 제목 복사와 프로필 메뉴의 현재 곡 제목 복사도 제공한다. 성공 알림은 띄우지 않는다.
+```text
+통합 Spotify 데스크톱 앱 (SpotX 적용)
+ └─ Spicetify (Spotify에 확장을 붙이는 도구)
+     ├─ ivLyrics (가사 화면 앱, 원문과 발음 표시)
+     └─ 한글 발음 확장 (이 프로젝트)
+          └─ 로컬 도우미 (같은 PC에서만 동작)
+               └─ 한음, 나무위키에서 발음 자료 조회 후 원문과 대조
+```
 
-모든 곡에 발음 자료가 있는 것은 아니다. 사이트 응답, 문서 구조와 가사 표기 차이로 실패할 수 있다. 자동 발음은 실제 노래의 한자 읽기와 다를 수 있다. 문장 단위 자료가 여러 재생 줄에 반복될 수 있다.
+로컬 도우미는 Spotify 안에서 직접 읽을 수 없는 웹 문서를 대신 읽어 오는 작은 프로그램입니다. 바탕화면 바로가기로 Spotify를 열 때 함께 시작하고, Spotify를 닫으면 약 30 초 뒤 스스로 종료합니다. 서비스 등록이나 부팅 자동 시작은 하지 않습니다.
 
-## 사용
+## 주요 기능
 
-[배포 페이지](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)에서 `SpotifyHangul-0.6.0-Setup.exe`를 받는다. 인터넷에 연결한 상태에서 설치 프로그램을 실행하고 전용 폴더를 선택한다. Spotify를 따로 설치하거나 먼저 실행할 필요가 없다. 선택한 폴더 안에 Spotify를 구성하고 SpotX, Spicetify와 ivLyrics를 적용한다. 기존 Spotify 파일과 공유 Spicetify 설정은 보존한다. 통합본에는 별도 Spicetify 설정을 사용하며 기존 확장과 테마가 있으면 처음 설치할 때 복사한다.
+**발음 표시**
 
-통합본의 Spotify는 패치 유지를 위해 자동 업데이트를 차단한다. 이후 버전 교체는 통합 설치본 업데이트로 진행한다. 백신 예외와 부팅 자동 시작은 추가하지 않는다. 설치 후 한글 가사 바로가기를 실행하면 기존에 실행 중인 일반 Spotify를 종료하고 통합본을 연다. [통합 구조와 검증 범위](docs/SPOTX_INTEGRATION.md)를 참고한다.
+- 한음, 나무위키의 일본어 가사와 한글 발음을 Spotify 가사와 줄 단위로 대조
+- 원문 일본어 줄의 85% 이상, 최소 5 줄이 맞는 자료만 사용 (일본어가 3~4 줄인 곡은 모든 줄 일치 필요)
+- 원문 대조를 통과한 자료 주소를 기억해 다음 재생 때 빠르게 표시
+- 곡마다 사용할 자료 주소를 직접 지정 가능 (프로필 메뉴의 **한글 발음 자료**)
 
-바탕화면의 **Spotify 한글 가사** 바로가기를 실행하고 Spotify의 **ivLyrics** 화면을 연다. 이미 Spotify가 실행 중이어도 같은 바로가기를 사용할 수 있다. 프로필 메뉴의 **한글 발음 자료**에서 현재 곡의 자료 주소와 자동 발음을 설정한다. 자동 발음은 기본값이 꺼짐이며 원하는 경우 직접 켠다.
+**가사를 못 찾을 때의 보완**
 
-시작 스크립트는 환경 변수 `IVLYRICS_HANGUL_PYTHON`, `runtime/pythonw.exe`, `python-path.txt`, PATH의 실제 Python 순서로 찾는다. WindowsApps 앱 별칭은 제외한다. 실행에 실패하면 `start-error.txt`에 오류를 남기고 오류 창을 표시한다. `python-path.txt`는 설치 PC에서 만들며 배포물에는 넣지 않는다.
+- 제목의 feat. 표기를 빼거나 공동 가수 중 대표 가수로 재검색
+- 곡명, 가수, 앨범, 길이를 확인해 다른 녹음의 가사 배제 (Live 등 버전 표기는 유지)
+- 커버곡은 제목에서 원곡을 찾아 원곡 가사와 대조하고, 재생 시간은 현재 녹음 기준 유지
+- 가사 서버가 혼잡(429, 5xx)하면 일시 오류로 보고 해당 서버만 잠시 대기
 
-설치 전제와 미완료 항목은 [배포 안내](docs/RELEASE.md), 실행 위치와 중지는 [운영 안내](docs/OPERATIONS.md)에 기록한다. 이 베타 설치 파일에는 코드 서명이 없다. 이전 [0.5.0 베타](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.5.0)도 유지한다.
+**선택 기능**
 
-## 캐시와 데이터 보존
+- 자동 발음: 발음 자료에 없는 줄을 사전 기반으로 변환 (기본값 꺼짐, 자료 설정 화면에서 자동 생성 줄 수 확인)
+- 제목 복사: 하단 재생바의 곡 제목 우클릭, 곡 메뉴, 프로필 메뉴에서 전체 제목 복사
 
-조회에 성공한 발음은 `%LOCALAPPDATA%\ivLyricsHangul\cache.json`, 원문과 일치한다고 확인한 자료 주소는 같은 폴더의 `aliases.json`에 저장한다. 각각 최대 500 곡과 30 일을 기준으로 관리한다. 조회 실패는 같은 도우미 프로세스 안에서 10 분 동안 기억한다. ivLyrics는 이와 별도로 Spotify 내부 IndexedDB의 `ivLyricsCache`에 원문과 발음 등의 결과를 저장한다. 확인한 기본 보관 기간은 365 일이다.
+## 설치
 
-설치 폴더와 개인 캐시는 분리한다. 업데이트와 프로그램 제거 시 위 개인 캐시를 지우지 않는다. 저장된 원문이 달라지거나 캐시가 만료되면 다시 대조할 수 있다. 한 번 저장했다고 모든 다른 가사 버전까지 영구히 재사용하는 구조는 아니다. 개인 캐시와 계정 정보는 배포물에 넣지 않는다.
+### 1단계: 통합 설치
 
-## 개발과 검증
+**Spotify와 SpotX 및 Python을 미리 설치하거나 먼저 실행할 필요가 없습니다.** 인터넷 연결만 준비합니다.
 
-검증한 조합은 Windows 11 x64, Python 3.13.9, Spotify 1.3.6.1921, Spicetify 2.46.3, ivLyrics 7.0.16이다. Node.js는 확장 검사에 사용한다. 의존성은 프로젝트 전용 폴더에 설치한다.
+1. [0.6.0 배포 페이지](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.0)에서 `SpotifyHangul-0.6.0-Setup.exe`를 받아 실행합니다.
+2. 기본값(`%LOCALAPPDATA%\Programs\SpotifyHangul`) 또는 비어 있는 전용 설치 폴더를 선택합니다. 기존 한글 가사 설치본을 업데이트하려면 같은 폴더를 선택합니다.
+3. 설치 프로그램이 공식 Spotify x64 파일 약 150 MB를 내려받고 크기와 SHA-256 및 Spotify AB 서명을 검사한 뒤 SpotX와 가사 기능을 연결합니다.
+
+관리자 권한은 필요하지 않으며 설치 폴더에 쓰기 권한이 있어야 합니다. 베타 EXE에는 코드 서명이 없습니다. 기존 확장과 테마 및 ivLyrics가 있으면 처음 설치할 때 통합본의 별도 설정 폴더에 복사합니다. 이후 기존 설정의 변경을 자동 동기화하지는 않습니다.
+
+통합 Spotify의 자동 업데이트는 패치 유지를 위해 차단하며 새 통합 설치본으로 버전을 교체합니다. 백신 예외와 부팅 자동 시작은 추가하지 않습니다. Store판은 자동 제거하지 않으며 공존 검증은 남아 있습니다. [통합 구조와 검증 범위](docs/SPOTX_INTEGRATION.md)를 참고하세요.
+
+### 2단계: 사용
+
+1. 바탕화면의 **Spotify 한글 가사** 바로가기로 통합 Spotify를 엽니다. 기존 Spotify가 실행 중이면 확인한 이전 클라이언트를 종료하고 통합본을 엽니다.
+2. Spotify에서 **ivLyrics** 화면을 엽니다.
+3. ivLyrics 설정에서 원문 표시와 한글 발음 표시를 선택합니다.
+4. 필요하면 프로필 메뉴의 **한글 발음 자료**에서 곡별 자료 주소와 자동 발음을 설정합니다.
+
+> [!IMPORTANT]
+> 일반 Spotify 바로가기로 열면 로컬 도우미가 시작되지 않아 발음이 표시되지 않습니다. 항상 **Spotify 한글 가사** 바로가기를 사용하세요.
+
+### 업데이트와 제거
+
+- **업데이트**: 새 버전 설치 파일을 같은 폴더에 다시 설치합니다.
+- **Spotify 버전 교체**: 통합 Spotify는 자동 업데이트를 차단합니다. 새 통합 설치본으로 교체합니다. 공식 다운로드 파일이 바뀌어 해시 검사가 실패해도 새 설치본이 필요합니다.
+- **제거**: Windows **설정 > 앱 > 설치된 앱**에서 **Spotify 한글 가사**를 제거합니다. 설치 폴더의 통합 Spotify와 Spicetify 및 ivLyrics를 함께 제거합니다. 기존 Spotify와 사용자 프로필 및 개인 발음 캐시는 남깁니다.
+
+## 한계와 주의 사항
+
+- 모든 곡에 한글 발음 자료가 있지는 않습니다. 사이트 응답, 문서 구조, 가사 표기 차이로 실패할 수 있습니다.
+- 자동 발음은 실제 노래의 한자 읽기와 다를 수 있습니다.
+- 문장 단위로 작성된 자료는 같은 발음이 여러 재생 줄에 반복될 수 있습니다.
+- Spotify와 Spicetify 업데이트에 따라 호환성이 달라질 수 있습니다.
+- Windows ARM64는 검증하지 않았습니다.
+
+## 검증 환경
+
+| 구성 요소 | 확인한 버전 |
+| --- | --- |
+| Windows | 11 x64 |
+| Spotify | 1.3.6.1921, 공식 파일에 SpotX 적용 |
+| SpotX | 3cfbdfd1fac3dc755155e434116e28b51acfec07 |
+| Spicetify | 2.46.3 |
+| ivLyrics | 7.0.16 |
+| 내장 Python | CPython 3.13.17 |
+
+상세 결과와 미완료 항목은 [검증 기록](docs/VERIFICATION.md)에 있습니다.
+
+## 저장 데이터
+
+| 데이터 | 위치 | 보관 기준 |
+| --- | --- | --- |
+| 조회한 한글 발음 | `%LOCALAPPDATA%\ivLyricsHangul\cache.json` | 최대 500 곡, 30 일 |
+| 원문과 일치한 자료 주소 | `%LOCALAPPDATA%\ivLyricsHangul\aliases.json` | 최대 500 곡, 30 일 |
+| 조회 실패 기록 | 로컬 도우미 메모리 | 10 분 |
+| ivLyrics 자체 캐시 | Spotify 내부 IndexedDB의 `ivLyricsCache` | 기본 365 일 |
+
+개인 캐시는 설치 폴더와 분리되어 업데이트나 제거 때 지워지지 않습니다. 계정 정보와 개인 캐시는 배포물에 포함하지 않습니다. 실행 위치와 수동 중지 방법은 [운영 안내](docs/OPERATIONS.md)에 정리되어 있습니다.
+
+## 개발자용
+
+<details>
+<summary>테스트, 소스 배포, 설치 프로그램 빌드</summary>
+
+개발 PC에는 Python과 Node.js가 필요합니다. 의존성은 프로젝트 전용 `vendor` 폴더에 설치합니다.
 
 ```powershell
 python -m pip install --target vendor -r requirements.txt
 python -m unittest discover -s . -p test_bridge.py -v
 node --test test_extension.cjs
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_installer.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_bootstrap.ps1
 ```
 
-소스 배포 초안은 다음 명령으로 생성한다. 개인 캐시, 설치 PC의 Python 경로, 진단 기록과 런타임은 포함하지 않는다.
+소스 배포 초안과 설치 프로그램은 다음 명령으로 `dist/`에 생성합니다. 외부 배포 파일은 공식 배포 주소와 SHA-256으로 고정합니다.
 
 ```powershell
 python scripts/build_spotx_adapter.py
 python scripts/prepare_release.py
-```
-
-생성 위치는 `dist/`이며 파일별 SHA-256 목록과 압축 파일의 해시를 함께 만든다. 설치 프로그램을 빌드하려면 고정된 외부 배포 파일을 준비한 다음 다음 명령을 사용한다. 다운로드 입력은 공식 배포 주소와 SHA-256으로 기록한다.
-
-```powershell
 python scripts/fetch_distribution_inputs.py
 python scripts/build_installer.py
 ```
 
-설치본은 CPython 3.13.17, Spicetify 2.46.3, ivLyrics 7.0.16과 원본 라이선스 및 대응 소스를 포함한다. 전체 검증 범위는 [검증 기록](docs/VERIFICATION.md)에 기록한다.
-
-## 안드로이드
-
-개발과 APK 배포는 [안드로이드 전용 저장소](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)에서 관리한다. [베타 APK](https://github.com/ForUltraplayer/SPOTIFY_ANDROID/releases/tag/v2.0.1-hangul.4)는 Myspoti 기반으로 재생과 한글 가사를 같은 앱에서 제공하며 PC 서버에 연결하지 않는다. Google 로그인 실패 사례와 이메일 로그인 대안은 안드로이드 README와 릴리스에 명시했다. Apple과 Facebook 로그인은 실제 검증하지 않았다. 호스트 검사와 APK 빌드 및 서명은 확인했고 새 APK의 휴대폰 설치와 실제 재생 검증은 대기한다. 이 저장소의 `android/` 패치는 분리 전 이력이며 새 개발의 기준은 전용 저장소다.
-
-## 소스 구성
+로컬 도우미의 Python은 환경 변수 `IVLYRICS_HANGUL_PYTHON`, `runtime/pythonw.exe`, `python-path.txt`, PATH의 실제 Python 순서로 찾습니다. 시작에 실패하면 설치 폴더의 `start-error.txt`에 오류를 남깁니다.
 
 | 경로 | 역할 |
 | --- | --- |
-| `bridge.py` | 웹 자료 조회와 일본어 원문 대조, 로컬 HTTP 요청 처리 |
-| `phonetics.py` | 선택 기능인 기기 내부 발음 변환 |
-| `hangul-lyrics.js` | ivLyrics 제공자 연결, 캐시 처리와 제목 복사 |
-| `start.ps1`, `stop.ps1` | 도우미와 Spotify 시작 및 도우미 중지 |
-| `scripts/prepare_release.py` | 허용한 소스 파일만 배포 초안으로 묶는 도구 |
-| `work/` | 원본 이력, 개인 진단과 검증 기록, Git 제외 |
+| `bridge.py` | 로컬 도우미: 웹 자료 조회, 일본어 원문 대조, 로컬 HTTP 응답 |
+| `phonetics.py` | 사전 기반 자동 발음 변환 |
+| `hangul-lyrics.js` | Spicetify 확장: ivLyrics 발음 공급, 캐시, 제목 복사 |
+| `start.ps1`, `stop.ps1` | 도우미와 Spotify 시작, 도우미 중지 |
+| `installer/` | NSIS 설치 프로그램과 Spicetify 연결 스크립트 |
+| `scripts/` | 배포 준비, 외부 입력 다운로드, 설치 프로그램 빌드 |
 
-프로젝트 이동 전의 전체 기록은 로컬 `work/migration/README-legacy.md`와 `verification-legacy.json`에 보존한다. Git에 들어가는 문서와 배포 초안에는 개인 진단 자료를 포함하지 않는다. 외부 의존성과 라이선스 상태는 [외부 구성 요소](THIRD_PARTY_NOTICES.md)와 [라이선스 검토](docs/LICENSE_REVIEW.md)에 기록한다.
+배포 절차와 포함 범위는 [배포 안내](docs/RELEASE.md)를 참고합니다.
+
+</details>
+
+## 라이선스
+
+이 프로젝트의 소스는 GPL-3.0-or-later를 따릅니다. 설치본에 포함한 외부 구성 요소의 라이선스와 대응 소스는 [외부 구성 요소](THIRD_PARTY_NOTICES.md)와 [라이선스 검토](docs/LICENSE_REVIEW.md)에 정리되어 있습니다. 소프트웨어 라이선스는 가사 자체의 재배포 권한을 부여하지 않습니다.
+
+이 저장소의 `android/` 폴더는 안드로이드 앱을 분리하기 전의 이력입니다. 안드로이드 개발과 APK 배포는 [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)에서 진행합니다.
+
+안드로이드의 [현재 베타 APK](https://github.com/ForUltraplayer/SPOTIFY_ANDROID/releases/tag/v2.0.1-hangul.4)는 재생과 한글 가사를 한 앱에서 제공합니다. Google 로그인 실패 사례와 Spotify용 비밀번호를 사용하는 이메일 로그인 대안은 해당 README와 릴리스에 명시했습니다. Apple과 Facebook 로그인은 실제 검증하지 않았습니다.
