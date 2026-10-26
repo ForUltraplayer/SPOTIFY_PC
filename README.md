@@ -1,5 +1,7 @@
 # Spotify 한글 발음 가사 (Windows)
 
+**한국어** | [English](README.en.md)
+
 Windows용 Spotify 데스크톱 앱의 가사 화면에 **일본어 노래의 한글 발음**을 함께 표시합니다. 사람이 웹에 정리해 둔 한글 발음 자료를 찾아 Spotify의 일본어 가사와 줄 단위로 맞춘 뒤 보여 줍니다.
 
 > [!NOTE]
