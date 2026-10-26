@@ -19,6 +19,11 @@ $stage=$null
 $state=$null
 $attemptConfig=$null
 $attemptApps=$null
+$preprocessState=Join-Path $root 'spicetify-state'
+$attemptPreprocess=$null
+$preprocessExisted=$false
+$preprocessTouched=$false
+$stockApps=$null
 $ivLyricsTransaction=$null
 
 function Assert-AppDirectory {
@@ -96,6 +101,18 @@ function Assert-CombinedClient {
     }
 }
 
+function Get-ManagedApplyArguments([string]$ClientPath,[string]$ConfigPath,[string]$CliVersion,[bool]$RebuildState) {
+    if (@(Get-ChildItem -LiteralPath (Join-Path $ClientPath 'Apps') -Filter '*.spa' -File).Count) { return @('-n','backup','apply') }
+    $section=''
+    $preparedWith=''
+    foreach ($line in Get-Content -LiteralPath $ConfigPath) {
+        if ($line -match '^\s*\[([^]]+)\]') { $section=$Matches[1]; continue }
+        if ($section -eq 'Backup' -and $line -match '^\s*with\s*=\s*(\S+)') { $preparedWith=$Matches[1] }
+    }
+    if ($RebuildState -or $preparedWith -ne $CliVersion) { return @('-n','restore','backup','apply') }
+    return @('-n','apply')
+}
+
 try {
     Assert-AppDirectory
     if ($Mode -eq 'Prepare') {
@@ -136,6 +153,7 @@ try {
     . (Join-Path $root 'installer\managed-ivlyrics.ps1')
     Assert-OwnedChild $client
     Assert-OwnedChild $config
+    Assert-OwnedChild $preprocessState
     $components=(Get-Content -LiteralPath (Join-Path $root 'components.json') -Raw | ConvertFrom-Json).components
     $reuse=(Test-Path -LiteralPath (Join-Path $client 'spotx-hangul.json'))
     if ($reuse) {
@@ -143,8 +161,12 @@ try {
         $reuse=$identity.App -eq 'SpotifyHangul' -and $identity.SpotifyVersion -eq $components.spotify.version -and
             $identity.SpotXRevision -eq $components.spotx.revision
     }
-    if (-not $reuse) {
-        if ((Test-Path -LiteralPath $client) -and @(Get-ChildItem -LiteralPath $client -Force).Count) { throw '기존 Spotify 하위 폴더의 소유권을 확인하지 못했습니다.' }
+    # Older releases isolated config only; Spicetify's state still used APPDATA.
+    # Rebuild once from verified, SpotX-patched stock files rather than trusting
+    # another client's shared Backup/Extracted directories.
+    $rebuildState=$reuse -and -not (Test-Path -LiteralPath (Join-Path $preprocessState 'xpui.spa'))
+    if (-not $reuse -or $rebuildState) {
+        if (-not $reuse -and (Test-Path -LiteralPath $client) -and @(Get-ChildItem -LiteralPath $client -Force).Count) { throw '기존 Spotify 하위 폴더의 소유권을 확인하지 못했습니다.' }
         $stage=Join-Path $root ('.client-stage-'+[Guid]::NewGuid().ToString('N'))
         [void](New-Item -ItemType Directory -Path $stage)
         $download=Join-Path $stage 'SpotifySetup.exe'
@@ -163,8 +185,11 @@ try {
         'SpotifyHangul isolated client' | Set-Content -LiteralPath (Join-Path $extract '.spotify-hangul-stage') -Encoding UTF8
         & $powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'installer\spotx-patch.ps1') -StagingDirectory $extract *> (Join-Path $root 'spotx-install.log')
         if ($LASTEXITCODE -ne 0) { throw 'SpotX 적용에 실패했습니다. spotx-install.log를 확인해 주세요.' }
-        if (Test-Path -LiteralPath $client) { Remove-Item -LiteralPath $client }
-        Move-Item -LiteralPath $extract -Destination $client
+        if ($reuse) { $stockApps=Join-Path $extract 'Apps' }
+        else {
+            if (Test-Path -LiteralPath $client) { Remove-Item -LiteralPath $client }
+            Move-Item -LiteralPath $extract -Destination $client
+        }
     }
     if ($state -and -not $state.ManagedClient) {
         if (-not (Test-Path -LiteralPath (Join-Path $root 'legacy-install-state.json'))) { Copy-Item -LiteralPath $statePath -Destination (Join-Path $root 'legacy-install-state.json') }
@@ -181,12 +206,25 @@ try {
     }
     $attemptConfig=Join-Path $root ('.config-attempt-'+[Guid]::NewGuid().ToString('N'))
     Copy-Item -LiteralPath $config -Destination $attemptConfig -Recurse
+    $preprocessExisted=Test-Path -LiteralPath $preprocessState
+    if ($preprocessExisted) {
+        $attemptPreprocess=Join-Path $root ('.preprocess-attempt-'+[Guid]::NewGuid().ToString('N'))
+        Copy-Item -LiteralPath $preprocessState -Destination $attemptPreprocess -Recurse
+    }
     if ($reuse) {
         Stop-ExactSpotify (Join-Path $client 'Spotify.exe')
         $attemptApps=Join-Path $root ('.apps-attempt-'+[Guid]::NewGuid().ToString('N'))
         Copy-Item -LiteralPath (Join-Path $client 'Apps') -Destination $attemptApps -Recurse
     }
     $env:SPICETIFY_CONFIG=$config
+    $env:SPICETIFY_STATE=$preprocessState
+    $preprocessTouched=$true
+    [void](New-Item -ItemType Directory -Path $preprocessState -Force)
+    if ($stockApps) {
+        Get-ChildItem -LiteralPath $stockApps -Filter '*.spa' -File | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $preprocessState $_.Name) -Force
+        }
+    }
     $prefs=Join-Path $root 'client.prefs'
     ('app.last-launched-version="'+$components.spotify.version+'"') | Set-Content -LiteralPath $prefs -Encoding ASCII
     & (Join-Path $root 'runtime\python.exe') -I -B -c 'import sys,pykakasi,phonetics; assert sys.flags.isolated == 1; assert phonetics.japanese_to_hangul(chr(0x9752)+chr(0x3044)+chr(0x7a7a),pykakasi.kakasi())'
@@ -197,8 +235,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $root 'hangul-lyrics.js') -Destination (Join-Path $config 'Extensions\hangul-lyrics.js') -Force
     Invoke-Cli @('config','custom_apps','ivLyrics','extensions','hangul-lyrics.js')
     Stop-ExactSpotify (Join-Path $client 'Spotify.exe')
-    if (@(Get-ChildItem -LiteralPath (Join-Path $client 'Apps') -Filter '*.spa' -File).Count) { Invoke-Cli @('-n','backup','apply') }
-    else { Invoke-Cli @('-n','apply') }
+    Invoke-Cli (Get-ManagedApplyArguments $client (Join-Path $config 'config-xpui.ini') $components.spicetify.version $rebuildState)
     Assert-CombinedClient
     $release=Get-Content -LiteralPath (Join-Path $root 'release.json') -Raw | ConvertFrom-Json
     [PSCustomObject]@{ App='SpotifyHangul'; ManagedClient=$true; Version=$release.version; SpotifyExe=(Join-Path $client 'Spotify.exe'); ConfigRoot=$config;
@@ -225,12 +262,20 @@ try {
         Move-Item -LiteralPath $attemptApps -Destination $apps
         $attemptApps=$null
     }
+    if ($preprocessTouched) {
+        Assert-OwnedChild $preprocessState
+        if (Test-Path -LiteralPath $preprocessState) { Remove-Item -LiteralPath $preprocessState -Recurse -Force }
+        if ($attemptPreprocess -and (Test-Path -LiteralPath $attemptPreprocess)) {
+            Move-Item -LiteralPath $attemptPreprocess -Destination $preprocessState
+            $attemptPreprocess=$null
+        }
+    }
     # Newly assembled files are retained for diagnosis; no existing Spotify
     # executable, account preferences or public cache has been overwritten.
     Write-Error $message -ErrorAction Continue
     exit 1
 } finally {
-    foreach ($temporary in @($stage,$attemptConfig,$attemptApps)) {
+    foreach ($temporary in @($stage,$attemptConfig,$attemptApps,$attemptPreprocess)) {
         if ($temporary -and (Test-Path -LiteralPath $temporary)) { Assert-OwnedChild $temporary; Remove-Item -LiteralPath $temporary -Recurse -Force }
     }
 }

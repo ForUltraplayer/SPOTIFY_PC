@@ -53,21 +53,33 @@ function Invoke-RestMethod {
 }
 function Invoke-WebRequest { param($Uri,$OutFile,[switch]$UseBasicParsing,$TimeoutSec) Copy-Item -LiteralPath $Fixture -Destination $OutFile }
 function Get-Process { param($Name,$Id,$ErrorAction) if ($Scenario -eq 'Playing' -and $Name -eq 'Spotify') { return [PSCustomObject]@{Id=123} } }
+function Get-CimInstance {
+    param($ClassName,$Filter)
+    if ($Scenario -eq 'ActiveInstaller') {
+        $pending=Get-ChildItem -LiteralPath (Join-Path $Area 'local') -Filter pending.json -Recurse | Select-Object -First 1
+        $record=Get-Content -LiteralPath $pending.FullName -Raw | ConvertFrom-Json
+        return [PSCustomObject]@{ExecutablePath=(Join-Path $pending.DirectoryName $record.name)}
+    }
+    return $null
+}
 function Start-Process {
     param($FilePath,$ArgumentList,$WindowStyle,[switch]$PassThru)
-    if ($Scenario -ne 'Install') { throw 'Unexpected installer execution' }
+    if ($Scenario -notin @('Install','Stale','InstallFail','Timeout')) { throw 'Unexpected installer execution' }
     [PSCustomObject]@{exe=$FilePath;arguments=$ArgumentList} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Area 'executed.json') -Encoding UTF8
-    '{"version":"0.6.0"}' | Set-Content -LiteralPath (Join-Path $Root 'release.json')
-    '{"Version":"0.6.0"}' | Set-Content -LiteralPath (Join-Path $Root 'install-state.json')
-    $process=[PSCustomObject]@{Id=999999;ExitCode=0}
-    $process | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value { param($Timeout) return $true }
+    if ($Scenario -in @('Install','Stale')) {
+        '{"version":"0.6.0"}' | Set-Content -LiteralPath (Join-Path $Root 'release.json')
+        '{"Version":"0.6.0"}' | Set-Content -LiteralPath (Join-Path $Root 'install-state.json')
+    }
+    $process=[PSCustomObject]@{Id=999999;ExitCode=if($Scenario -eq 'InstallFail'){1}else{0};TimedOut=($Scenario -eq 'Timeout')}
+    $process | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value { param($Timeout) return (-not $this.TimedOut) }
     return $process
 }
-& $Updater -Mode $Action -InstallRoot $Root -IgnoreInterval -Interactive:$Interactive
+& $Updater -Mode $Action -InstallRoot $Root -IgnoreInterval -Interactive:$Interactive -ErrorFile (Join-Path $Area 'error.txt')
 exit $LASTEXITCODE
 '@ | Set-Content -LiteralPath $driver -Encoding UTF8
 $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 function Invoke-Fixture($Scenario,$Action,[switch]$Interactive) {
+    Remove-Item -LiteralPath (Join-Path $area 'error.txt') -ErrorAction SilentlyContinue
     $fixtureArguments=@('-NoProfile','-ExecutionPolicy','Bypass','-File',$driver,'-Updater',$updater,'-Root',$root,'-Area',$area,'-Fixture',$fixture,'-Scenario',$Scenario,'-Action',$Action)
     if ($Interactive) { $fixtureArguments += '-Interactive' }
     & $powershell @fixtureArguments *>> (Join-Path $area 'driver.log')
@@ -92,4 +104,61 @@ $pending | ConvertTo-Json | Set-Content -LiteralPath $pendingFile.FullName -Enco
 if ((Invoke-Fixture Block ApplyPending) -ne 0 -or (Get-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Raw | ConvertFrom-Json).status -ne 'install-failed') { throw 'The same failed update was retried automatically.' }; $passed++
 if ((Invoke-Fixture Offline Check) -ne 0) { throw 'Offline check blocks normal playback.' }; $passed++
 if ((Invoke-Fixture Offline Check -Interactive) -ne 1) { throw 'Manual updater hides download failures.' }; $passed++
+function Reset-PendingFixture {
+    '{"Version":"0.5.1"}' | Set-Content -LiteralPath (Join-Path $root 'install-state.json') -Encoding UTF8
+    $pending | ConvertTo-Json | Set-Content -LiteralPath $pendingFile.FullName -Encoding UTF8
+    '{"status":"queued","version":"0.6.0"}' | Set-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Encoding UTF8
+    Remove-Item -LiteralPath (Join-Path $area 'executed.json') -ErrorAction SilentlyContinue
+}
+Reset-PendingFixture
+if ((Invoke-Fixture InstallFail ApplyPending -Interactive) -ne 1) { throw 'Installation failure did not return an error.' }
+$message=[IO.File]::ReadAllText((Join-Path $area 'error.txt'))
+if ($message -notmatch '설치 종료 코드: 1' -or $message -match 'Spotify 프로세스가 실행') { throw 'Installation failure was mislabeled as Spotify running.' }; $passed++
+$failure=Get-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Raw | ConvertFrom-Json
+if ($failure.status -ne 'install-failed' -or $failure.installer_exit_code -ne 1) { throw 'Installer failure details were lost.' }; $passed++
+Reset-PendingFixture
+'{"status":"installing","version":"0.6.0","pid":999999}' | Set-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Encoding UTF8
+if ((Invoke-Fixture Stale ApplyPending -Interactive) -ne 0 -or (Test-Path -LiteralPath $pendingFile.FullName)) { throw 'Reboot recovery must succeed on the first interactive retry.' }; $passed++
+Reset-PendingFixture
+'{"status":"installing","version":"0.6.0","pid":999999}' | Set-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Encoding UTF8
+if ((Invoke-Fixture Block ApplyPending) -ne 0 -or (Test-Path -LiteralPath (Join-Path $area 'executed.json'))) { throw 'Stale automatic install was repeated.' }; $passed++
+Reset-PendingFixture
+'{"status":"installing","version":"0.6.0","pid":999999}' | Set-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Encoding UTF8
+if ((Invoke-Fixture ActiveInstaller ApplyPending -Interactive) -ne 10 -or (Test-Path -LiteralPath (Join-Path $area 'executed.json'))) { throw 'Active installer was not protected.' }; $passed++
+Reset-PendingFixture
+if ((Invoke-Fixture Timeout ApplyPending -Interactive) -ne 11 -or [IO.File]::ReadAllText((Join-Path $area 'error.txt')) -notmatch '제한 시간') { throw 'Installer timeout was mislabeled.' }; $passed++
+Reset-PendingFixture
+$held=[IO.File]::Open((Join-Path $pendingFile.DirectoryName 'update.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+try {
+    if ((Invoke-Fixture Block ApplyPending -Interactive) -ne 10 -or [IO.File]::ReadAllText((Join-Path $area 'error.txt')) -notmatch '다운로드가 진행') { throw 'Update lock reason missing.' }
+} finally { $held.Dispose() }
+$passed++
+[IO.File]::WriteAllText($pendingFile.FullName,($pending | ConvertTo-Json),[Text.UTF8Encoding]::new($false))
+if ((Invoke-Fixture Install ApplyPending -Interactive) -ne 0 -or (Test-Path -LiteralPath $pendingFile.FullName)) { throw 'BOM-free UTF-8 queue lost the Korean installation path.' }
+$passed++
+Reset-PendingFixture
+$originalFixture=$fixture
+$replacement=Join-Path $area 'replacement.exe'
+Copy-Item -LiteralPath $fixture -Destination $replacement
+$stream=[IO.File]::Open($replacement,[IO.FileMode]::Append,[IO.FileAccess]::Write)
+try { $stream.WriteByte(90) } finally { $stream.Dispose() }
+$replacementRelease=$release | ConvertTo-Json -Depth 6 | ConvertFrom-Json
+$replacementRelease.assets[0].digest='sha256:'+(Get-Sha256 $replacement)
+$replacementRelease.assets[0].size=(Get-Item -LiteralPath $replacement).Length
+$replacementRelease | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $area 'release.json') -Encoding UTF8
+$fixture=$replacement
+try {
+    if ((Invoke-Fixture Download Check -Interactive) -ne 0) { throw 'Replacement release download failed.' }
+    $newPending=Get-Content -LiteralPath $pendingFile.FullName -Raw | ConvertFrom-Json
+    if ($newPending.sha256 -ne (Get-Sha256 $replacement)) { throw 'Old cached bytes were reused after a release asset changed.' }
+} finally { $fixture=$originalFixture }
+$passed++
+$startup=Join-Path $area 'timeout startup'
+[void](New-Item -ItemType Directory -Path $startup)
+Copy-Item -LiteralPath (Join-Path $project 'start.ps1') -Destination (Join-Path $startup 'start.ps1')
+'exit 11' | Set-Content -LiteralPath (Join-Path $startup 'auto-update.ps1') -Encoding UTF8
+'{"app":"SpotifyHangul"}' | Set-Content -LiteralPath (Join-Path $startup 'install-marker.json') -Encoding UTF8
+& $powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $startup 'start.ps1') -NoErrorDialog *> (Join-Path $area 'timeout-startup.log')
+if ($LASTEXITCODE -ne 0) { throw 'A timed-out installer must stop startup before trying to launch the missing helper/client.' }
+$passed++
 [PSCustomObject]@{tests=$passed;foreignReleasesRejected=$true;corruptionRejected=$true;playbackProtected=$true;mockInstallerOnly=$true} | ConvertTo-Json

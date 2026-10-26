@@ -4,7 +4,8 @@
 param([ValidateSet('Check','ApplyPending')][string]$Mode='Check',
       [Parameter(Mandatory=$true)][string]$InstallRoot,
       [switch]$IgnoreInterval,
-      [switch]$Interactive)
+      [switch]$Interactive,
+      [string]$ErrorFile)
 $ErrorActionPreference='Stop'
 $env:PSModulePath=(Join-Path $PSHOME 'Modules')+[IO.Path]::PathSeparator+$env:PSModulePath
 $root=[IO.Path]::GetFullPath($InstallRoot).TrimEnd('\')
@@ -21,7 +22,7 @@ function Get-Sha256([string]$Path) {
 
 function Assert-Installation {
     $marker=Join-Path $root 'install-marker.json'
-    if (-not (Test-Path -LiteralPath $marker) -or (Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json).app -ne 'SpotifyHangul') {
+    if (-not (Test-Path -LiteralPath $marker) -or (Get-Content -LiteralPath $marker -Raw -Encoding UTF8 | ConvertFrom-Json).app -ne 'SpotifyHangul') {
         throw 'Spotify 한글 가사 설치 폴더를 확인하지 못했습니다.'
     }
     $forbidden=@([IO.Path]::GetPathRoot($root).TrimEnd('\'),$env:USERPROFILE,$env:LOCALAPPDATA,$env:APPDATA,$env:SystemRoot,$env:ProgramFiles)
@@ -33,7 +34,7 @@ function Assert-Installation {
 function Get-InstalledVersion {
     $installation=Join-Path $root 'install-state.json'
     if (Test-Path -LiteralPath $installation) {
-        $record=Get-Content -LiteralPath $installation -Raw | ConvertFrom-Json
+        $record=Get-Content -LiteralPath $installation -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($record.Version -match '^\d+\.\d+\.\d+$') { return [version]$record.Version }
     }
     $registered=(Get-ItemProperty -LiteralPath 'HKCU:\Software\SpotifyHangul' -ErrorAction SilentlyContinue).InstallDir
@@ -41,7 +42,7 @@ function Get-InstalledVersion {
         $version=(Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\SpotifyHangul' -ErrorAction SilentlyContinue).DisplayVersion
         if ($version -match '^\d+\.\d+\.\d+$') { return [version]$version }
     }
-    return [version](Get-Content -LiteralPath (Join-Path $root 'release.json') -Raw | ConvertFrom-Json).version
+    return [version](Get-Content -LiteralPath (Join-Path $root 'release.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version
 }
 
 function Select-UpdateAsset($Releases,[version]$CurrentVersion) {
@@ -75,6 +76,13 @@ function Write-UpdateState($Value) {
     Move-Item -LiteralPath $temporary -Destination (Join-Path $cache 'state.json') -Force
 }
 
+function Report-UpdateError([string]$Message) {
+    Write-Warning $Message
+    if ($ErrorFile) {
+        try { [IO.File]::WriteAllText($ErrorFile,$Message,[Text.Encoding]::Unicode) } catch { }
+    }
+}
+
 try {
     Assert-Installation
     $current=Get-InstalledVersion
@@ -86,32 +94,38 @@ try {
     if ((Get-Item -LiteralPath $cache).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw '업데이트 저장 폴더가 연결 경로입니다.' }
     if ($Mode -eq 'ApplyPending') {
         try { $applyLock=[IO.File]::Open((Join-Path $cache 'apply.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None) }
-        catch [IO.IOException] { exit 10 }
+        catch [IO.IOException] { Report-UpdateError '다른 업데이트 적용 작업이 실행 중입니다. 해당 작업이 끝난 뒤 다시 실행해 주세요.'; exit 10 }
     }
     try { $lock=[IO.File]::Open((Join-Path $cache 'update.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None) }
-    catch [IO.IOException] { if ($Interactive) { exit 10 }; exit 0 }
+    catch [IO.IOException] { if ($Interactive) { Report-UpdateError '다른 업데이트 확인 또는 다운로드가 진행 중입니다. 잠시 뒤 다시 실행해 주세요.'; exit 10 }; exit 0 }
     $pendingPath=Join-Path $cache 'pending.json'
-    $pending=if (Test-Path -LiteralPath $pendingPath) { Get-Content -LiteralPath $pendingPath -Raw | ConvertFrom-Json } else { $null }
+    $pending=if (Test-Path -LiteralPath $pendingPath) { Get-Content -LiteralPath $pendingPath -Raw -Encoding UTF8 | ConvertFrom-Json } else { $null }
     $statePath=Join-Path $cache 'state.json'
-    $state=if (Test-Path -LiteralPath $statePath) { Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json } else { $null }
+    $state=if (Test-Path -LiteralPath $statePath) { Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json } else { $null }
     if ($Mode -eq 'ApplyPending') {
         if (-not $pending) { exit 0 }
         if ([version]$pending.version -le $current) { Remove-Item -LiteralPath $pendingPath; exit 0 }
         if ($state.status -eq 'install-failed' -and $state.version -eq $pending.version -and -not $Interactive) { exit 0 }
         if ($state.status -eq 'installing') {
             $running=if ($state.pid) { Get-CimInstance Win32_Process -Filter ('ProcessId='+[int]$state.pid) } else { $null }
-            if ($running -and $running.ExecutablePath -eq (Join-Path $cache $pending.name)) { exit 10 }
-            Write-UpdateState @{status='install-failed';version=$pending.version;error='이전 설치가 중단되어 자동 재시도를 멈췄습니다.'}
-            if ($Interactive) { exit 1 }; exit 0
+            if ($running -and $running.ExecutablePath -eq (Join-Path $cache $pending.name)) { Report-UpdateError '이전 설치 프로그램이 아직 실행 중입니다. 완료될 때까지 기다려 주세요.'; exit 10 }
+            if (-not $Interactive) {
+                Write-UpdateState @{status='install-failed';version=$pending.version;error='이전 설치가 중단되어 자동 재시도를 멈췄습니다.'}
+                exit 0
+            }
+            # A reboot can leave an installing record without a process. The
+            # interactive retry may recover it after validating the installer.
         }
         if (-not (Test-QueuedInstaller $pending $current)) { throw '예약된 업데이트의 버전 또는 해시가 올바르지 않습니다.' }
-        if (Get-Process -Name Spotify -ErrorAction SilentlyContinue) { exit 20 }
+        if (Get-Process -Name Spotify -ErrorAction SilentlyContinue) { Report-UpdateError 'Spotify 프로세스가 실행 중입니다. 작업 관리자에서 Spotify를 완전히 종료한 뒤 다시 실행해 주세요.'; exit 20 }
         Write-UpdateState @{status='installing';version=$pending.version;checked_at=(Get-Date -Format o)}
         $process=Start-Process -FilePath (Join-Path $cache $pending.name) -ArgumentList ('/S /D='+$root) -WindowStyle Hidden -PassThru
         Write-UpdateState @{status='installing';version=$pending.version;pid=$process.Id;checked_at=(Get-Date -Format o)}
-        if (-not $process.WaitForExit(600000)) { exit 10 }
+        if (-not $process.WaitForExit(600000)) { Report-UpdateError '설치 프로그램이 제한 시간 안에 끝나지 않았습니다. 설치 창과 install.log를 확인해 주세요.'; exit 11 }
         if ($process.ExitCode -ne 0 -or (Get-InstalledVersion) -ne [version]$pending.version) {
-            Write-UpdateState @{status='install-failed';version=$pending.version;error=('설치 종료 코드: '+$process.ExitCode)}
+            $message='업데이트 설치가 실패했습니다. 설치 종료 코드: '+$process.ExitCode+'. 설치 로그: '+(Join-Path $root 'install.log')
+            Write-UpdateState @{status='install-failed';version=$pending.version;error=$message;installer_exit_code=$process.ExitCode}
+            Report-UpdateError $message
             if ($Interactive) { exit 1 }; exit 0
         }
         Write-UpdateState @{status='installed';version=$pending.version;checked_at=(Get-Date -Format o)}
@@ -119,7 +133,14 @@ try {
         Write-Output ('Spotify 한글 가사를 '+$pending.version+' 버전으로 업데이트했습니다.')
         exit 0
     }
-    if ($state.status -eq 'installing') { exit 0 }
+    if ($state.status -eq 'installing') {
+        $running=if ($state.pid) { Get-CimInstance Win32_Process -Filter ('ProcessId='+[int]$state.pid) } else { $null }
+        if ($pending -and $running -and $running.ExecutablePath -eq (Join-Path $cache $pending.name)) {
+            if ($Interactive) { Report-UpdateError '이전 설치 프로그램이 아직 실행 중입니다. 완료될 때까지 기다려 주세요.'; exit 10 }
+            exit 0
+        }
+        if (-not $Interactive) { exit 0 }
+    }
     if (-not $IgnoreInterval -and $state.checked_at -and (Get-Date) -lt ([DateTimeOffset]::Parse($state.checked_at).LocalDateTime.AddHours(8))) { exit 0 }
     [Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     $releases=Invoke-RestMethod -Uri 'https://api.github.com/repos/ForUltraplayer/SPOTIFY_PC/releases?per_page=10' -Headers @{'User-Agent'='SpotifyHangul-Updater';'Accept'='application/vnd.github+json'} -TimeoutSec 15
@@ -129,7 +150,8 @@ try {
         Write-UpdateState @{status='install-failed';version=$state.version;error=$state.error;checked_at=(Get-Date -Format o)}
         exit 0
     }
-    if ($pending -and $pending.version -eq $asset.version -and (Test-QueuedInstaller $pending $current)) {
+    if ($pending -and $pending.version -eq $asset.version -and $pending.sha256 -ceq $asset.sha256 -and
+        $pending.size -eq $asset.size -and $pending.url -ceq $asset.url -and (Test-QueuedInstaller $pending $current)) {
         Write-UpdateState @{status='queued';version=$pending.version;checked_at=(Get-Date -Format o)}
         exit 0
     }
@@ -148,9 +170,10 @@ try {
     Write-UpdateState @{status='queued';version=$asset.version;checked_at=(Get-Date -Format o)}
     Write-Output ('다음 실행 전에 적용할 '+$asset.version+' 업데이트를 내려받았습니다.')
 } catch {
-    if ($cache) { try { Write-UpdateState @{status='check-failed';checked_at=(Get-Date -Format o);error=$_.Exception.Message} } catch {} }
+    $message=$_.Exception.Message
+    if ($cache) { try { Write-UpdateState @{status=if($Mode -eq 'ApplyPending'){'install-failed'}else{'check-failed'};checked_at=(Get-Date -Format o);error=$message} } catch {} }
     # Checking/downloading must never prevent music playback.
-    Write-Warning $_.Exception.Message
+    Report-UpdateError $message
     if ($Interactive) { exit 1 }
     exit 0
 } finally {

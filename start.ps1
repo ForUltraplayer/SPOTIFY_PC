@@ -12,7 +12,7 @@ if ((Test-Path -LiteralPath $updater) -and (Test-Path -LiteralPath (Join-Path $P
     Copy-Item -LiteralPath $updater -Destination $updateRunner
     try {
         & $nativePowerShell -NoProfile -ExecutionPolicy Bypass -File $updateRunner -Mode ApplyPending -InstallRoot $PSScriptRoot
-        if ($LASTEXITCODE -eq 10) { return }
+        if ($LASTEXITCODE -in @(10,11)) { return }
     } finally { Remove-Item -LiteralPath $updateRunner -ErrorAction SilentlyContinue }
 }
 $bridgeScript = Join-Path $PSScriptRoot 'bridge.py'

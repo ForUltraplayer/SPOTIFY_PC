@@ -37,21 +37,33 @@ Function .onInit
   ${EndIf}
 FunctionEnd
 
+Function ShowUpdateError
+  StrCpy $1 "업데이트에 실패했습니다. 설치 창의 세부 정보를 확인해 주세요. 오류 코드: $0"
+  IfFileExists "$PLUGINSDIR\update-error.txt" 0 show_update_error
+  FileOpen $2 "$PLUGINSDIR\update-error.txt" r
+  FileReadUTF16LE $2 $1
+  FileClose $2
+  show_update_error:
+  MessageBox MB_ICONSTOP "$1" /SD IDOK
+FunctionEnd
+
 Section
   InitPluginsDir
   SetOutPath "$PLUGINSDIR"
   File /oname=auto-update.ps1 "${PAYLOAD_DIR}\auto-update.ps1"
-  nsExec::ExecToLog /TIMEOUT=240000 '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\auto-update.ps1" -Mode Check -IgnoreInterval -Interactive -InstallRoot "$INSTDIR"'
+  Delete "$PLUGINSDIR\update-error.txt"
+  nsExec::ExecToLog /TIMEOUT=240000 '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\auto-update.ps1" -Mode Check -IgnoreInterval -Interactive -InstallRoot "$INSTDIR" -ErrorFile "$PLUGINSDIR\update-error.txt"'
   Pop $0
   ${If} $0 != 0
-    MessageBox MB_ICONSTOP "업데이트 다운로드를 완료하지 못했습니다. 잠시 뒤 다시 실행해 주세요." /SD IDOK
+    Call ShowUpdateError
     SetErrorLevel 1
     Abort
   ${EndIf}
-  nsExec::ExecToLog /TIMEOUT=660000 '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\auto-update.ps1" -Mode ApplyPending -Interactive -InstallRoot "$INSTDIR"'
+  Delete "$PLUGINSDIR\update-error.txt"
+  nsExec::ExecToLog /TIMEOUT=660000 '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\auto-update.ps1" -Mode ApplyPending -Interactive -InstallRoot "$INSTDIR" -ErrorFile "$PLUGINSDIR\update-error.txt"'
   Pop $0
   ${If} $0 != 0
-    MessageBox MB_ICONSTOP "Spotify를 완전히 종료하고 다시 실행해 주세요. 설치 중이라면 완료될 때까지 기다려 주세요." /SD IDOK
+    Call ShowUpdateError
     SetErrorLevel 1
     Abort
   ${EndIf}

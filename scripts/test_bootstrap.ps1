@@ -9,7 +9,7 @@ $source=Join-Path $project 'installer\bootstrap.ps1'
 $errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile($source,[ref]$null,[ref]$errors)
 if ($errors.Count) { throw 'Bootstrap parsing failed.' }
-foreach ($name in @('Assert-AppDirectory','Assert-OwnedChild','Test-SpotifyInstaller','Get-Sha256')) {
+foreach ($name in @('Assert-AppDirectory','Assert-OwnedChild','Test-SpotifyInstaller','Get-Sha256','Get-ManagedApplyArguments')) {
     $node=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name},$true)
     Invoke-Expression $node.Extent.Text
 }
@@ -66,6 +66,20 @@ $nativePowerShell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\pow
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $prepared 'install-marker.json'))) {
     throw 'NSIS Prepare entry point must run with bootstrap.ps1 alone before payload extraction.'
 }
+$count++
+$applyClient=Join-Path $area 'cli client'
+[void](New-Item -ItemType Directory -Path (Join-Path $applyClient 'Apps'))
+$applyIni=Join-Path $area 'cli-config.ini'
+"[Backup]`r`nwith = 2.46.3`r`n" | Set-Content -LiteralPath $applyIni -Encoding UTF8
+if (((Get-ManagedApplyArguments $applyClient $applyIni '2.46.4' $false) -join ' ') -ne '-n restore backup apply') { throw 'CLI upgrade must regenerate preprocessing.' }
+$count++
+"[Backup]`r`nwith = 2.46.4`r`n" | Set-Content -LiteralPath $applyIni -Encoding UTF8
+if (((Get-ManagedApplyArguments $applyClient $applyIni '2.46.4' $false) -join ' ') -ne '-n apply') { throw 'Same CLI must reuse valid preprocessing.' }
+$count++
+if (((Get-ManagedApplyArguments $applyClient $applyIni '2.46.4' $true) -join ' ') -ne '-n restore backup apply') { throw 'New isolated state requires preprocessing.' }
+$count++
+'stock' | Set-Content -LiteralPath (Join-Path $applyClient 'Apps\xpui.spa')
+if (((Get-ManagedApplyArguments $applyClient $applyIni '2.46.4' $false) -join ' ') -ne '-n backup apply') { throw 'Fresh stock must be backed up first.' }
 $count++
 $root=$env:USERPROFILE
 $marker=Join-Path $root 'install-marker.json'

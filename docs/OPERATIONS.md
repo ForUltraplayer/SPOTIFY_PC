@@ -15,7 +15,8 @@
 | 발음 캐시와 확인한 자료 주소 | %LOCALAPPDATA%\ivLyricsHangul의 cache.json과 aliases.json |
 | 원문과 발음 등의 ivLyrics 캐시 | Spotify 내부 IndexedDB의 ivLyricsCache |
 | 통합 Spotify와 SpotX | 설치 폴더의 Spotify |
-| 통합 Spicetify 설정과 백업 | 설치 폴더의 spicetify-config |
+| 통합 Spicetify 설정 | 설치 폴더의 spicetify-config |
+| 0.6.3의 독립 백업과 전처리 | 설치 폴더의 spicetify-state |
 | 설치 상태와 이전 버전 복원용 파일 | 설치 폴더의 install-state.json과 legacy-install-state.json 및 backup |
 | 설치 오류와 시작 오류 | 설치 폴더의 install.log와 spotx-install.log 및 start-error.txt |
 | 제공자 확장 | 설치 폴더의 spicetify-config\Extensions\hangul-lyrics.js |
@@ -49,3 +50,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "선택한 설치폴더\
 GitHub 공개 API와 알려진 저장소의 정확한 자산 주소만 사용하고 파일 크기 및 GitHub 자산 SHA-256과 설치 파일의 버전을 검사한다. 이는 코드 서명이나 GitHub 계정 침해 방어를 대신하지 않는다. 다운로드는 최대 180 초, 설치 완료 대기는 최대 600 초로 제한한다. 상태는 업데이트 저장 폴더의 state.json과 pending.json에 기록한다. 다운로드와 적용에는 각각 잠금을 사용하며 설치 중인 경우 두 번째 실행이 겹치지 않도록 한다.
 
 별도 서비스를 등록하거나 Windows 자동 시작을 추가하지 않는다. 기존 시작 스크립트와 검증한 통합 설치본을 재사용하는 방식을 선택했다. 상주 서비스와 차등 파일 패치는 시험하지 않았다. Update.exe는 작은 다운로드 실행기이며 약 65 MB의 통합 설치본을 추가로 받는다. 자동 업데이트로 기존 통합 Spotify를 재사용하는 경우 Spotify 본체를 다시 받지 않는다. 업데이트 상태를 포함한 개인 데이터는 프로그램 제거 후에도 남는다.
+
+
+## 0.6.3 전처리 상태 분리와 오류 안내
+
+0.6.2는 업데이트 실패로 비공개 초안으로 전환했고 공개 배포는 0.6.1을 유지한다. 0.6.3은 검증 중인 개발 버전이다. 이전에는 SPICETIFY_CONFIG만 지정해 실제 Backup과 Extracted가 APPDATA의 공유 폴더에 남는 결함이 있었다. Spicetify 원본의 GetStateFolder 구현에서 이 동작을 확인했다. 0.6.3은 설치 훅의 자식 프로세스에만 SPICETIFY_STATE를 지정하고 설치 폴더 안의 별도 상태를 사용한다. 전역 환경 변수와 자동 시작은 등록하지 않는다.
+
+처음 전환할 때는 기존 공유 백업이 해당 통합 클라이언트의 자료인지 확정할 수 없어 그대로 복사하지 않는다. 검증한 공식 Spotify 설치 파일 약 150 MB를 내려받아 SpotX가 적용된 UI 원본을 다시 준비한다. 이후에는 자체 백업을 사용한다. 공유 백업과 기존 Spotify 실행 파일을 변경하지 않으며 설정, 앱 코드와 Spotify Apps 및 자체 전처리를 이번 시도 직전 상태로 복원할 수 있게 보존한다.
+
+Spicetify의 전처리 버전과 새 CLI 버전이 다르면 restore backup apply를 사용하고, 같으면 기존 전처리를 재사용한다. 설치 실패, Spotify 실행, 다른 업데이트 작업과 시간 초과는 각각 다른 오류로 안내한다. 팝업에는 실제 원인과 필요한 로그 위치를 표시한다. 재부팅으로 이전 설치 프로세스가 사라진 경우 수동 재시도는 검증 후 진행할 수 있고 자동 재시도는 중단 상태를 유지한다. 상태 JSON은 BOM 유무와 관계없이 UTF-8로 읽는다.
