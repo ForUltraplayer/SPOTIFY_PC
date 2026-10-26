@@ -1,13 +1,10 @@
 {
   "name": "SpotifyHangul",
-  "version": "0.6.1",
-  "helper_version": "0.6.1",
+  "version": "0.6.2",
+  "helper_version": "0.6.2",
   "channel": "installer-beta",
   "tested_platform": "Windows 11 x64",
   "tested_python": "3.13.9",
-  "tested_spotify": "1.3.6.1921",
-  "tested_spicetify": "2.46.3",
-  "tested_ivlyrics": "7.0.16",
   "public_release_ready": false,
-  "bundled_python": "3.13.17"
+  "components": "components.json"
 }

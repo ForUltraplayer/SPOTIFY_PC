@@ -23,8 +23,9 @@ node --test test_extension.cjs
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_installer.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_bootstrap.ps1
 python scripts/build_spotx_adapter.py
-python scripts/prepare_release.py
 python scripts/fetch_distribution_inputs.py
+python scripts/check_compatibility.py
+python scripts/prepare_release.py
 python scripts/build_installer.py
 ```
 
@@ -35,3 +36,7 @@ python scripts/build_installer.py
 ## 남은 검증
 
 현재 PC의 실제 설치, 한글 및 공백 경로, 제거와 기존 설정 보존 결과는 검증 기록에 구분해 남긴다. PATH에서 Python을 제외한 격리 검사는 깨끗한 다른 PC에서의 설치 시험과 구별한다. 전체 곡의 발음 청취 정확도와 외부 가사 서비스의 모든 이용 조건 검토는 완료하지 않았다. 자체 소프트웨어의 라이선스가 가사 재배포 권한을 부여하지 않는다.
+
+## 0.6.2 개발 빌드
+
+구성 요소 정보는 components.json으로 통합한다. Spicetify 2.46.4 후보의 자동 검사를 통과해 개발 목록에 반영했다. 설치본 빌드는 현재 소스와 목록에 일치하는 호환성 검사 보고서를 요구한다. ivLyrics 교체와 원본 유지 관리 절차는 [구성 요소 유지 관리](DEPENDENCIES.md)를 따른다. 공개 릴리스와 실제 재생 검증 여부는 별도로 확인한다.

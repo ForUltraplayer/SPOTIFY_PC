@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "components": {
+    "spotify": {
+      "version": "1.3.6.1921",
+      "url": "https://download.scdn.co/SpotifyFullSetupX64.exe",
+      "bytes": 157180192,
+      "sha256": "e5ca46ad79de202c8deaf888c26f2a608b9e042142279e0690d589d80640591d"
+    },
+    "spicetify": {
+      "version": "2.46.4",
+      "repository": "spicetify/cli",
+      "track": "release",
+      "artifact": "spicetify-2.46.4-windows-x64.zip",
+      "source_artifact": "spicetify-2.46.4-source.zip",
+      "revision": "c3fd98f6fbf922ae944d1ecd64f97c380d04368e"
+    },
+    "ivlyrics": {
+      "version": "7.0.16",
+      "revision": "fe45082ef26a5dfdd87170b50e56ded2da95702d",
+      "repository": "ivLis-Studio/ivLyrics",
+      "track": "release",
+      "source_artifact": "ivLyrics-7.0.16-source.zip"
+    },
+    "spotx": {
+      "revision": "3cfbdfd1fac3dc755155e434116e28b51acfec07",
+      "repository": "SpotX-Official/SpotX",
+      "track": "commit",
+      "script_sha256": "0d2a747b5c8ac07df2dd4771463ea336bbdd08153adb7043bf899ad0dd865e57"
+    },
+    "python": {
+      "version": "3.13.17",
+      "artifact": "python-3.13.17-embed-amd64.zip",
+      "pth": "python313._pth"
+    },
+    "nsis": {
+      "version": "3.13",
+      "artifact": "nsis-3.13.zip"
+    }
+  },
+  "artifacts": {
+    "python-3.13.17-embed-amd64.zip": {
+      "url": "https://www.python.org/ftp/python/3.13.17/python-3.13.17-embed-amd64.zip",
+      "sha256": "9e35319bffedab8b36ad44d8f377cb4f1733bcec257a0b6d04d94f01486ddb38",
+      "bytes": 11441267
+    },
+    "ivLyrics-7.0.16-source.zip": {
+      "url": "https://codeload.github.com/ivLis-Studio/ivLyrics/zip/fe45082ef26a5dfdd87170b50e56ded2da95702d",
+      "sha256": "9578e9d9f876461eb77c656a987e64cb3b42e86fc6b748a511667bae4fe2ba91",
+      "bytes": 10368561
+    },
+    "nsis-3.13.zip": {
+      "url": "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.13/nsis-3.13.zip",
+      "sha256": "ba63dffc4410ee89193e1cb5a41989991bd77c61068da17e3156d136b7b0b3d8",
+      "bytes": 2363925
+    },
+    "pykakasi-2.3.0.tar.gz": {
+      "url": "https://files.pythonhosted.org/packages/ad/32/2a8e213fd744459a03864af7cf4c6142ee061fc915757c8152d147b16015/pykakasi-2.3.0.tar.gz",
+      "sha256": "fa052a8e63f59fb8d6569abbe719a8c9f9daf15ed27a67a56ab1705f0f67b0a1",
+      "bytes": 21752447
+    },
+    "jaconv-0.5.0.tar.gz": {
+      "url": "https://files.pythonhosted.org/packages/91/0e/9fffaacda59bdfa479372c71d18d72968d2af5a36a5a2086b02a60124b98/jaconv-0.5.0.tar.gz",
+      "sha256": "53f6f968276846716f0f37100a6d5c7308cfa1e0c714eb41287d5bb09345c40f",
+      "bytes": 21816
+    },
+    "deprecated-3.0.0.tar.gz": {
+      "url": "https://files.pythonhosted.org/packages/f7/9c/16649913bf14c73e0a9453782e148362ff2657067deff6aa9c7ebcddcc31/deprecated-3.0.0.tar.gz",
+      "sha256": "16850204d3a1e6bb0acd06bff48d96e8b0a0d25d1c52f71705405a0f4894192d",
+      "bytes": 166912
+    },
+    "wrapt-2.5.1.tar.gz": {
+      "url": "https://files.pythonhosted.org/packages/04/22/89e2f3bdae5cb34e0cab0cd86d7172dbf418de4b46c9b17b9c7a560dfa44/wrapt-2.5.1.tar.gz",
+      "sha256": "f595bb0185aab3e9dc31950c95d914f56ea8278810c3b928f3426e12ed6d27bc",
+      "bytes": 184455
+    },
+    "wheels/pykakasi-2.3.0-py3-none-any.whl": {
+      "url": "https://files.pythonhosted.org/packages/0f/e8/11644fe823e05c583b330e9fb81e3e8fc5d079036512a8300fc157be349d/pykakasi-2.3.0-py3-none-any.whl",
+      "sha256": "26d21b090048ff45c6a4d8e962426b7951767216008ec30358e8a9d74af77f29",
+      "bytes": 2395003
+    },
+    "wheels/jaconv-0.5.0-py3-none-any.whl": {
+      "url": "https://files.pythonhosted.org/packages/3b/da/9657d637bcacdbaf6a914ce504000da5639f9d945f8d3552a940f021d6c0/jaconv-0.5.0-py3-none-any.whl",
+      "sha256": "2914114fe761ca49fc7089e25e6ad4a400c26f262ffce84e13b176916b71610a",
+      "bytes": 16831
+    },
+    "wheels/deprecated-3.0.0-py3-none-any.whl": {
+      "url": "https://files.pythonhosted.org/packages/83/ae/676feae8e4644a6d7169951a97f61c56f416c73f67bf1761f2461d75cc81/deprecated-3.0.0-py3-none-any.whl",
+      "sha256": "58204cf4a7f6270d547af5c278ee7a6bb56045a4b3d8441a1cd11660f41b7939",
+      "bytes": 21912
+    },
+    "wheels/wrapt-2.5.1-cp313-cp313-win_amd64.whl": {
+      "url": "https://files.pythonhosted.org/packages/7b/dc/6a5735874ea79816f85c1ec9d92139d7073c20d1881c15ff2108c211354b/wrapt-2.5.1-cp313-cp313-win_amd64.whl",
+      "sha256": "09b1893ee4063706574c1813abf479b8b51926633fbdb6f96aab8dc7b0976668",
+      "bytes": 105870
+    },
+    "spicetify-2.46.4-windows-x64.zip": {
+      "url": "https://github.com/spicetify/cli/releases/download/v2.46.4/spicetify-2.46.4-windows-x64.zip",
+      "sha256": "0490380bf59e00c94cf6cb12bfac5152791b91bb8009aceef53c49815b45a56f",
+      "bytes": 7795758
+    },
+    "spicetify-2.46.4-source.zip": {
+      "url": "https://codeload.github.com/spicetify/cli/zip/c3fd98f6fbf922ae944d1ecd64f97c380d04368e",
+      "sha256": "64a7490b4746288dc561ac6086b63e991f9a3e49d9dae6e0b05a7e6882f21469",
+      "bytes": 2184177
+    }
+  }
+}

@@ -31,8 +31,9 @@ foreach ($item in (Get-Content -LiteralPath (Join-Path $SourceRoot 'upstream.jso
     }
 }
 $spotifyExecutable = Join-Path $spotifyDirectory 'Spotify.exe'
+$components=(Get-Content -LiteralPath (Join-Path (Split-Path -Parent (Split-Path -Parent $SourceRoot)) 'components.json') -Raw | ConvertFrom-Json).components
 $offline = (Get-Item -LiteralPath $spotifyExecutable).VersionInfo.FileVersion
-if ($offline -ne '1.3.6.1921') { throw ('Unverified Spotify version for this adapter: ' + $offline) }
+if ($offline -ne $components.spotify.version) { throw ('Unverified Spotify version for this adapter: ' + $offline) }
 $xpui_spa_patch = Join-Path $spotifyDirectory 'Apps\xpui.spa'
 if (-not (Test-Path -LiteralPath $xpui_spa_patch) -or (Test-Path -LiteralPath (Join-Path $spotifyDirectory 'Apps\xpui\xpui.js'))) {
     throw 'SpotX staging requires original Spotify SPA archives.'
@@ -68,7 +69,7 @@ try {
 if ((Get-Sha256 $spotifyDll) -eq (Get-Sha256 $dll_bak)) {
     throw 'SpotX binary was not modified.'
 }
-[PSCustomObject]@{ App='SpotifyHangul'; SpotXRevision='3cfbdfd1fac3dc755155e434116e28b51acfec07';
+[PSCustomObject]@{ App='SpotifyHangul'; SpotXRevision=$components.spotx.revision;
     SpotifyVersion=$offline; UpdateBlocked=(-not $AllowUpdates); PatchedAt=(Get-Date -Format o) } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $spotifyDirectory 'spotx-hangul.json') -Encoding UTF8
 Write-Output 'SpotX archive and binary patches verified.'

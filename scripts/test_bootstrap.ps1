@@ -4,6 +4,7 @@
 param([string]$VerifiedInstaller)
 $ErrorActionPreference='Stop'
 $project=Split-Path -Parent $PSScriptRoot
+$components=(Get-Content -LiteralPath (Join-Path $project 'components.json') -Raw | ConvertFrom-Json).components
 $source=Join-Path $project 'installer\bootstrap.ps1'
 $errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile($source,[ref]$null,[ref]$errors)
@@ -42,7 +43,7 @@ try { Test-SpotifyInstaller $file } catch { $rejected=$_.Exception.Message -matc
 if (-not $rejected) { throw 'Truncated installer accepted.' }
 $count++
 $stream=[IO.File]::OpenWrite($file)
-try { $stream.SetLength(157180192) } finally { $stream.Dispose() }
+try { $stream.SetLength($components.spotify.bytes) } finally { $stream.Dispose() }
 $rejected=$false
 try { Test-SpotifyInstaller $file } catch { $rejected=$_.Exception.Message -match 'SHA-256' }
 if (-not $rejected) { throw 'Wrong installer digest accepted.' }

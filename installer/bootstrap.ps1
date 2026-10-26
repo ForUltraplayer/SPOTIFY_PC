@@ -19,6 +19,8 @@ $stage=$null
 $state=$null
 $attemptConfig=$null
 $attemptApps=$null
+$ivLyricsTransaction=$null
+. (Join-Path $PSScriptRoot 'managed-ivlyrics.ps1')
 
 function Assert-AppDirectory {
     $forbidden=@([IO.Path]::GetPathRoot($root).TrimEnd('\'),$env:USERPROFILE,$env:APPDATA,$env:LOCALAPPDATA,$env:ProgramFiles,${env:ProgramFiles(x86)},$env:SystemRoot)
@@ -67,8 +69,8 @@ function Invoke-Cli([string[]]$Arguments) {
 }
 
 function Test-SpotifyInstaller([string]$Path) {
-    if ((Get-Item -LiteralPath $Path).Length -ne 157180192) { throw 'Spotify 설치 파일 크기가 다릅니다. 실행을 중단합니다.' }
-    if ((Get-Sha256 $Path) -ne 'E5CA46AD79DE202C8DEAF888C26F2A608B9E042142279E0690D589D80640591D') {
+    if ((Get-Item -LiteralPath $Path).Length -ne $components.spotify.bytes) { throw 'Spotify 설치 파일 크기가 다릅니다. 실행을 중단합니다.' }
+    if ((Get-Sha256 $Path) -ne $components.spotify.sha256) {
         throw 'Spotify 설치 파일의 SHA-256이 검증 버전과 다릅니다. 새 통합 설치본이 필요합니다.'
     }
     Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1') -ErrorAction Stop
@@ -132,11 +134,12 @@ try {
     }
     Assert-OwnedChild $client
     Assert-OwnedChild $config
+    $components=(Get-Content -LiteralPath (Join-Path $root 'components.json') -Raw | ConvertFrom-Json).components
     $reuse=(Test-Path -LiteralPath (Join-Path $client 'spotx-hangul.json'))
     if ($reuse) {
         $identity=Get-Content -LiteralPath (Join-Path $client 'spotx-hangul.json') -Raw | ConvertFrom-Json
-        $reuse=$identity.App -eq 'SpotifyHangul' -and $identity.SpotifyVersion -eq '1.3.6.1921' -and
-            $identity.SpotXRevision -eq '3cfbdfd1fac3dc755155e434116e28b51acfec07'
+        $reuse=$identity.App -eq 'SpotifyHangul' -and $identity.SpotifyVersion -eq $components.spotify.version -and
+            $identity.SpotXRevision -eq $components.spotx.revision
     }
     if (-not $reuse) {
         if ((Test-Path -LiteralPath $client) -and @(Get-ChildItem -LiteralPath $client -Force).Count) { throw '기존 Spotify 하위 폴더의 소유권을 확인하지 못했습니다.' }
@@ -148,7 +151,7 @@ try {
             Write-Output '공식 Spotify x64 설치 파일을 내려받습니다. 약 150 MB가 필요합니다.'
             [Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
             $ProgressPreference='SilentlyContinue'
-            Invoke-WebRequest -Uri 'https://download.scdn.co/SpotifyFullSetupX64.exe' -OutFile $download -UseBasicParsing -TimeoutSec 180
+            Invoke-WebRequest -Uri $components.spotify.url -OutFile $download -UseBasicParsing -TimeoutSec 180
         }
         Test-SpotifyInstaller $download
         $extract=Join-Path $stage 'client'
@@ -183,14 +186,12 @@ try {
     }
     $env:SPICETIFY_CONFIG=$config
     $prefs=Join-Path $root 'client.prefs'
-    'app.last-launched-version="1.3.6.1921"' | Set-Content -LiteralPath $prefs -Encoding ASCII
+    ('app.last-launched-version="'+$components.spotify.version+'"') | Set-Content -LiteralPath $prefs -Encoding ASCII
     & (Join-Path $root 'runtime\python.exe') -I -B -c 'import sys,pykakasi,phonetics; assert sys.flags.isolated == 1; assert phonetics.japanese_to_hangul(chr(0x9752)+chr(0x3044)+chr(0x7a7a),pykakasi.kakasi())'
     if ($LASTEXITCODE -ne 0) { throw '내장 Python과 발음 사전 검사에 실패했습니다.' }
     Invoke-Cli @('config','spotify_path',$client,'prefs_path',$prefs)
     [void](New-Item -ItemType Directory -Path (Join-Path $config 'Extensions'),(Join-Path $config 'CustomApps') -Force)
-    if (-not (Test-Path -LiteralPath (Join-Path $config 'CustomApps\ivLyrics\index.js'))) {
-        Copy-Item -LiteralPath (Join-Path $root 'ivLyrics') -Destination (Join-Path $config 'CustomApps\ivLyrics') -Recurse
-    }
+    $ivLyricsTransaction=Install-ManagedIvLyrics $root $config
     Copy-Item -LiteralPath (Join-Path $root 'hangul-lyrics.js') -Destination (Join-Path $config 'Extensions\hangul-lyrics.js') -Force
     Invoke-Cli @('config','custom_apps','ivLyrics','extensions','hangul-lyrics.js')
     Stop-ExactSpotify (Join-Path $client 'Spotify.exe')
@@ -208,6 +209,7 @@ try {
         ('[bootstrap '+$Mode+'] '+$message+"`r`n"+$_.InvocationInfo.PositionMessage+"`r`n"+$_.ScriptStackTrace) |
             Out-File -LiteralPath (Join-Path $root 'install.log') -Encoding UTF8 -Append
     }
+    if ($ivLyricsTransaction) { Undo-ManagedIvLyrics $ivLyricsTransaction }
     if ($attemptConfig -and (Test-Path -LiteralPath $attemptConfig)) {
         Assert-OwnedChild $config
         Remove-Item -LiteralPath $config -Recurse -Force

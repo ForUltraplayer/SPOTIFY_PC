@@ -143,8 +143,9 @@ The following commands create the source release and installer in `dist/`. Exter
 
 ```powershell
 python scripts/build_spotx_adapter.py
-python scripts/prepare_release.py
 python scripts/fetch_distribution_inputs.py
+python scripts/check_compatibility.py
+python scripts/prepare_release.py
 python scripts/build_installer.py
 ```
 
@@ -160,6 +161,8 @@ The local helper looks for Python in this order: the `IVLYRICS_HANGUL_PYTHON` en
 | `scripts/` | Release preparation, external input download, installer build |
 
 See the [release guide](docs/RELEASE.md) (Korean) for the release process and what is included.
+
+Version 0.6.2 in development centralizes component versions and digests in `components.json`. See [component maintenance](docs/DEPENDENCIES.md) for ivLyrics replacement, upstream detection and compatibility checks (Korean).
 
 </details>
 

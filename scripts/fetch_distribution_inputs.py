@@ -1,21 +1,14 @@
 # @file fetch_distribution_inputs.py
 # @author: ForUltraplayer
 # @brief Fetch pinned public distribution inputs and verify published package digests.
-import base64
 import hashlib
 import json
 from pathlib import Path
 import urllib.request
+from dependencies import load, verify
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / 'work' / 'downloads'
-INPUTS = {
-    'python-3.13.17-embed-amd64.zip': 'https://www.python.org/ftp/python/3.13.17/python-3.13.17-embed-amd64.zip',
-    'spicetify-2.46.3-windows-x64.zip': 'https://github.com/spicetify/cli/releases/download/v2.46.3/spicetify-2.46.3-windows-x64.zip',
-    'spicetify-2.46.3-source.zip': 'https://codeload.github.com/spicetify/cli/zip/refs/tags/v2.46.3',
-    'ivLyrics-7.0.16-source.zip': 'https://codeload.github.com/ivLis-Studio/ivLyrics/zip/fe45082ef26a5dfdd87170b50e56ded2da95702d',
-    'nsis-3.13.zip': 'https://downloads.sourceforge.net/project/nsis/NSIS%203/3.13/nsis-3.13.zip',
-}
 
 
 def read_url(url):
@@ -43,26 +36,12 @@ def fetch(name, url, expected=None):
 
 def main():
     CACHE.mkdir(parents=True, exist_ok=True)
-    lock_file = CACHE / 'distribution-inputs.json'
-    lock = json.loads(lock_file.read_text(encoding='utf-8')) if lock_file.exists() else {}
-    for name, url in INPUTS.items():
-        expected = lock.get(name, {}).get('sha256')
-        if name.startswith('python-'):
-            bundle = json.loads(read_url(url + '.sigstore'))
-            expected = base64.b64decode(bundle['messageSignature']['messageDigest']['digest']).hex()
-        lock[name] = fetch(name, url, expected)
-        lock_file.write_text(json.dumps(lock, indent=2) + '\n', encoding='utf-8')
-    requirements = (ROOT / 'requirements.txt').read_text().splitlines()
-    for line in requirements:
-        package, version = line.split('==')
-        metadata = json.loads(read_url(f'https://pypi.org/pypi/{package}/{version}/json'))
-        source = next(item for item in metadata['urls'] if item['packagetype'] == 'sdist')
-        lock[source['filename']] = fetch(source['filename'], source['url'], source['digests']['sha256'])
-        wheel = next(item for item in metadata['urls'] if item['packagetype'] == 'bdist_wheel'
-                     and (item['filename'].endswith('-none-any.whl') or item['filename'].endswith('-cp313-cp313-win_amd64.whl')))
-        wheel_name = 'wheels/' + wheel['filename']
-        lock[wheel_name] = fetch(wheel_name, wheel['url'], wheel['digests']['sha256'])
-        lock_file.write_text(json.dumps(lock, indent=2) + '\n', encoding='utf-8')
+    lock = load()['artifacts']
+    for name, metadata in lock.items():
+        fetch(name, metadata['url'], metadata['sha256'])
+        verify(CACHE / name, metadata)
+    # A derived receipt for old tooling; this is never the authority for a build.
+    (CACHE / 'distribution-inputs.json').write_text(json.dumps(lock, indent=2) + '\n', encoding='utf-8')
 
 
 if __name__ == '__main__':

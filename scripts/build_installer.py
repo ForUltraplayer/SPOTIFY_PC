@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import zipfile
+from dependencies import load, verify, fingerprint, source_fingerprint
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / 'work' / 'downloads'
@@ -34,10 +35,14 @@ def extract(archive, destination, strip_root=False):
 
 def main():
     release = json.loads((ROOT / 'release.json').read_text(encoding='utf-8-sig'))
-    lock = json.loads((CACHE / 'distribution-inputs.json').read_text(encoding='utf-8'))
+    dependencies = load()
+    components = dependencies['components']
+    lock = dependencies['artifacts']
+    proof = json.loads((ROOT / 'work/compatibility.json').read_text(encoding='utf-8'))
+    if proof.get('result') != 'passed' or proof.get('manifest') != fingerprint(dependencies) or proof.get('source') != source_fingerprint():
+        raise ValueError('Run check_compatibility.py for the current manifest and source before building')
     for name, metadata in lock.items():
-        if hashlib.sha256((CACHE / name).read_bytes()).hexdigest() != metadata['sha256']:
-            raise ValueError(f'Distribution input changed: {name}')
+        verify(CACHE / name, metadata)
     if PAYLOAD.exists():
         if PAYLOAD.parent != ROOT / 'work' or not (PAYLOAD / '.builder-owned').is_file():
             raise ValueError('Refusing to replace an unowned payload directory')
@@ -45,15 +50,21 @@ def main():
     PAYLOAD.mkdir(parents=True)
     (PAYLOAD / '.builder-owned').write_text('SpotifyHangul build payload\n')
     for name in ('bridge.py', 'phonetics.py', 'hangul-lyrics.js', 'start.ps1', 'stop.ps1', 'auto-update.ps1',
-                 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'release.json'):
+                 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'release.json', 'components.json'):
         shutil.copy2(ROOT / name, PAYLOAD / name)
     shutil.copytree(ROOT / 'installer', PAYLOAD / 'installer')
     shutil.copytree(ROOT / 'licenses', PAYLOAD / 'licenses')
     shutil.copytree(ROOT / 'third_party' / 'spotx', PAYLOAD / 'third_party' / 'spotx')
-    extract(CACHE / 'python-3.13.17-embed-amd64.zip', PAYLOAD / 'runtime')
-    (PAYLOAD / 'runtime' / 'python313._pth').write_text('python313.zip\n.\n..\n../vendor\n', encoding='ascii')
-    extract(CACHE / 'spicetify-2.46.3-windows-x64.zip', PAYLOAD / 'tools')
-    extract(CACHE / 'ivLyrics-7.0.16-source.zip', PAYLOAD / 'ivLyrics', strip_root=True)
+    extract(CACHE / components['python']['artifact'], PAYLOAD / 'runtime')
+    pth = components['python']['pth']
+    (PAYLOAD / 'runtime' / pth).write_text(pth.replace('._pth', '.zip')+'\n.\n..\n../vendor\n', encoding='ascii')
+    extract(CACHE / components['spicetify']['artifact'], PAYLOAD / 'tools')
+    extract(CACHE / components['ivlyrics']['source_artifact'], PAYLOAD / 'ivLyrics', strip_root=True)
+    managed = {'app': 'SpotifyHangul', 'version': components['ivlyrics']['version'],
+               'revision': components['ivlyrics']['revision'],
+               'files': {str(p.relative_to(PAYLOAD / 'ivLyrics')).replace('\\', '/'): hashlib.sha256(p.read_bytes()).hexdigest()
+                         for p in (PAYLOAD / 'ivLyrics').rglob('*') if p.is_file()}}
+    (PAYLOAD / 'ivLyrics' / 'hangul-managed.json').write_text(json.dumps(managed, indent=2), encoding='utf-8')
     temporary = ROOT / 'work' / 'build-temp'
     temporary.mkdir(exist_ok=True)
     build_environment = dict(os.environ, TEMP=str(temporary), TMP=str(temporary))
@@ -69,14 +80,14 @@ def main():
     if not source_bundle.exists():
         raise ValueError('Run prepare_release.py before building the installer')
     shutil.copy2(source_bundle, sources / source_bundle.name)
-    shutil.copy2(CACHE / 'distribution-inputs.json', PAYLOAD / 'licenses' / 'distribution-inputs.json')
-    extract(CACHE / 'nsis-3.13.zip', TOOLS / 'nsis', strip_root=True)
+    (PAYLOAD / 'licenses' / 'distribution-inputs.json').write_text(json.dumps(lock, indent=2), encoding='utf-8')
+    extract(CACHE / components['nsis']['artifact'], TOOLS / 'nsis', strip_root=True)
     shutil.copy2(TOOLS / 'nsis' / 'COPYING', PAYLOAD / 'licenses' / 'NSIS-COPYING.txt')
     shutil.copy2(PAYLOAD / 'runtime' / 'LICENSE.txt', PAYLOAD / 'licenses' / 'Python-LICENSE.txt')
     spicetify_source = TOOLS / 'spicetify-source'
-    extract(CACHE / 'spicetify-2.46.3-source.zip', spicetify_source, strip_root=True)
+    extract(CACHE / components['spicetify']['source_artifact'], spicetify_source, strip_root=True)
     shutil.copy2(spicetify_source / 'LICENSE', PAYLOAD / 'licenses' / 'Spicetify-LICENSE.txt')
-    marker = {'app': 'SpotifyHangul', 'version': release['version'], 'runtime': 'CPython 3.13.17 x64'}
+    marker = {'app': 'SpotifyHangul', 'version': release['version'], 'runtime': 'CPython '+components['python']['version']+' x64'}
     (PAYLOAD / 'install-marker.json').write_text(json.dumps(marker), encoding='utf-8')
     smoke = "import json,sys,pykakasi,phonetics; assert sys.flags.isolated == 1; assert all('anaconda' not in p.lower() for p in sys.path); print(json.dumps({'python':sys.version.split()[0],'isolated':True,'dictionaryWorks':bool(phonetics.japanese_to_hangul('青い空',pykakasi.kakasi()))}))"
     environment = dict(os.environ, PATH=os.path.join(os.environ['SystemRoot'], 'System32'), PYTHONPATH='', PYTHONHOME='')

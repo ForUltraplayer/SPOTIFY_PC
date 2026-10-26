@@ -143,8 +143,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_auto_update
 
 ```powershell
 python scripts/build_spotx_adapter.py
-python scripts/prepare_release.py
 python scripts/fetch_distribution_inputs.py
+python scripts/check_compatibility.py
+python scripts/prepare_release.py
 python scripts/build_installer.py
 ```
 
@@ -160,6 +161,8 @@ python scripts/build_installer.py
 | `scripts/` | 배포 준비, 외부 입력 다운로드, 설치 프로그램 빌드 |
 
 배포 절차와 포함 범위는 [배포 안내](docs/RELEASE.md)를 참고합니다.
+
+개발 중인 0.6.2는 `components.json`에서 버전과 해시를 관리합니다. ivLyrics 교체와 원본 감지 및 호환성 검사 절차는 [구성 요소 유지 관리](docs/DEPENDENCIES.md)를 참고하세요.
 
 </details>
 

@@ -1,0 +1,59 @@
+# @file dependencies.yml
+# @author: ForUltraplayer
+# @brief Detect upstream changes daily and verify component candidates before source promotion.
+name: Component maintenance
+on:
+  schedule:
+    - cron: '27 2 * * *'
+  workflow_dispatch:
+    inputs:
+      component:
+        description: Optional component to stage
+        type: choice
+        options: ['', spicetify, ivlyrics]
+      tag:
+        description: Exact stable release tag, for example v2.46.4
+        type: string
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r requirements.txt
+      - name: Detect original project updates
+        run: python scripts/upstream_updates.py check
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: python scripts/fetch_distribution_inputs.py
+      - name: Stage requested candidate
+        if: github.event_name == 'workflow_dispatch' && inputs.component != ''
+        run: python scripts/upstream_updates.py stage --component "$env:CANDIDATE_COMPONENT" --tag "$env:CANDIDATE_TAG"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_COMPONENT: ${{ inputs.component }}
+          CANDIDATE_TAG: ${{ inputs.tag }}
+      - name: Check candidate compatibility
+        if: github.event_name == 'workflow_dispatch' && inputs.component != ''
+        run: python scripts/check_compatibility.py --manifest work/candidate-components.json --report work/compatibility-candidate.json
+      - name: Check selected components
+        run: python scripts/check_compatibility.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: component-inspection
+          path: |
+            work/upstream-status.json
+            work/compatibility*.json
+            work/candidate-components.json

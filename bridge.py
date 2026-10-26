@@ -34,7 +34,7 @@ _kana_converter = None
 _kana_lock = threading.Lock()
 _request_context = threading.local()
 
-VERSION = "0.6.1"
+VERSION = "0.6.2"
 MATCHING_VERSION = "0.3.1"  # Search changes do not invalidate compatible client pronunciation caches.
 PORT = 19643
 ORIGIN = "https://xpui.app.spotify.com"
