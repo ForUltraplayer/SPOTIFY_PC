@@ -1,4 +1,4 @@
-# Spotify Hangul Lyrics (Windows)
+# SpotX + ivLyrics + Hangul Pronunciation (Windows)
 
 [한국어](README.md) | **English**
 
