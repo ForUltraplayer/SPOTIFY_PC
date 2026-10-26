@@ -16,7 +16,9 @@ on:
         type: string
   push:
     branches: [main]
+    paths: ['components.json', 'release.json', 'requirements.txt', '*.py', '*.js', '*.ps1', '*.cjs', 'installer/**', 'scripts/**', 'third_party/**', '.github/workflows/dependencies.yml']
   pull_request:
+    paths: ['components.json', 'release.json', 'requirements.txt', '*.py', '*.js', '*.ps1', '*.cjs', 'installer/**', 'scripts/**', 'third_party/**', '.github/workflows/dependencies.yml']
 permissions:
   contents: read
 jobs:
