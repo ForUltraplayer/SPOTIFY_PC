@@ -1,4 +1,4 @@
-# Spotify 한글 발음 가사 (Windows)
+# Spotify(SpotX) + ivLyrics + 일본어발음  (Windows)
 
 **한국어** | [English](README.en.md)
 
