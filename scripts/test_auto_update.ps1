@@ -56,7 +56,7 @@ function Get-Process { param($Name,$Id,$ErrorAction) if ($Scenario -eq 'Playing'
 function Start-Process {
     param($FilePath,$ArgumentList,$WindowStyle,[switch]$PassThru)
     if ($Scenario -ne 'Install') { throw 'Unexpected installer execution' }
-    [PSCustomObject]@{exe=$FilePath;arguments=$ArgumentList} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Area 'executed.json')
+    [PSCustomObject]@{exe=$FilePath;arguments=$ArgumentList} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Area 'executed.json') -Encoding UTF8
     '{"version":"0.6.0"}' | Set-Content -LiteralPath (Join-Path $Root 'release.json')
     '{"Version":"0.6.0"}' | Set-Content -LiteralPath (Join-Path $Root 'install-state.json')
     $process=[PSCustomObject]@{Id=999999;ExitCode=0}

@@ -31,6 +31,11 @@ Assert (-not $unchanged.Changed) 'Identical code was replaced again'
 Undo-ManagedIvLyrics $transaction
 Assert ((Get-Content -LiteralPath (Join-Path $target 'index.js') -Raw).Trim() -eq 'old code') 'Rollback lost original'
 Assert (Test-Path -LiteralPath (Join-Path $target 'old-addon.js')) 'Rollback lost stale original'
+'left by a previous NSIS payload' | Set-Content -LiteralPath (Join-Path $source 'old-bundled-addon.js')
+$overlaid=Install-ManagedIvLyrics $app $config
+Assert $overlaid.Changed 'Overlaid payload was rejected'
+Assert (-not (Test-Path -LiteralPath (Join-Path $target 'old-bundled-addon.js'))) 'Obsolete bundled code was copied'
+Undo-ManagedIvLyrics $overlaid
 'corrupt' | Set-Content -LiteralPath (Join-Path $source 'index.js')
 $rejected=$false
 try { Install-ManagedIvLyrics $app $config | Out-Null } catch { $rejected=$true }
@@ -39,4 +44,4 @@ Assert ((Get-Content -LiteralPath (Join-Path $target 'index.js') -Raw).Trim() -e
 $rejected=$false
 try { Assert-IvLyricsChild $app (Join-Path $app '..\outside') } catch { $rejected=$true }
 Assert $rejected 'Outside path accepted'
-[PSCustomObject]@{tests=11;replacement=$true;rollback=$true;integrity=$true;settingsPreserved=$true}|ConvertTo-Json
+[PSCustomObject]@{tests=13;replacement=$true;rollback=$true;integrity=$true;settingsPreserved=$true}|ConvertTo-Json

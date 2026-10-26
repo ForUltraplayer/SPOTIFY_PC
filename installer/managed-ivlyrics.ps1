@@ -20,7 +20,7 @@ function Assert-IvLyricsChild([string]$Parent, [string]$Path) {
     }
 }
 
-function Test-IvLyricsFiles([string]$Directory, $Manifest) {
+function Test-IvLyricsFiles([string]$Directory, $Manifest, [switch]$AllowExtra) {
     foreach ($file in $Manifest.files.PSObject.Properties) {
         $path=Join-Path $Directory $file.Name
         Assert-IvLyricsChild $Directory $path
@@ -31,6 +31,7 @@ function Test-IvLyricsFiles([string]$Directory, $Manifest) {
         finally { $stream.Dispose(); $hash.Dispose() }
         if ($digest -cne $file.Value) { return $false }
     }
+    if ($AllowExtra) { return $true }
     # Stale scripts from an older version must not survive a replacement.
     $expected=@($Manifest.files.PSObject.Properties).Count+1
     return @(Get-ChildItem -LiteralPath $Directory -Recurse -File -Force).Count -eq $expected
@@ -44,7 +45,7 @@ function Install-ManagedIvLyrics([string]$InstallRoot, [string]$ConfigRoot) {
     $manifest=Get-Content -LiteralPath (Join-Path $source 'hangul-managed.json') -Raw | ConvertFrom-Json
     $component=(Get-Content -LiteralPath (Join-Path $InstallRoot 'components.json') -Raw | ConvertFrom-Json).components.ivlyrics
     if ($manifest.app -ne 'SpotifyHangul' -or $manifest.version -ne $component.version -or $manifest.revision -ne $component.revision -or
-        -not $manifest.files.'index.js' -or -not (Test-IvLyricsFiles $source $manifest)) { throw 'Bundled ivLyrics integrity verification failed.' }
+        -not $manifest.files.'index.js' -or -not (Test-IvLyricsFiles $source $manifest -AllowExtra)) { throw 'Bundled ivLyrics integrity verification failed.' }
     if ((Test-Path -LiteralPath (Join-Path $target 'hangul-managed.json')) -and (Test-IvLyricsFiles $target $manifest)) {
         return [PSCustomObject]@{Changed=$false;Target=$target;Backup=$null;InstallRoot=$InstallRoot;ConfigRoot=$ConfigRoot}
     }
@@ -55,7 +56,15 @@ function Install-ManagedIvLyrics([string]$InstallRoot, [string]$ConfigRoot) {
     [void](New-Item -ItemType Directory -Path (Split-Path -Parent $backup) -Force)
     $saved=$false
     try {
-        Copy-Item -LiteralPath $source -Destination $stage -Recurse
+        [void](New-Item -ItemType Directory -Path $stage)
+        # NSIS overlays the payload directory. Copy only the new manifest's files,
+        # so obsolete source files from a previous installer are never executed.
+        foreach ($file in $manifest.files.PSObject.Properties) {
+            $destination=Join-Path $stage $file.Name
+            [void](New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force)
+            Copy-Item -LiteralPath (Join-Path $source $file.Name) -Destination $destination
+        }
+        Copy-Item -LiteralPath (Join-Path $source 'hangul-managed.json') -Destination (Join-Path $stage 'hangul-managed.json')
         if (-not (Test-IvLyricsFiles $stage $manifest)) { throw 'Staged ivLyrics integrity verification failed.' }
         if (Test-Path -LiteralPath $target) { Move-Item -LiteralPath $target -Destination $backup; $saved=$true }
         Move-Item -LiteralPath $stage -Destination $target
