@@ -1,6 +1,6 @@
 # 설치 배포 안내
 
-버전 0.6.1은 Windows x64용 통합 EXE 베타다. 사용자 지정 폴더에 Spotify와 SpotX, Spicetify 및 ivLyrics를 한 번에 구성한다. CPython 3.13.17과 사전을 포함하므로 별도 Python 설치가 필요하지 않다. 설치 중 공식 Spotify 파일 약 150 MB를 추가로 내려받는다. 다른 깨끗한 PC에서의 검증이 남아 있어 정식 배포 준비 완료로 표시하지 않는다.
+버전 0.6.2는 Windows x64용 통합 EXE 베타다. 사용자 지정 폴더에 Spotify와 SpotX, Spicetify 및 ivLyrics를 한 번에 구성한다. CPython 3.13.17과 사전을 포함하므로 별도 Python 설치가 필요하지 않다. 설치 중 공식 Spotify 파일 약 150 MB를 추가로 내려받는다. 다른 깨끗한 PC에서의 검증이 남아 있어 정식 배포 준비 완료로 표시하지 않는다.
 
 ## 설치와 제거
 
@@ -15,7 +15,7 @@
 
 ## 포함 범위와 재현 빌드
 
-설치본은 자체 소스, 내장 Python, 의존 라이브러리와 사전, Spicetify 2.46.3, ivLyrics 7.0.16과 고정한 SpotX MIT 소스를 포함한다. 원본 고지는 licenses와 각 패키지 및 third_party/spotx/LICENSE에 유지한다. GPL 및 LGPL 구성 요소의 대응 소스 압축은 third_party_sources에 포함한다. Spotify 실행 파일, 계정 정보, 가사 묶음과 개인 캐시는 배포하지 않는다.
+설치본은 자체 소스, 내장 Python, 의존 라이브러리와 사전, Spicetify 2.46.4, ivLyrics 7.0.16과 고정한 SpotX MIT 소스를 포함한다. 원본 고지는 licenses와 각 패키지 및 third_party/spotx/LICENSE에 유지한다. GPL 및 LGPL 구성 요소의 대응 소스 압축은 third_party_sources에 포함한다. Spotify 실행 파일, 계정 정보, 가사 묶음과 개인 캐시는 배포하지 않는다.
 
 ```powershell
 python -m unittest discover -s . -p test_bridge.py -v
@@ -37,6 +37,6 @@ python scripts/build_installer.py
 
 현재 PC의 실제 설치, 한글 및 공백 경로, 제거와 기존 설정 보존 결과는 검증 기록에 구분해 남긴다. PATH에서 Python을 제외한 격리 검사는 깨끗한 다른 PC에서의 설치 시험과 구별한다. 전체 곡의 발음 청취 정확도와 외부 가사 서비스의 모든 이용 조건 검토는 완료하지 않았다. 자체 소프트웨어의 라이선스가 가사 재배포 권한을 부여하지 않는다.
 
-## 0.6.2 개발 빌드
+## 0.6.2 구성 요소 관리
 
 구성 요소 정보는 components.json으로 통합한다. Spicetify 2.46.4 후보의 자동 검사를 통과해 개발 목록에 반영했다. 설치본 빌드는 현재 소스와 목록에 일치하는 호환성 검사 보고서를 요구한다. ivLyrics 교체와 원본 유지 관리 절차는 [구성 요소 유지 관리](DEPENDENCIES.md)를 따른다. 공개 릴리스와 실제 재생 검증 여부는 별도로 확인한다.

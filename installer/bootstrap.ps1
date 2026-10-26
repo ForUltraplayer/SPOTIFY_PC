@@ -20,7 +20,6 @@ $state=$null
 $attemptConfig=$null
 $attemptApps=$null
 $ivLyricsTransaction=$null
-. (Join-Path $PSScriptRoot 'managed-ivlyrics.ps1')
 
 function Assert-AppDirectory {
     $forbidden=@([IO.Path]::GetPathRoot($root).TrimEnd('\'),$env:USERPROFILE,$env:APPDATA,$env:LOCALAPPDATA,$env:ProgramFiles,${env:ProgramFiles(x86)},$env:SystemRoot)
@@ -132,6 +131,9 @@ try {
         }
         exit 0
     }
+    # NSIS runs Prepare from a temporary folder containing only this script.
+    # Load installation helpers only after the complete payload is extracted.
+    . (Join-Path $root 'installer\managed-ivlyrics.ps1')
     Assert-OwnedChild $client
     Assert-OwnedChild $config
     $components=(Get-Content -LiteralPath (Join-Path $root 'components.json') -Raw | ConvertFrom-Json).components

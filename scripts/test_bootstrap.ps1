@@ -57,6 +57,16 @@ foreach ($name in @('patch-functions.ps1','patch-calls.ps1')) {
     if (@($commands | Where-Object { $_.GetCommandName() -in $forbidden }).Count) { throw 'Unexpected operation in patch adapter.' }
     $count++
 }
+$entry=Join-Path $area 'nsis temporary files'
+$prepared=Join-Path $area 'prepared app'
+[void](New-Item -ItemType Directory -Path $entry)
+Copy-Item -LiteralPath $source -Destination (Join-Path $entry 'bootstrap.ps1')
+$nativePowerShell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+& $nativePowerShell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $entry 'bootstrap.ps1') -Mode Prepare -InstallRoot $prepared *> (Join-Path $area 'prepare-entry.log')
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $prepared 'install-marker.json'))) {
+    throw 'NSIS Prepare entry point must run with bootstrap.ps1 alone before payload extraction.'
+}
+$count++
 $root=$env:USERPROFILE
 $marker=Join-Path $root 'install-marker.json'
 $rejected=$false

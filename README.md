@@ -4,9 +4,9 @@
 
 Spotify 데스크톱 가사 화면에 일본어 노래의 한글 발음을 같이 띄워 줍니다. 한음, 나무위키에 올라와 있는 한글 발음을 가져와 Spotify 가사와 줄 단위로 맞춥니다.
 
-[SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) 기반이고, 현재 0.6.1 베타입니다.
+[SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) 기반이고, 현재 0.6.2 베타입니다.
 
-**[⬇ 다운로드 (v0.6.1)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.1)**
+**[⬇ 다운로드 (v0.6.2)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.2)**
 
 안드로이드 버전: [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)
 
@@ -14,7 +14,7 @@ Spotify 데스크톱 가사 화면에 일본어 노래의 한글 발음을 같�
 
 Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다.
 
-1. `SpotifyHangul-0.6.1-Setup.exe`를 받아 실행합니다.
+1. `SpotifyHangul-0.6.2-Setup.exe`를 받아 실행합니다.
 2. 설치 폴더를 고릅니다. 기본값은 `%LOCALAPPDATA%\Programs\SpotifyHangul`입니다.
 3. 설치 중에 공식 Spotify 파일(약 150 MB)을 내려받습니다.
 
@@ -43,7 +43,7 @@ Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다.
 ## 업데이트 / 제거
 
 - **0.6.1 이후**: 바로가기로 실행하면 새 버전을 확인해서 자동으로 업데이트합니다 (8시간 간격, Spotify 종료 후 적용).
-- **0.6.0 이하**: Spotify를 끄고 `SpotifyHangul-0.6.1-Update.exe`를 실행하거나 Setup.exe를 같은 폴더에 다시 설치합니다.
+- **0.6.0 이하**: Spotify를 끄고 `SpotifyHangul-0.6.2-Update.exe`를 실행하거나 Setup.exe를 같은 폴더에 다시 설치합니다.
 - **제거**: Windows 설정 > 앱 > 설치된 앱에서 **Spotify 한글 가사**를 제거합니다. 기존 Spotify와 발음 캐시는 남습니다.
 
 통합 Spotify 자체의 자동 업데이트는 패치 유지를 위해 막아 둡니다. Spotify 버전은 새 설치본으로 올라갑니다.
@@ -57,7 +57,7 @@ Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다.
 
 ## 테스트 환경
 
-Windows 11 x64 / Spotify 1.3.6.1921 / Spicetify 2.46.3 / ivLyrics 7.0.16
+Windows 11 x64 / Spotify 1.3.6.1921 / Spicetify 2.46.4 / ivLyrics 7.0.16
 
 ## 저장 데이터
 
@@ -102,7 +102,7 @@ python scripts/build_installer.py
 
 배포 절차는 [docs/RELEASE.md](docs/RELEASE.md) 참고.
 
-개발 중인 0.6.2는 `components.json`에서 버전과 해시를 관리합니다. ivLyrics 교체와 원본 감지 및 호환성 검사 절차는 [구성 요소 유지 관리](docs/DEPENDENCIES.md)를 참고하세요.
+0.6.2부터 `components.json`에서 버전과 해시를 관리합니다. ivLyrics 교체와 원본 감지 및 호환성 검사 절차는 [구성 요소 유지 관리](docs/DEPENDENCIES.md)를 참고하세요.
 
 </details>
 

@@ -4,9 +4,9 @@
 
 Shows the Korean (Hangul) pronunciation of Japanese songs in the Spotify desktop lyrics view. Pronunciation is pulled from Haneum and Namuwiki and matched line by line against Spotify's lyrics.
 
-Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Current version: 0.6.1 beta.
+Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Current version: 0.6.2 beta.
 
-**[⬇ Download (v0.6.1)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.1)**
+**[⬇ Download (v0.6.2)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.2)**
 
 Android version: [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)
 
@@ -14,7 +14,7 @@ Android version: [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_AND
 
 No need to install Spotify, SpotX or Python first.
 
-1. Download and run `SpotifyHangul-0.6.1-Setup.exe`.
+1. Download and run `SpotifyHangul-0.6.2-Setup.exe`.
 2. Pick an install folder (default: `%LOCALAPPDATA%\Programs\SpotifyHangul`).
 3. The installer downloads the official Spotify files (~150 MB).
 
@@ -43,7 +43,7 @@ Per-song source URLs and automatic pronunciation are under **한글 발음 자�
 ## Update / Uninstall
 
 - **0.6.1 and later**: the shortcut checks for new versions and updates automatically (every 8 hours, applied after Spotify closes).
-- **0.6.0 and earlier**: close Spotify and run `SpotifyHangul-0.6.1-Update.exe`, or reinstall Setup.exe into the same folder.
+- **0.6.0 and earlier**: close Spotify and run `SpotifyHangul-0.6.2-Update.exe`, or reinstall Setup.exe into the same folder.
 - **Uninstall**: Windows Settings > Apps > Installed apps > **Spotify 한글 가사**. Your existing Spotify and pronunciation cache are kept.
 
 Spotify's own auto-update is blocked to keep the patches. New Spotify versions come with new installer releases.
@@ -57,7 +57,7 @@ Spotify's own auto-update is blocked to keep the patches. New Spotify versions c
 
 ## Tested on
 
-Windows 11 x64 / Spotify 1.3.6.1921 / Spicetify 2.46.3 / ivLyrics 7.0.16
+Windows 11 x64 / Spotify 1.3.6.1921 / Spicetify 2.46.4 / ivLyrics 7.0.16
 
 ## Stored data
 
@@ -102,7 +102,7 @@ python scripts/build_installer.py
 
 Release process: [docs/RELEASE.md](docs/RELEASE.md) (Korean).
 
-Version 0.6.2 in development centralizes component versions and digests in `components.json`. See [component maintenance](docs/DEPENDENCIES.md) for ivLyrics replacement, upstream detection and compatibility checks (Korean).
+Version 0.6.2 centralizes component versions and digests in `components.json`. See [component maintenance](docs/DEPENDENCIES.md) for ivLyrics replacement, upstream detection and compatibility checks (Korean).
 
 </details>
 
