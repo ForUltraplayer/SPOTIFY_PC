@@ -15,6 +15,7 @@ ivLyrics Android는 조회한 저장소의 라이선스 메타데이터가 없�
 | 구성 요소 | 확인한 라이선스 | 이 저장소의 처리 | 근거 |
 | --- | --- | --- | --- |
 | 자체 PC 소스 | GPL-3.0-or-later 적용 | 원본 LICENSE 포함 | 루트 LICENSE와 THIRD_PARTY_NOTICES.md |
+| SpotX 패치 | MIT, Copyright (c) 2021-2026 amd64fox | 원본과 라이선스 및 패치 전용 파생 소스 포함, Spotify 본체는 설치 시 공식 서버에서 다운로드 | [고정한 원본 LICENSE](https://github.com/SpotX-Official/SpotX/blob/3cfbdfd1fac3dc755155e434116e28b51acfec07/LICENSE) |
 | PyKakasi 2.3.0과 사전 | GPL-3.0-or-later | EXE에 원본 고지와 전체 소스 배포 압축 포함 | [PyPI의 버전별 고지](https://pypi.org/project/pykakasi/2.3.0/) |
 | jaconv, Deprecated | MIT | 버전 고정, EXE에 원본 고지와 소스 압축 포함 | 설치된 배포 정보의 METADATA와 LICENSE |
 | wrapt | BSD-2-Clause | 버전 고정, EXE에 원본 고지와 소스 압축 포함 | 설치된 배포 정보의 METADATA와 LICENSE |
@@ -32,3 +33,5 @@ ivLyrics Android는 조회한 저장소의 라이선스 메타데이터가 없�
 버전 0.5.0의 설치본은 Python의 LICENSE.txt, 라이브러리의 dist-info 고지, NSIS COPYING, Spicetify와 ivLyrics의 LGPL 원문 및 대응 소스를 포함한다. PyKakasi와 하위 의존성의 원본 소스 배포 압축도 포함한다. 자체 설치 통합 코드와 빌드 스크립트의 대응 소스 압축을 함께 제공한다. 설치 프로그램은 기본 zlib 압축을 사용한다. 바이너리 포함으로 바뀐 배포 범위는 이 후속 검토로 정정한다.
 
 [Python 내장 배포 안내](https://docs.python.org/3.13/using/windows.html#the-embeddable-package), [NSIS 라이선스](https://nsis.sourceforge.io/License)와 실제 내려받은 패키지의 원문 고지를 확인했다. LGPL 구성 요소는 원본 파일을 제공하고 교체 가능한 일반 파일로 설치한다. 서명하지 않은 베타의 기기 설치 검증 여부는 라이선스 판단과 별도로 기록한다.
+
+버전 0.6.0에서는 SpotX의 MIT 고지와 기준 커밋의 전체 소스 및 파일 패치용 파생 코드를 배포물에 추가했다. MIT 고지를 유지한 소스 공개는 가능하다고 판단했다. Spotify 본체의 재배포 권한은 확인하지 못했으므로 EXE에는 넣지 않고 공식 서버의 설치 파일을 설치 시 내려받는다. Spotify 서비스 이용 조건까지 준수한다고 판단한 것은 아니며, [이용 약관](https://www.spotify.com/us/legal/end-user-agreement/)의 재배포 제한과 통합 검증의 한계는 docs/SPOTX_INTEGRATION.md에 따로 기록했다.

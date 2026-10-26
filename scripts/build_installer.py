@@ -49,6 +49,7 @@ def main():
         shutil.copy2(ROOT / name, PAYLOAD / name)
     shutil.copytree(ROOT / 'installer', PAYLOAD / 'installer')
     shutil.copytree(ROOT / 'licenses', PAYLOAD / 'licenses')
+    shutil.copytree(ROOT / 'third_party' / 'spotx', PAYLOAD / 'third_party' / 'spotx')
     extract(CACHE / 'python-3.13.17-embed-amd64.zip', PAYLOAD / 'runtime')
     (PAYLOAD / 'runtime' / 'python313._pth').write_text('python313.zip\n.\n..\n../vendor\n', encoding='ascii')
     extract(CACHE / 'spicetify-2.46.3-windows-x64.zip', PAYLOAD / 'tools')

@@ -32,6 +32,20 @@ if (Test-Path -LiteralPath $installationState) {
     if ($installedSpotify -and (Test-Path -LiteralPath $installedSpotify)) { $spotifyExe = $installedSpotify }
 }
 if (-not (Test-Path -LiteralPath $spotifyExe)) { throw 'Spotify 실행 파일을 찾지 못했습니다.' }
+if (Test-Path -LiteralPath $installationState) {
+    $installedState = Get-Content -LiteralPath $installationState -Raw | ConvertFrom-Json
+    if ($installedState.ManagedClient) {
+        # Spotify's single-instance handoff could open the old client instead
+        # of the managed one. Only stop known previous Spotify executables.
+        $knownPrevious = @($installedState.PreviousSpotifyExe, (Join-Path $env:APPDATA 'Spotify\Spotify.exe'))
+        $other = @(Get-CimInstance Win32_Process -Filter "name='Spotify.exe'" |
+            Where-Object { $_.ExecutablePath -and $_.ExecutablePath -ne $spotifyExe })
+        foreach ($process in $other) {
+            if ($knownPrevious -contains $process.ExecutablePath) { Stop-Process -Id $process.ProcessId -ErrorAction SilentlyContinue }
+            else { throw '다른 위치의 Spotify가 실행 중입니다. 해당 Spotify를 종료한 뒤 한글 가사 바로가기를 다시 실행해 주세요.' }
+        }
+    }
+}
 $bridgeHealthy = $false
 try {
     $health = Invoke-RestMethod -Uri 'http://127.0.0.1:19643/health' -TimeoutSec 2

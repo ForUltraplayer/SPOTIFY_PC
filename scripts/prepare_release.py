@@ -13,13 +13,18 @@ FILES = (
     'bridge.py', 'phonetics.py', 'hangul-lyrics.js', 'start.ps1', 'stop.ps1',
     'test_bridge.py', 'test_extension.cjs', 'scripts/prepare_release.py',
     'docs/RELEASE.md', 'docs/OPERATIONS.md', 'docs/VERIFICATION.md', 'docs/LICENSE_REVIEW.md',
+    'docs/SPOTX_INTEGRATION.md',
     'licenses/ivLyrics-LGPL-2.1.txt',
     'licenses/Kuromoji-Apache-2.0.txt', 'licenses/Kuromoji-IPADIC-NOTICE.md',
     'android/README.md', 'android/PLAN.md', 'android/LICENSE', 'android/upstream.json',
     'android/patches/myspoti-hangul.patch',
     'scripts/fetch_distribution_inputs.py', 'scripts/build_installer.py', 'scripts/audit_playlists.cjs',
-    'scripts/test_installer.ps1',
+    'scripts/test_installer.ps1', 'scripts/test_bootstrap.ps1', '.gitattributes',
     'installer/integrate.ps1', 'installer/setup.nsi',
+    'installer/bootstrap.ps1', 'installer/spotx-patch.ps1', 'scripts/build_spotx_adapter.py',
+    'third_party/spotx/upstream-run.ps1', 'third_party/spotx/patches.json', 'third_party/spotx/en.ps1',
+    'third_party/spotx/LICENSE', 'third_party/spotx/upstream.json',
+    'third_party/spotx/patch-functions.ps1', 'third_party/spotx/patch-calls.ps1',
 )
 
 

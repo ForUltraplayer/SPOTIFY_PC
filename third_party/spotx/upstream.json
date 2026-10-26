@@ -1,0 +1,13 @@
+{
+  "repository": "https://github.com/SpotX-Official/SpotX",
+  "revision": "3cfbdfd1fac3dc755155e434116e28b51acfec07",
+  "license": "MIT",
+  "files": {
+    "upstream-run.ps1": "0d2a747b5c8ac07df2dd4771463ea336bbdd08153adb7043bf899ad0dd865e57",
+    "patches.json": "0a04b76784d26429f81ef82756b8302bf927387fe652e9b5de55b9b584e99667",
+    "en.ps1": "226ed824ccf802df4d1d8ea53e4f0875f66226294c10a1b307bb5bb50d605088",
+    "LICENSE": "40a1f5d0199616712c7f1ab0317b60c1a42e964fed80fb25baca798e1444fe40",
+    "patch-functions.ps1": "75b8ab2c79ca1e4093a78be1cf3bf772d4b4623f69225bb817dbaa18d500590b",
+    "patch-calls.ps1": "0c078c65948b9f01591e5ce31e4b452e69eed71071e08d6bbf9fc171dadd6c7a"
+  }
+}

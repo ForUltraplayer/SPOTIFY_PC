@@ -3,12 +3,13 @@
 # @brief Integrate the bundled per-user application while preserving existing Spotify customizations.
 param(
     [ValidateSet('Prepare','Install','Uninstall')][string]$Mode = 'Install',
-    [string]$InstallRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$InstallRoot = (Split-Path -Parent $PSScriptRoot),
+    [ValidateSet('install-state.json','legacy-install-state.json')][string]$StateFile = 'install-state.json'
 )
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath($InstallRoot).TrimEnd('\')
 $marker = Join-Path $root 'install-marker.json'
-$statePath = Join-Path $root 'install-state.json'
+$statePath = Join-Path $root $StateFile
 $configRoot = if ($env:SPICETIFY_CONFIG) { $env:SPICETIFY_CONFIG } else { Join-Path $env:APPDATA 'spicetify' }
 $configPath = Join-Path $configRoot 'config-xpui.ini'
 $extension = Join-Path $configRoot 'Extensions\hangul-lyrics.js'

@@ -1,26 +1,28 @@
 # 설치 배포 안내
 
-버전 0.5.1은 Windows x64용 EXE 베타 설치본이다. 사용자 지정 폴더에 설치하며 CPython 3.13.17과 사전을 포함하므로 별도 Python 설치가 필요하지 않다. 다른 깨끗한 PC에서의 검증이 남아 있어 정식 배포 준비 완료로 표시하지 않는다.
+버전 0.6.0은 Windows x64용 통합 EXE 베타다. 사용자 지정 폴더에 Spotify와 SpotX, Spicetify 및 ivLyrics를 한 번에 구성한다. CPython 3.13.17과 사전을 포함하므로 별도 Python 설치가 필요하지 않다. 설치 중 공식 Spotify 파일 약 150 MB를 추가로 내려받는다. 다른 깨끗한 PC에서의 검증이 남아 있어 정식 배포 준비 완료로 표시하지 않는다.
 
 ## 설치와 제거
 
-1. Spotify 데스크톱 버전을 설치하고 한 번 실행한다. 현재 탐지는 일반 데스크톱 설치 경로나 기존 Spicetify 설정을 사용한다. Microsoft Store 전용 설치와 Windows ARM64는 검증하지 않았다.
-2. 배포 페이지의 Setup.exe를 실행하고 비어 있는 전용 하위 폴더를 선택한다. 기본 위치는 `%LOCALAPPDATA%\Programs\SpotifyHangul`이다. 설치 중 Spotify는 종료된다.
+1. Spotify를 미리 설치하거나 실행할 필요가 없다. 인터넷 연결을 준비한다. Microsoft Store판 공존과 Windows ARM64는 검증하지 않았다.
+2. 배포 페이지의 Setup.exe를 실행하고 비어 있는 전용 하위 폴더를 선택한다. 기본 위치는 `%LOCALAPPDATA%\Programs\SpotifyHangul`이다. 기존 설치를 업데이트하려면 같은 폴더를 선택한다.
 3. 바탕화면의 Spotify 한글 가사를 실행하고 Spotify 안의 ivLyrics 화면을 연다. 원문 표시와 한글 발음 표시를 선택한다. 자동 발음 사용 여부는 한글 발음 자료 메뉴에서 정한다.
-4. 제거할 때는 Windows 설치된 앱의 Spotify 한글 가사를 사용한다. 이 설치본이 추가한 발음 확장을 연결 해제하거나 설치 전 파일로 복원한다. 함께 준비한 ivLyrics와 개인 캐시는 유지한다.
+4. 제거할 때는 Windows 설치된 앱의 Spotify 한글 가사를 사용한다. 설치 폴더의 통합 Spotify와 Spicetify 및 ivLyrics는 함께 제거한다. 기존 Spotify와 사용자 프로필 및 개인 발음 캐시는 유지한다. 0.5.x에서 업데이트한 경우 이전 확장 복원 절차도 실행한다.
 
-설치 프로그램은 관리자 권한을 요구하지 않는다. 선택한 폴더에는 현재 사용자의 쓰기 권한이 필요하다. 서비스, 부팅 자동 시작이나 전역 PATH는 등록하지 않는다. Spotify와 Spicetify의 버전 호환성은 외부 업데이트에 따라 달라질 수 있다. 기존 ivLyrics가 있으면 유지하므로 다른 기존 버전과의 조합은 추가 검증이 필요하다. 베타 EXE는 코드 서명이 없다.
+설치 프로그램은 관리자 권한을 요구하지 않는다. 선택한 폴더에는 현재 사용자의 쓰기 권한이 필요하다. 서비스, 부팅 자동 시작이나 전역 PATH는 등록하지 않는다. 백신 예외도 추가하지 않는다. 통합 Spotify의 자동 업데이트는 패치 유지를 위해 차단하며 새 통합 설치본으로 버전을 교체한다. 기존 ivLyrics가 있으면 처음 설치할 때 복사해 유지하므로 다른 기존 버전과의 조합은 추가 검증이 필요하다. 베타 EXE는 코드 서명이 없다.
 
-기존 발음 확장과 설정 및 바탕화면 바로가기는 설치 폴더의 backup에 보존한다. 적용 도중 오류가 나면 해당 시도의 확장과 설정을 복원하고 가능한 경우 이전 설정을 재적용한다. 오류 원문은 install.log에 남긴다. 제거 후 ivLyrics 표시 설정의 자동 복원은 제공하지 않는다.
+기존 Spotify 파일과 공유 Spicetify 설정은 덮어쓰지 않는다. 통합본은 설치 폴더의 spicetify-config와 독립 백업을 사용한다. 재적용 전 해당 시도의 설정과 Spotify Apps 폴더를 보존하고 실패하면 복원한다. 0.5.x에서 보존한 backup은 유지한다. 오류 원문은 install.log와 spotx-install.log에 남긴다. 제거 후 ivLyrics 표시 설정의 자동 복원은 제공하지 않는다. [통합 구조와 한계](SPOTX_INTEGRATION.md)를 참고한다.
 
 ## 포함 범위와 재현 빌드
 
-설치본은 자체 소스, 내장 Python, 의존 라이브러리와 사전, Spicetify 2.46.3, ivLyrics 7.0.16을 포함한다. 원본 고지는 licenses와 각 패키지에 유지한다. GPL 및 LGPL 구성 요소의 대응 소스 압축은 third_party_sources에 포함한다. Spotify 실행 파일, 계정 정보, 가사 묶음과 개인 캐시는 배포하지 않는다.
+설치본은 자체 소스, 내장 Python, 의존 라이브러리와 사전, Spicetify 2.46.3, ivLyrics 7.0.16과 고정한 SpotX MIT 소스를 포함한다. 원본 고지는 licenses와 각 패키지 및 third_party/spotx/LICENSE에 유지한다. GPL 및 LGPL 구성 요소의 대응 소스 압축은 third_party_sources에 포함한다. Spotify 실행 파일, 계정 정보, 가사 묶음과 개인 캐시는 배포하지 않는다.
 
 ```powershell
 python -m unittest discover -s . -p test_bridge.py -v
 node --test test_extension.cjs
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_installer.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_bootstrap.ps1
+python scripts/build_spotx_adapter.py
 python scripts/prepare_release.py
 python scripts/fetch_distribution_inputs.py
 python scripts/build_installer.py

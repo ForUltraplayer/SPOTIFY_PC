@@ -6,7 +6,7 @@
 | 발음 제공자 코드 | `web-hangul` |
 | 로컬 도우미 코드 | `ivLyricsHangul` |
 
-Windows Spotify의 ivLyrics에 웹에 작성된 일본어 노래의 한글 발음을 표시한다. 버전 0.5.1은 설치 폴더를 선택하는 Windows x64용 EXE 베타 배포다. Python을 따로 설치할 필요가 없으며 실행 환경과 사전을 포함한다. 자체 소스에는 GPL-3.0-or-later를 적용한다. 깨끗한 다른 PC의 설치와 전체 곡의 발음 청취 검수는 남아 있다.
+Windows Spotify의 ivLyrics에 웹에 작성된 일본어 노래의 한글 발음을 표시한다. 버전 0.6.0은 Spotify와 SpotX까지 한 번에 구성하는 Windows x64용 EXE 베타다. 설치 폴더를 선택할 수 있으며 Python과 Spotify를 미리 설치할 필요가 없다. 설치 중 공식 Spotify x64 파일 약 150 MB를 내려받아 SHA-256과 Spotify AB 서명을 검사한다. 자체 소스에는 GPL-3.0-or-later를 적용한다. 깨끗한 다른 PC의 설치와 전체 곡의 발음 청취 검수는 남아 있다.
 
 ## 기능
 
@@ -22,7 +22,9 @@ Windows Spotify의 ivLyrics에 웹에 작성된 일본어 노래의 한글 발�
 
 ## 사용
 
-[배포 페이지](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)에서 `SpotifyHangul-0.5.1-Setup.exe`를 받는다. Spotify 데스크톱 버전을 설치하고 한 번 실행한 다음 설치 프로그램에서 전용 폴더를 선택한다. Spicetify와 ivLyrics는 설치본에 포함한다. 기존 ivLyrics가 있으면 유지한다. 설치 중 Spotify는 종료되므로 음악을 멈춘 뒤 진행한다.
+[배포 페이지](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)에서 `SpotifyHangul-0.6.0-Setup.exe`를 받는다. 인터넷에 연결한 상태에서 설치 프로그램을 실행하고 전용 폴더를 선택한다. Spotify를 따로 설치하거나 먼저 실행할 필요가 없다. 선택한 폴더 안에 Spotify를 구성하고 SpotX, Spicetify와 ivLyrics를 적용한다. 기존 Spotify 파일과 공유 Spicetify 설정은 보존한다. 통합본에는 별도 Spicetify 설정을 사용하며 기존 확장과 테마가 있으면 처음 설치할 때 복사한다.
+
+통합본의 Spotify는 패치 유지를 위해 자동 업데이트를 차단한다. 이후 버전 교체는 통합 설치본 업데이트로 진행한다. 백신 예외와 부팅 자동 시작은 추가하지 않는다. 설치 후 한글 가사 바로가기를 실행하면 기존에 실행 중인 일반 Spotify를 종료하고 통합본을 연다. [통합 구조와 검증 범위](docs/SPOTX_INTEGRATION.md)를 참고한다.
 
 바탕화면의 **Spotify 한글 가사** 바로가기를 실행하고 Spotify의 **ivLyrics** 화면을 연다. 이미 Spotify가 실행 중이어도 같은 바로가기를 사용할 수 있다. 프로필 메뉴의 **한글 발음 자료**에서 현재 곡의 자료 주소와 자동 발음을 설정한다. 자동 발음은 기본값이 꺼짐이며 원하는 경우 직접 켠다.
 
@@ -49,6 +51,7 @@ node --test test_extension.cjs
 소스 배포 초안은 다음 명령으로 생성한다. 개인 캐시, 설치 PC의 Python 경로, 진단 기록과 런타임은 포함하지 않는다.
 
 ```powershell
+python scripts/build_spotx_adapter.py
 python scripts/prepare_release.py
 ```
 
@@ -63,7 +66,7 @@ python scripts/build_installer.py
 
 ## 안드로이드
 
-개발과 APK 배포는 [안드로이드 전용 저장소](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)에서 관리한다. [베타 APK](https://github.com/ForUltraplayer/SPOTIFY_ANDROID/releases/tag/v2.0.1-hangul.3)는 Myspoti 기반으로 재생과 한글 가사를 같은 앱에서 제공하며 PC 서버에 연결하지 않는다. 호스트 검사와 APK 빌드 및 서명은 확인했고 새 APK의 휴대폰 설치와 실제 재생 검증은 대기한다. 이 저장소의 `android/` 패치는 분리 전 이력이며 새 개발의 기준은 전용 저장소다.
+개발과 APK 배포는 [안드로이드 전용 저장소](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)에서 관리한다. [베타 APK](https://github.com/ForUltraplayer/SPOTIFY_ANDROID/releases/tag/v2.0.1-hangul.4)는 Myspoti 기반으로 재생과 한글 가사를 같은 앱에서 제공하며 PC 서버에 연결하지 않는다. Google 로그인 실패 사례와 이메일 로그인 대안은 안드로이드 README와 릴리스에 명시했다. Apple과 Facebook 로그인은 실제 검증하지 않았다. 호스트 검사와 APK 빌드 및 서명은 확인했고 새 APK의 휴대폰 설치와 실제 재생 검증은 대기한다. 이 저장소의 `android/` 패치는 분리 전 이력이며 새 개발의 기준은 전용 저장소다.
 
 ## 소스 구성
 
