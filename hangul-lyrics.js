@@ -21,63 +21,138 @@
         }
     }
     const currentResult = () => trackResults.get(activeTrackId()) || null;
+    const lyricLookups = new Map();
+    const mirrorCooldowns = new Map();
+    const cleanLookupTitle = value => String(value || '')
+        .replace(/\s*[(（[［]\s*(?:feat\.?|ft\.?|featuring)\s+[^)）\]］]+[)）\]］]/gi, '').trim();
+    const identityKey = value => String(value || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+    const durationSeconds = value => {
+        const parts = String(value ?? '').split(':').map(Number);
+        return parts.every(Number.isFinite) ? parts.reduce((total, part) => total * 60 + part, 0) : 0;
+    };
+    function sameRecordingMetadata(metadata, info) {
+        if (identityKey(cleanLookupTitle(metadata.title || metadata.name)) !== identityKey(cleanLookupTitle(info.title))) return false;
+        const expected = identityKey(String(info.artist || '').split(',')[0]);
+        const artists = String(metadata.artist || metadata.artistName || '').split(/[/,;]/)
+            .map(value => identityKey(value.replace(/\s+feat\..*$/i, '')));
+        if (!expected || !artists.includes(expected)) return false;
+        const album = metadata.album || metadata.albumName;
+        if (album && info.album && identityKey(album) !== identityKey(info.album)) return false;
+        const duration = Number(info.durationMs ?? info.duration_ms ?? info.duration ?? 0);
+        const expectedSeconds = duration > 10000 ? duration / 1000 : duration;
+        const actual = metadata.durationMs ? Number(metadata.durationMs) / 1000 : durationSeconds(metadata.totalDuration);
+        return !actual || !expectedSeconds || Math.abs(actual - expectedSeconds) <= 3;
+    }
     function installLyricsPlusFallback() {
         const provider = window.LyricsAddonManager?.getAddon?.('lyricsplus');
         const parser = window.__ivLyricsPlusDebug;
         if (!provider?.getLyrics || !parser?.parseLyricsPayload || !parser?.resolveTrackIsrc || !parser?.buildLyricsUrl) return;
         if (provider.getLyrics.hangulMirrorFallback) return;
         const original = provider.getLyrics;
-        const cacheVersion = `${provider.cacheVersion || 'lyricsplus'}-hangul-mirrors-1`;
+        const cacheVersion = `${provider.cacheVersion || 'lyricsplus'}-hangul-mirrors-2`;
         provider.cacheVersion = cacheVersion;
         const usable = result => ['karaoke', 'synced', 'unsynced'].some(key => result?.[key]?.length > 0);
         const wrapped = async function (info) {
             const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 10000);
+            const timer = setTimeout(() => controller.abort(), 18000);
+            const attempts = [];
             const native = Promise.resolve().then(() => original.call(this, info));
+            const load = async (base, url) => {
+                const cooling = mirrorCooldowns.get(base);
+                if (cooling?.until > Date.now()) {
+                    attempts.push({ host: base, status: cooling.status, skipped: true });
+                    return null;
+                }
+                const response = await fetch(String(url), { signal: controller.signal, credentials: 'omit' });
+                attempts.push({ host: base, status: response.status || (response.ok ? 200 : 404) });
+                if (response.status === 429 || response.status >= 500) {
+                    const retry = response.headers?.get?.('Retry-After');
+                    const seconds = Number(retry);
+                    const delay = retry && !Number.isFinite(seconds) ? Date.parse(retry) - Date.now() : seconds * 1000;
+                    mirrorCooldowns.set(base, { status: response.status,
+                        until: Date.now() + Math.min(300000, Math.max(30000, delay || 60000)) });
+                    return null;
+                }
+                return response.ok ? response.json() : null;
+            };
             const extra = async () => {
                 const isrc = await parser.resolveTrackIsrc(info);
-                // These are the Android provider's public mirrors. Keep recording
-                // identity when available, then retry exact title/artist metadata.
-                const attempts = [['https://lyricsplus.binimum.org', isrc]];
-                if (isrc) attempts.push(['https://lyricsplus.prjktla.my.id', null]);
-                for (const [base, code] of attempts) {
-                    try {
-                        const response = await fetch(parser.buildLyricsUrl(base, info, code), {
-                            signal: controller.signal, credentials: 'omit'
-                        });
-                        if (!response.ok) continue;
-                        const payload = await response.json();
-                        if (isrc && payload.metadata?.isrc && payload.metadata.isrc !== isrc) continue;
-                        const duration = Number(info.durationMs ?? info.duration_ms ?? info.duration ?? 0);
-                        const parsed = parser.parseLyricsPayload(payload, duration > 10000 ? duration : duration * 1000);
-                        if (!usable(parsed)) continue;
-                        return { ...parsed, uri: info.uri || '', provider: 'lyricsplus', cacheVersion,
-                            karaokeSource: parsed.karaoke ? 'lyricsplus' : null, error: null,
-                            copyright: 'Lyrics from LyricsPlus.', isrc: isrc || null,
-                            lyricsPlus: { mirror: base, type: payload.type || null,
-                                source: payload.metadata?.source || null, language: payload.metadata?.language || null,
-                                title: payload.metadata?.title || null, songWriters: payload.metadata?.songWriters || [],
-                                agents: payload.metadata?.agents || {}, songParts: payload.metadata?.songParts || [],
-                                totalDuration: payload.metadata?.totalDuration || null, cached: payload.cached ?? null } };
-                    } catch (error) {
-                        if (controller.signal.aborted) throw error;
+                const cleaned = cleanLookupTitle(info.title);
+                const candidates = [{ ...info }];
+                const primaryArtist = String(info.artist || '').split(',')[0].trim();
+                if (primaryArtist && primaryArtist !== info.artist) candidates.push({ ...info,
+                    title: cleaned || info.title, artist: primaryArtist });
+                if (cleaned && cleaned !== info.title) candidates.push({ ...info, title: cleaned });
+                const nativeBases = parser.getApiBases?.() || [];
+                // Exact recording metadata stays first. A cover's ISRC is never
+                // attached to an original-song title or a different artist.
+                for (let index = 0; index < candidates.length; index++) {
+                    const candidate = candidates[index];
+                    for (const base of ['https://lyricsplus.binimum.org', 'https://lyricsplus.prjktla.my.id']) {
+                        if (index === 0 && !isrc && nativeBases.includes(base)) continue;
+                        try {
+                            const url = new URL(parser.buildLyricsUrl(base, candidate, null));
+                            if (isrc) url.searchParams.set('isrc', isrc);
+                            const payload = await load(base, url);
+                            if (!payload) continue;
+                            if (isrc && payload.metadata?.isrc && payload.metadata.isrc !== isrc) continue;
+                            if (index > 0) {
+                                let metadata = payload.metadata || {};
+                                if (!metadata.title || !metadata.artist) {
+                                    const identityUrl = new URL('/v1/metadata/get', base);
+                                    identityUrl.searchParams.set('title', candidate.title);
+                                    identityUrl.searchParams.set('artist', candidate.artist);
+                                    const identity = await load(base, identityUrl);
+                                    const found = identity?.metadata;
+                                    if (!found || !metadata.source || found.source !== metadata.source) continue;
+                                    metadata = { ...metadata, ...found };
+                                }
+                                if (!sameRecordingMetadata(metadata, info)) continue;
+                            }
+                            const duration = Number(info.durationMs ?? info.duration_ms ?? info.duration ?? 0);
+                            const milliseconds = duration > 10000 ? duration : duration * 1000;
+                            const parsed = parser.parseLyricsPayload(payload, milliseconds);
+                            if (!usable(parsed)) continue;
+                            if (index > 0 && milliseconds) {
+                                const end = Math.max(...(payload.lyrics || []).map(line => Number(line.time || 0) + Number(line.duration || 0)));
+                                if (!Number.isFinite(end) || end > milliseconds + 3000 || end < milliseconds * .6) continue;
+                            }
+                            return { ...parsed, uri: info.uri || '', provider: 'lyricsplus', cacheVersion,
+                                karaokeSource: parsed.karaoke ? 'lyricsplus' : null, error: null,
+                                copyright: 'Lyrics from LyricsPlus.', isrc: isrc || null,
+                                lyricsPlus: { mirror: base, type: payload.type || null,
+                                    source: payload.metadata?.source || null, language: payload.metadata?.language || null,
+                                    title: payload.metadata?.title || null, songWriters: payload.metadata?.songWriters || [],
+                                    agents: payload.metadata?.agents || {}, songParts: payload.metadata?.songParts || [],
+                                    totalDuration: payload.metadata?.totalDuration || null, cached: payload.cached ?? null,
+                                    lookupTitle: candidate.title, normalizedTitle: index > 0 } };
+                        } catch (error) {
+                            if (controller.signal.aborted) throw error;
+                            attempts.push({ host: base, status: 0, error: error.name || 'Error' });
+                        }
                     }
                 }
-                throw new Error('No usable lyrics on the additional mirrors');
+                throw new Error('No verified lyrics on the additional mirrors');
             };
             try {
                 const result = await Promise.any([
                     native.then(result => { if (!usable(result)) throw new Error(result?.error || 'No lyrics'); return result; }),
                     extra()
                 ]);
+                lyricLookups.set(info.uri, { status: 'success', attempts, normalizedTitle: !!result.lyricsPlus?.normalizedTitle });
                 return { ...result, cacheVersion };
             } catch {
-                // Keep the original provider's failure contract and diagnostics.
-                const result = await native;
-                return result ? { ...result, cacheVersion } : result;
+                // Preserve the provider contract and retain transient diagnostics
+                // instead of treating a throttled endpoint as a permanent miss.
+                const retryable = controller.signal.aborted || attempts.some(item => item.status === 0 || item.status === 429 || item.status >= 500);
+                lyricLookups.set(info.uri, { status: retryable ? 'temporary-error' : 'not-found', attempts });
+                const result = await native.catch(() => null);
+                return { ...(result || { error: 'No lyrics found', uri: info.uri }), cacheVersion,
+                    retryable, lyricsLookup: lyricLookups.get(info.uri) };
             } finally {
                 clearTimeout(timer);
                 controller.abort();
+                if (lyricLookups.size > 60) lyricLookups.delete(lyricLookups.keys().next().value);
             }
         };
         wrapped.hangulMirrorFallback = true;
@@ -229,6 +304,7 @@
         const [url, setUrl] = React.useState(() => sourceUrls()[currentKey()] || '');
         const [message, setMessage] = React.useState('연결 상태를 확인하고 있습니다.');
         const [source, setSource] = React.useState(currentResult);
+        const lookup = lyricLookups.get(currentKey());
         const [automatic, setAutomatic] = React.useState(automaticEnabled);
         const [fast, setFast] = React.useState(() => storage().get(PREFIX + 'fast-loading') !== 'false');
         React.useEffect(() => {
@@ -268,6 +344,7 @@
             h('strong', null, '기존 한글 발음 가사'),
             h('p', null, '한음과 나무위키에서 일본어 원문을 대조해 기존 한글 발음을 가져옵니다. 티스토리는 자료 주소를 지정할 수 있습니다.'),
             h('p', { role: 'status' }, message),
+            lookup?.status === 'temporary-error' && h('p', null, '원문 가사 서버의 요청 제한 또는 일시 오류가 있었습니다. 잠시 뒤 다시 조회해 주세요.'),
             source?.source_url && h('p', null,
                 '최근 출처: ', h('a', { href: source.source_url, target: '_blank', rel: 'noopener noreferrer' }, source.source_title || source.title || '가사 문서'),
                 ` (${source.matched}/${source.total} 줄)`),
@@ -298,7 +375,7 @@
         id: ID,
         name: '기존 한글 발음 가사',
         author: 'ForUltraplayer',
-        version: '0.5.0',
+        version: '0.5.1',
         description: { ko: '웹에 작성된 한글 발음을 가져옵니다. AI·API 키·유료 호출 없이 원문과 대조합니다.',
             en: 'Existing web-authored Hangul readings; no AI or paid API.' },
         supports: { pronunciation: true, translate: false, metadata: false, tmi: false,
@@ -380,7 +457,7 @@
             return { phonetic: result.phonetic, hangulReading: metadata };
         }
     };
-    window.HangulLyricsProvider = { addon, getLastResult: currentResult };
+    window.HangulLyricsProvider = { addon, getLastResult: currentResult, getLookupStatus: uri => lyricLookups.get(uri || currentKey()) || null };
     let attempts = 0;
     const register = () => {
         if (window.AIAddonManager && window.Spicetify?.LocalStorage && window.LyricsService?.cache?.getTranslation) {

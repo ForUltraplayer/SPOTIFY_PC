@@ -6,12 +6,14 @@
 | 발음 제공자 코드 | `web-hangul` |
 | 로컬 도우미 코드 | `ivLyricsHangul` |
 
-Windows Spotify의 ivLyrics에 웹에 작성된 일본어 노래의 한글 발음을 표시한다. 버전 0.5.0은 설치 폴더를 선택하는 Windows x64용 EXE 베타 배포다. Python을 따로 설치할 필요가 없으며 실행 환경과 사전을 포함한다. 자체 소스에는 GPL-3.0-or-later를 적용한다. 깨끗한 다른 PC의 설치와 전체 곡의 발음 청취 검수는 남아 있다.
+Windows Spotify의 ivLyrics에 웹에 작성된 일본어 노래의 한글 발음을 표시한다. 버전 0.5.1은 설치 폴더를 선택하는 Windows x64용 EXE 베타 배포다. Python을 따로 설치할 필요가 없으며 실행 환경과 사전을 포함한다. 자체 소스에는 GPL-3.0-or-later를 적용한다. 깨끗한 다른 PC의 설치와 전체 곡의 발음 청취 검수는 남아 있다.
 
 ## 기능
 
 - 한음과 나무위키의 일본어 가사와 기존 한글 발음을 대조한다. 곡별 자료 주소로 티스토리를 지정할 수 있다.
+- 원문 가사 조회가 실패하면 제목의 feat. 표기를 제거하거나 공동 가수명의 대표 가수로 다시 찾는다. 곡명과 가수 및 확인 가능한 앨범·길이를 검증하고 Live 등 버전 표기는 유지한다.
 - 커버곡의 제목에서 원곡 후보를 찾고 현재 가사와 대조한다. 현재 녹음의 가사 재생 시간은 유지한다.
+- 가사 서버의 429와 5xx 응답은 일시 오류로 구분하고 해당 서버에 대기 시간을 적용한다. 상태는 한글 발음 자료 설정에서 확인하며 팝업 알림은 띄우지 않는다.
 - 원문의 일본어 줄 중 85% 이상과 최소 5 줄이 연결된 자료를 사용한다. 일본어가 3~4 줄인 곡은 모든 줄이 연결되어야 한다.
 - 선택 기능으로 누락 줄에 사전 기반 자동 발음을 사용한다. 기본값은 꺼짐이며 사용 알림은 띄우지 않는다. 자료 설정 화면에서 자동으로 만든 줄 수를 확인한다.
 - 하단 재생바의 현재 곡 제목은 우클릭 한 번으로 전체 제목을 복사한다. 기존 곡 메뉴의 곡 제목 복사와 프로필 메뉴의 현재 곡 제목 복사도 제공한다. 성공 알림은 띄우지 않는다.
@@ -20,13 +22,13 @@ Windows Spotify의 ivLyrics에 웹에 작성된 일본어 노래의 한글 발�
 
 ## 사용
 
-[배포 페이지](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)에서 `SpotifyHangul-0.5.0-Setup.exe`를 받는다. Spotify 데스크톱 버전을 설치하고 한 번 실행한 다음 설치 프로그램에서 전용 폴더를 선택한다. Spicetify와 ivLyrics는 설치본에 포함한다. 기존 ivLyrics가 있으면 유지한다. 설치 중 Spotify는 종료되므로 음악을 멈춘 뒤 진행한다.
+[배포 페이지](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)에서 `SpotifyHangul-0.5.1-Setup.exe`를 받는다. Spotify 데스크톱 버전을 설치하고 한 번 실행한 다음 설치 프로그램에서 전용 폴더를 선택한다. Spicetify와 ivLyrics는 설치본에 포함한다. 기존 ivLyrics가 있으면 유지한다. 설치 중 Spotify는 종료되므로 음악을 멈춘 뒤 진행한다.
 
 바탕화면의 **Spotify 한글 가사** 바로가기를 실행하고 Spotify의 **ivLyrics** 화면을 연다. 이미 Spotify가 실행 중이어도 같은 바로가기를 사용할 수 있다. 프로필 메뉴의 **한글 발음 자료**에서 현재 곡의 자료 주소와 자동 발음을 설정한다. 자동 발음은 기본값이 꺼짐이며 원하는 경우 직접 켠다.
 
 시작 스크립트는 환경 변수 `IVLYRICS_HANGUL_PYTHON`, `runtime/pythonw.exe`, `python-path.txt`, PATH의 실제 Python 순서로 찾는다. WindowsApps 앱 별칭은 제외한다. 실행에 실패하면 `start-error.txt`에 오류를 남기고 오류 창을 표시한다. `python-path.txt`는 설치 PC에서 만들며 배포물에는 넣지 않는다.
 
-설치 전제와 미완료 항목은 [배포 안내](docs/RELEASE.md), 실행 위치와 중지는 [운영 안내](docs/OPERATIONS.md)에 기록한다. 이 베타 설치 파일에는 코드 서명이 없다.
+설치 전제와 미완료 항목은 [배포 안내](docs/RELEASE.md), 실행 위치와 중지는 [운영 안내](docs/OPERATIONS.md)에 기록한다. 이 베타 설치 파일에는 코드 서명이 없다. 이전 [0.5.0 베타](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.5.0)도 유지한다.
 
 ## 캐시와 데이터 보존
 

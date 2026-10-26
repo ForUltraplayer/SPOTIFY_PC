@@ -17,7 +17,7 @@ function loadExtension(record, response) {
     const api = { LocalStorage: { get: key => values.get(key), set: (key, value) => values.set(key, value) },
         Player: { data: { item: { uri: 'spotify:track:test' } } }, showNotification: value => notices.push(value) };
     const window = { Spicetify: api, LyricsService: { cache, getTranslationCacheId: uri => uri?.replace(/^spotify:track:/, '') }, AIAddonManager: { register() {} } };
-    const context = { window, Spicetify: api, setTimeout: (fn, ms) => ms <= 1000 ? setTimeout(fn, 0) : 0, clearTimeout, AbortController,
+    const context = { window, Spicetify: api, URL, setTimeout: (fn, ms) => ms <= 1000 ? setTimeout(fn, 0) : 0, clearTimeout, AbortController,
         fetch: async (url, options) => {
             context.lastRequest = JSON.parse(options.body);
             context.requestCount = (context.requestCount || 0) + 1;
@@ -218,12 +218,16 @@ async function mirrorHarness(native, fetcher) {
     };
     h.context.fetch = fetcher;
     await h.context.window.HangulLyricsProvider.addon.init();
+    Object.defineProperty(provider, 'harness', { value: h });
     return provider;
 }
 const coverInfo = { uri: 'spotify:track:cover', title: 'Cover', artist: 'Singer', duration: 216566 };
 test('an Android mirror rescues original lyrics absent on the desktop mirrors', async () => {
     const provider = await mirrorHarness(async () => ({ error: 'No lyrics' }), async (url, options) => {
-        assert.ok(url.includes('binimum.org?isrc='));
+        const parsed = new URL(url);
+        assert.equal(parsed.hostname, 'lyricsplus.binimum.org');
+        assert.equal(parsed.searchParams.get('isrc'), 'JPX302467020');
+        assert.equal(parsed.searchParams.get('title'), 'Cover');
         assert.equal(options.credentials, 'omit');
         return { ok: true, json: async () => ({ parsed: { synced: [{ text: 'fixture', startTime: 1234 }] } }) };
     });
@@ -233,7 +237,7 @@ test('an Android mirror rescues original lyrics absent on the desktop mirrors', 
     assert.equal(result.cacheVersion, provider.cacheVersion);
     assert.equal(result.isrc, 'JPX302467020');
 });
-test('a failed recording-code lookup retries exact title and artist metadata', async () => {
+test('both mirrors receive recording identity and exact metadata after a miss', async () => {
     const urls = [];
     const provider = await mirrorHarness(async () => ({ error: 'No lyrics' }), async url => {
         urls.push(url);
@@ -241,7 +245,11 @@ test('a failed recording-code lookup retries exact title and artist metadata', a
     });
     assert.equal((await provider.getLyrics(coverInfo)).synced.length, 1);
     assert.equal(urls.length, 2);
-    assert.ok(urls[1].includes('prjktla.my.id?title=Cover&artist=Singer'));
+    const second = new URL(urls[1]);
+    assert.equal(second.hostname, 'lyricsplus.prjktla.my.id');
+    assert.equal(second.searchParams.get('title'), 'Cover');
+    assert.equal(second.searchParams.get('artist'), 'Singer');
+    assert.equal(second.searchParams.get('isrc'), 'JPX302467020');
 });
 test('a working native provider returns without waiting for the additional mirror', async () => {
     let wasAborted = false;
@@ -264,4 +272,143 @@ test('incorrect recording identities and unusable payloads preserve the native f
     const result = await provider.getLyrics(coverInfo);
     assert.equal(result.error, 'Original failure');
     assert.equal(result.synced, null);
+});
+
+const normalizedInfo = { ...coverInfo, title: 'Cover (feat. Guest)', album: 'Cover Album' };
+const normalizedPayload = (overrides = {}) => ({
+    metadata: { title: 'Cover', artist: 'Singer', album: 'Cover Album', totalDuration: '3:36.566', ...overrides },
+    lyrics: [{ time: 1000, duration: 212000, text: 'fixture' }],
+    parsed: { synced: [{ text: 'fixture', startTime: 1000 }] }
+});
+const jsonResponse = (body, status = 200, retryAfter = null) => ({ ok: status === 200, status,
+    headers: { get: key => key === 'Retry-After' ? retryAfter : null }, json: async () => body });
+
+test('feat-only search recovery preserves the cover artist album and recording identifier', async () => {
+    const urls = [];
+    const provider = await mirrorHarness(async () => ({ error: 'No lyrics' }), async url => {
+        const u = new URL(url); urls.push(u);
+        return u.searchParams.get('title') === normalizedInfo.title
+            ? jsonResponse({}, 404) : jsonResponse(normalizedPayload());
+    });
+    const result = await provider.getLyrics(normalizedInfo);
+    assert.equal(result.synced.length, 1);
+    assert.equal(result.lyricsPlus.normalizedTitle, true);
+    assert.equal(result.uri, normalizedInfo.uri);
+    assert.equal(urls.length, 3);
+    for (const url of urls) {
+        assert.equal(url.searchParams.get('artist'), 'Singer');
+        assert.equal(url.searchParams.get('isrc'), 'JPX302467020');
+    }
+});
+
+test('normalized searches reject a different artist album duration or truncated performance', async () => {
+    for (const [override, truncated] of [[{ artist: 'Other Singer' }, false], [{ album: 'Live Album' }, false],
+        [{ totalDuration: '1:30.000' }, false], [{}, true]]) {
+        const provider = await mirrorHarness(async () => ({ error: 'No lyrics' }), async url => {
+            if (new URL(url).searchParams.get('title') === normalizedInfo.title) return jsonResponse({}, 404);
+            const payload = normalizedPayload(override);
+            if (truncated) payload.lyrics[0].duration = 59000;
+            return jsonResponse(payload);
+        });
+        assert.equal((await provider.getLyrics(normalizedInfo)).error, 'No lyrics');
+    }
+});
+
+test('missing QQ identity is checked against metadata from the same source', async () => {
+    const provider = await mirrorHarness(async () => ({ error: 'No lyrics' }), async url => {
+        const u = new URL(url);
+        if (u.pathname === '/v1/metadata/get') return jsonResponse({ metadata: {
+            name: 'Cover', artistName: 'Singer/Guest', source: 'QQ Music', durationMs: 216566
+        } });
+        if (u.searchParams.get('title') === normalizedInfo.title) return jsonResponse({}, 404);
+        const payload = normalizedPayload(); payload.metadata = { source: 'QQ Music' };
+        return jsonResponse(payload);
+    });
+    assert.equal((await provider.getLyrics(normalizedInfo)).synced.length, 1);
+});
+
+test('a metadata lookup from another source cannot validate missing lyric identity', async () => {
+    const provider = await mirrorHarness(async () => ({ error: 'No lyrics' }), async url => {
+        const u = new URL(url);
+        if (u.pathname === '/v1/metadata/get') return jsonResponse({ metadata: { name: 'Cover', artistName: 'Singer', source: 'Other' } });
+        if (u.searchParams.get('title') === normalizedInfo.title) return jsonResponse({}, 404);
+        const payload = normalizedPayload(); payload.metadata = { source: 'QQ Music' };
+        return jsonResponse(payload);
+    });
+    assert.equal((await provider.getLyrics(normalizedInfo)).error, 'No lyrics');
+});
+
+test('a throttled mirror is skipped for normalized candidates and subsequent songs', async () => {
+    const hosts = [];
+    const provider = await mirrorHarness(async () => ({ error: 'No lyrics' }), async url => {
+        const u = new URL(url); hosts.push(u.hostname);
+        if (u.hostname === 'lyricsplus.binimum.org') return jsonResponse({}, 429, '120');
+        return u.searchParams.get('title') === normalizedInfo.title ? jsonResponse({}, 404) : jsonResponse(normalizedPayload());
+    });
+    assert.equal((await provider.getLyrics(normalizedInfo)).synced.length, 1);
+    assert.equal((await provider.getLyrics({ ...normalizedInfo, uri: 'spotify:track:another' })).synced.length, 1);
+    assert.equal(hosts.filter(host => host === 'lyricsplus.binimum.org').length, 1);
+});
+
+test('request limits and overload remain transient while a mirror is cooling down', async () => {
+    let calls = 0;
+    const provider = await mirrorHarness(async () => ({ error: 'No lyrics' }), async url => {
+        calls++; return jsonResponse({}, new URL(url).hostname === 'lyricsplus.binimum.org' ? 429 : 503);
+    });
+    for (const info of [normalizedInfo, { ...normalizedInfo, uri: 'spotify:track:next' }]) {
+        const result = await provider.getLyrics(info);
+        assert.equal(result.retryable, true);
+        assert.equal(result.lyricsLookup.status, 'temporary-error');
+        assert.equal(provider.harness.context.window.HangulLyricsProvider.getLookupStatus(info.uri).status, 'temporary-error');
+    }
+    assert.equal(calls, 2);
+});
+
+test('a feat candidate retains Live labels and full width artist punctuation is compared safely', async () => {
+    const info = { ...normalizedInfo, title: 'Cover (Live) (feat. Guest)', artist: 'Singer！' };
+    const provider = await mirrorHarness(async () => ({ error: 'No lyrics' }), async url => {
+        const title = new URL(url).searchParams.get('title');
+        if (title === info.title) return jsonResponse({}, 404);
+        assert.equal(title, 'Cover (Live)');
+        return jsonResponse(normalizedPayload({ title: 'Cover (Live)', artist: 'Singer!' }));
+    });
+    assert.equal((await provider.getLyrics(info)).synced.length, 1);
+});
+
+test('an exact metadata lookup already owned by the native provider is not duplicated', async () => {
+    const urls=[];
+    const provider=await mirrorHarness(async()=>({error:'No lyrics'}),async url=>{
+        const parsed=new URL(url);urls.push(parsed);
+        return parsed.searchParams.get('title')===normalizedInfo.title?jsonResponse({},404):jsonResponse(normalizedPayload());
+    });
+    const parser=provider.harness.context.window.__ivLyricsPlusDebug;
+    parser.resolveTrackIsrc=async()=>'';
+    parser.getApiBases=()=>['https://lyricsplus.prjktla.my.id'];
+    assert.equal((await provider.getLyrics(normalizedInfo)).synced.length,1);
+    assert.equal(urls.filter(url=>url.hostname==='lyricsplus.prjktla.my.id'&&url.searchParams.get('title')===normalizedInfo.title).length,0);
+});
+
+test('joint credits can retry the primary artist without replacing recording identity', async () => {
+    const info={...normalizedInfo,artist:'Singer, Guest One, Guest Two'};
+    const seen=[];
+    const provider=await mirrorHarness(async()=>({error:'No lyrics'}),async url=>{
+        const u=new URL(url);seen.push(u);
+        if(u.searchParams.get('artist')!=='Singer')return jsonResponse({},404);
+        assert.equal(u.searchParams.get('isrc'),'JPX302467020');
+        assert.equal(u.searchParams.get('title'),'Cover');
+        return jsonResponse(normalizedPayload());
+    });
+    assert.equal((await provider.getLyrics(info)).synced.length,1);
+    assert.equal(seen.filter(u=>u.searchParams.get('artist')==='Singer').length,1);
+});
+
+test('joint-credit recovery preserves full width punctuation in the search title', async () => {
+    const info={...normalizedInfo,title:'我らステインバスターズ！',artist:'Singer, Guest'};
+    const provider=await mirrorHarness(async()=>({error:'No lyrics'}),async url=>{
+        const u=new URL(url);
+        assert.equal(u.searchParams.get('title'),'我らステインバスターズ！');
+        if(u.searchParams.get('artist')!== 'Singer')return jsonResponse({},404);
+        return jsonResponse(normalizedPayload({title:'我らステインバスターズ！'}));
+    });
+    assert.equal((await provider.getLyrics(info)).synced.length,1);
 });

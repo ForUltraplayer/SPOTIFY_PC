@@ -1,6 +1,6 @@
 {
   "name": "SpotifyHangul",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "helper_version": "0.5.0",
   "channel": "installer-beta",
   "tested_platform": "Windows 11 x64",
