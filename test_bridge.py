@@ -206,6 +206,10 @@ class ReaderTests(unittest.TestCase):
         for title, artist, expected in cases:
             with self.subTest(title=title):
                 self.assertEqual(title_candidates(title, artist)[0], expected)
+        # A slash or corner bracket inside the title is kept unless it separates an artist.
+        self.assertEqual(title_candidates('ハロ／ハワユ', 'ナノウ')[0], 'ハロ/ハワユ')
+        self.assertEqual(title_candidates('W / X / Y', 'Tani Yuuki')[0], 'W / X / Y')
+        self.assertEqual(title_candidates('Be The MUSIC! (feat. 「Rising」一同)', 'Example')[0], 'Be The MUSIC!')
         self.assertIn('Cover Girl', title_candidates('Cover Girl', 'Example'))
         self.assertEqual(title_candidates('Cover', 'Example'), ['Cover'])
 
@@ -427,10 +431,24 @@ class ReaderTests(unittest.TestCase):
             self.assertEqual(original['reading_kind'], 'authored')
 
     def test_kana_conversion_handles_mora_and_keeps_non_japanese(self):
-        for kana, expected in [('キャット', '캿토'), ('スーパー', '수우파아'), ('しんぶん', '심분'),
-                               ('フィナーレ', '피나아레'), ('アイデンティティ', '아이덴티티'),
+        # Follows authored lyric conventions: long vowels dropped, っ as ㅅ, ん as ㄴ, じょ as 조.
+        for kana, expected in [('キャット', '캿토'), ('スーパー', '수파'), ('しんぶん', '신분'),
+                               ('フィナーレ', '피나레'), ('アイデンティティ', '아이덴티티'),
+                               ('どうして', '도시테'), ('とうきょう', '토쿄'), ('ねえ', '네'), ('ゲーム', '게이무'),
+                               ('ショッピング', '숏핀구'), ('じょうしき', '조시키'), ('いい', '이이'),
                                ('Love 123!', 'Love 123!')]:
             self.assertEqual(kana_to_hangul(kana), expected)
+
+    def test_token_boundaries_and_verb_endings_follow_the_whole_line(self):
+        class Tokens:
+            def __init__(self, tokens): self.tokens = tokens
+            def convert(self, _text): return [{'orig': o, 'hira': h} for o, h in self.tokens]
+        # A sokuon split from its syllable by tokenization still becomes a final consonant.
+        self.assertEqual(japanese_to_hangul('わっ', Tokens([('わ', 'わ'), ('っ', 'っ')])), '왓')
+        # A kanji verb's okurigana う is spoken; a volitional ょう is a long vowel.
+        self.assertEqual(japanese_to_hangul('思う', Tokens([('思う', 'おもう')])), '오모우')
+        self.assertEqual(japanese_to_hangul('遊びましょう', Tokens([('遊びましょう', 'あそびましょう')])), '아소비마쇼')
+        self.assertEqual(japanese_to_hangul('今日', Tokens([('今日', 'きょう')])), '쿄')
 
     def test_automatic_setting_rejects_truthy_strings(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -583,6 +601,15 @@ class YouTubeMetadataTests(unittest.TestCase):
             opener.return_value.open.return_value = response
             with self.assertRaises(ValueError):
                 youtube_metadata('rKQptWhAvO0')
+
+    def test_private_or_removed_video_is_a_not_found_lookup(self):
+        with patch('bridge.urllib.request.build_opener') as opener:
+            opener.return_value.open.side_effect = urllib.error.HTTPError('u', 404, 'Not Found', {}, None)
+            with self.assertRaises(LookupError):
+                youtube_metadata('rKQptWhAvO0')
+            opener.return_value.open.side_effect = urllib.error.HTTPError('u', 503, 'Unavailable', {}, None)
+            with self.assertRaises(urllib.error.HTTPError):
+                youtube_metadata('rKQptWhAvO1')
 
 
 if __name__ == '__main__':

@@ -4,14 +4,14 @@
 
 Shows the Korean (Hangul) pronunciation of Japanese songs in the Spotify desktop lyrics view. Pronunciation is pulled from Haneum and Namuwiki and matched line by line against Spotify's lyrics.
 
-Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Public version: 0.7.0 beta.
+Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Public version: 0.7.2 beta.
 
-**[⬇ Download (v0.7.0)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.0)**
+**[⬇ Download (v0.7.2)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.2)**
 
-Users on 0.6.0, 0.6.1, or 0.6.3 can upgrade directly. Close Spotify and the overlay, then run the 0.7.0 Setup.exe into the existing installation folder.
+0.7.0 installs update to 0.7.2 automatically when launched from the shortcut. Users on 0.6.0, 0.6.1, or 0.6.3 can also upgrade directly. To install manually, close Spotify, then run the 0.7.2 Setup.exe into the existing installation folder.
 
 > [!NOTE]
-> Version 0.7.0 is a public beta with YouTube links, mixed playlists, and the existing desktop overlay. Redistribution licensing for the original overlay remains unconfirmed. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for component notices.
+> From 0.7.2 the desktop lyrics overlay is no longer bundled. A modified build with playback buttons is available separately from the [ivLyrics-overlay fork releases](https://github.com/ForUltraplayer/ivLyrics-overlay/releases). The original overlay repository does not declare a license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for component notices.
 
 Android version: [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)
 
@@ -19,7 +19,7 @@ Android version: [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_AND
 
 No need to install Spotify, SpotX or Python first.
 
-1. Download and run `SpotifyHangul-0.7.0-Setup.exe`.
+1. Download and run `SpotifyHangul-0.7.2-Setup.exe`.
 2. Pick an install folder (default: `%LOCALAPPDATA%\Programs\SpotifyHangul`).
 3. The installer downloads the official Spotify files (~150 MB).
 
@@ -46,22 +46,24 @@ Per-song source URLs and automatic pronunciation are under **한글 발음 자�
 - Copy song title (right-click the title in the playback bar, song menu, profile menu)
 
 <details>
-<summary>Additional features in 0.7.0</summary>
+<summary>Additional features in 0.7.x</summary>
 
 - Play YouTube links alongside Spotify tracks, with playlist import and export
 - Switch between audio streaming and the video player, using the existing playback bar and ivLyrics
 - Adjust per-track lyric timing in seconds, with undo
-- Playback controls and control spacing in the existing desktop overlay
+- Start a separately installed desktop overlay with the app and connect its playback buttons
 - Restore previous files and installation registration after failed or interrupted installs
+- 0.7.2: fix first YouTube audio playback failures (wait until a fresh stream URL is served, then retry once if it still fails)
+- 0.7.2: align automatic pronunciation with authored Korean conventions (long vowels dropped, sokuon as ㅅ)
 
-Local installers include Python and Node. Small overlay windows may reduce the lyric area when control spacing increases; leave enough window height. First launch on a separate clean PC remains untested. See [YouTube integration](docs/YOUTUBE_LINKS.md), [distribution preparation](docs/DISTRIBUTION_PLAN.md), and [verification](docs/VERIFICATION.md) for implementation details and limits (Korean).
+Local installers include Python and Node. Place `lyrics-plus-overlay.exe` in `%LOCALAPPDATA%\lyrics-plus-overlay\` to have the shortcut start the desktop overlay too. First launch on a separate clean PC remains untested. See [YouTube integration](docs/YOUTUBE_LINKS.md), [distribution preparation](docs/DISTRIBUTION_PLAN.md), and [verification](docs/VERIFICATION.md) for implementation details and limits (Korean).
 
 </details>
 
 ## Update / Uninstall
 
-- **Install / update to the 0.7.0 beta**: close Spotify and the overlay, then run `SpotifyHangul-0.7.0-Setup.exe` into the same folder. Use the same method for earlier 0.7.0 test builds.
-- **Automatic updates**: the shortcut checks for and downloads new versions when launched, at least 8 hours after the previous check. Updates apply before the next launch after Spotify closes. The 0.7.0 updater selects stable GitHub releases only, so use `Setup.exe` instead of `Update.exe` for this beta. The older 0.6.1 and 0.6.3 updaters also select public prereleases.
+- **Manual install / update**: close Spotify and the overlay, then run `SpotifyHangul-0.7.2-Setup.exe` into the same folder.
+- **Automatic updates**: the shortcut checks for and downloads new versions when launched, at least 8 hours after the previous check. Updates apply before the next launch after Spotify closes. From 0.7.0 the updater selects only GitHub releases not marked as prerelease. The overlay bundled with 0.7.0 is removed from the install folder on update; a separately installed overlay is left alone.
 - **Uninstall**: Windows Settings > Apps > Installed apps > **Spotify 한글 가사**. Your existing Spotify and pronunciation cache are kept.
 
 Spotify's own auto-update is blocked to keep the patches. New Spotify versions come with new installer releases.
@@ -101,7 +103,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_bootstrap.p
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_auto_update.ps1
 ```
 
-The published 0.7.0 all-in-one build uses a verified original-overlay executable and corresponding source as local inputs. These are provided separately in the release asset `SpotifyHangul-0.7.0-DesktopOverlay.zip`. A fresh clone alone cannot reproduce that installer. With the local inputs prepared, use a new candidate directory under `work/`.
+From 0.7.2 the installer no longer bundles the desktop overlay, so it builds from the repository and public downloads alone. Use a new candidate directory under `work/`.
 
 ```powershell
 python scripts/build_spotx_adapter.py

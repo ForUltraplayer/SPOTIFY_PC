@@ -87,6 +87,13 @@ test('pairing precedes desktop configuration, publication and queue drain withou
     assert.equal(instance.getState().desktopConnected, true);
     instance.dispose(); assert.equal(h.timers.size, 0);
 });
+test('a disabled ivLyrics overlay never receives the control token', async () => {
+    const h = harness(); h.host.OverlaySender.enabled = false;
+    const instance = bridge.create(h.host); await instance.ready;
+    assert.deepEqual(h.requests.map(r => r.path), ['/playback-session', '/playback-state', '/playback-commands']);
+    assert.equal(instance.getState().desktopConnected, false);
+    instance.dispose();
+});
 test('a replayed queue ID executes once and late commands for another recording are ignored', async () => {
     const h = harness(async url => ({ ok: true, status: 200, json: async () => url.endsWith('/playback-session')
         ? { bridgeUrl: 'http://127.0.0.1:19643', token: TOKEN, expiresAt: Date.now() + 900000 }

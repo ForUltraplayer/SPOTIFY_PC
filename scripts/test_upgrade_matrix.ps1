@@ -107,14 +107,11 @@ function Assert-InstalledRuntime([string]$Target,[string]$RowArea,$Row) {
     })
     $Row.shortcutWorkingDirectories=$shortcutRecords
     $Row.installManifest=Test-Path -LiteralPath (Join-Path $Target 'package-manifest.json')
-    $required=@('runtime\python.exe','tools\node.exe','vendor\yt_dlp\__init__.py','vendor\yt_dlp_ejs\__init__.py','youtube-now-playing.js','youtube-now-playing.css','installer\payload-transaction.ps1','installer\desktop-overlay.ps1','desktop-overlay\lyrics-plus-overlay.exe','desktop-overlay\receipt.json','Spotify\Apps\xpui\extensions\hangul-lyrics.js','Spotify\Apps\xpui\spicetify-routes-ivLyrics.js')
+    $required=@('runtime\python.exe','tools\node.exe','vendor\yt_dlp\__init__.py','vendor\yt_dlp_ejs\__init__.py','youtube-now-playing.js','youtube-now-playing.css','installer\payload-transaction.ps1','installer\desktop-overlay.ps1','Spotify\Apps\xpui\extensions\hangul-lyrics.js','Spotify\Apps\xpui\spicetify-routes-ivLyrics.js')
     foreach ($relative in $required) { if (-not (Test-Path -LiteralPath (Join-Path $Target $relative))) { throw ('Missing installed runtime asset '+$relative) } }
     $Row.requiredRuntimeAssets=$required.Count
-    $overlayReceipt=Get-Content -LiteralPath (Join-Path $Target 'desktop-overlay\receipt.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-    $overlayExe=Get-Item -LiteralPath (Join-Path $Target 'desktop-overlay\lyrics-plus-overlay.exe')
-    $overlayDigest=(Get-FileHash -LiteralPath $overlayExe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($overlayReceipt.app -ne 'SpotifyHangulDesktopOverlay' -or $overlayReceipt.sha256 -ne $overlayDigest -or $overlayReceipt.bytes -ne $overlayExe.Length) { throw 'Existing overlay receipt does not match the installed executable.' }
-    $Row.overlaySha256=$overlayDigest
+    # 0.7.2 stopped bundling the overlay; an upgrade must remove the 0.7.0 copy.
+    if (Test-Path -LiteralPath (Join-Path $Target 'desktop-overlay\lyrics-plus-overlay.exe')) { throw 'Bundled overlay from 0.7.0 was left behind.' }
     $smokeCode="import sys,json,pykakasi,phonetics,yt_dlp,yt_dlp_ejs; assert sys.flags.isolated; assert all('anaconda' not in p.lower() for p in sys.path); assert phonetics.japanese_to_hangul(chr(0x9752)+chr(0x3044)+chr(0x7a7a),pykakasi.kakasi()); print(json.dumps({'python':sys.version.split()[0],'isolated':True,'youtubeModules':True}))"
     & (Join-Path $Target 'runtime\python.exe') -I -B -c $smokeCode *> (Join-Path $RowArea 'installed-python-smoke.json')
     if ($LASTEXITCODE -ne 0) { throw 'Installed embedded Python or isolated YouTube dependencies failed.' }

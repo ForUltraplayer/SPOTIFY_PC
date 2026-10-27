@@ -38,6 +38,7 @@ Put $root 'Spotify\Apps\xpui\xpui.js' 'old patched spotify'
 Put $root 'spicetify-config\config-xpui.ini' 'old config'
 Put $root 'client.prefs' 'account preferences'
 Put $root 'obsolete-code.js' 'old managed code'
+Put $root 'old-feature\only-file.js' 'old managed folder'
 Put $root 'modified-old.js' 'original managed code'
 Make-Manifest $root
 Put $root 'modified-old.js' 'user modified code'
@@ -71,6 +72,7 @@ $transaction=Start-PayloadTransaction $root $payload -NoMetadata
 Invoke-PayloadTransaction $transaction $payload -Integration { param($app) Put $app 'spicetify-config\config-xpui.ini' 'new integrated config' }
 Assert ((Read-PayloadTransaction $root).Status -eq 'pending-commit') 'Successful integration was committed too early.'
 Assert (-not (Test-Path -LiteralPath (Join-Path $root 'obsolete-code.js'))) 'Unmodified obsolete owned file survived.'
+Assert (-not (Test-Path -LiteralPath (Join-Path $root 'old-feature'))) 'A folder emptied by obsolete file removal survived.'
 Assert ((Get-Content -LiteralPath (Join-Path $root 'modified-old.js') -Raw) -eq 'user modified code') 'A user-modified old file was removed.'
 Assert ((Get-Content -LiteralPath (Join-Path $root 'user data\lyrics.db') -Raw) -eq 'pronunciations and offsets: 5300') 'User data changed during upgrade.'
 Assert (-not (Test-Path -LiteralPath (Join-Path $root 'runtime\runtime'))) 'Recursive payload copy nested runtime twice.'

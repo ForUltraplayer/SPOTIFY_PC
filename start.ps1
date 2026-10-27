@@ -120,8 +120,12 @@ if (-not $bridgeHealthy) {
 $desktopOverlayHook=Join-Path $PSScriptRoot 'installer\desktop-overlay.ps1'
 if (Test-Path -LiteralPath $desktopOverlayHook) {
     . $desktopOverlayHook
-    try { $null=Start-BundledDesktopOverlay -InstallRoot $PSScriptRoot }
-    catch { throw ('데스크톱 가사창을 시작하지 못했습니다. 기존 가사창을 종료한 뒤 다시 실행해 주세요. '+$_.Exception.Message) }
+    # The overlay is an optional separate app; its failure must not block Spotify.
+    try { $null=Start-UserDesktopOverlay }
+    catch {
+        $overlayMessage='데스크톱 가사창을 시작하지 못했습니다. Spotify는 계속 실행합니다. '+$_.Exception.Message
+        try { "$(Get-Date -Format o)`r`n$overlayMessage" | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'start-error.txt') -Encoding UTF8 } catch { }
+    }
 }
 Start-Process -FilePath $spotifyExe -WorkingDirectory (Split-Path -Parent $spotifyExe)
 if (Test-Path -LiteralPath $updater) {

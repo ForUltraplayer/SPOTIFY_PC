@@ -16,14 +16,27 @@ _ROWS = {
 }
 _KANA = {kana: hangul for row, values in _ROWS.items() for kana, hangul in zip(row, values.split())}
 for stem, readings in {
-    'き': '캬 큐 쿄', 'ぎ': '갸 규 교', 'し': '샤 슈 쇼', 'じ': '쟈 쥬 죠',
-    'ち': '차 추 초', 'ぢ': '쟈 쥬 죠', 'に': '냐 뉴 뇨', 'ひ': '햐 휴 효',
+    'き': '캬 큐 쿄', 'ぎ': '갸 규 교', 'し': '샤 슈 쇼', 'じ': '자 주 조',
+    'ち': '차 추 초', 'ぢ': '자 주 조', 'に': '냐 뉴 뇨', 'ひ': '햐 휴 효',
     'び': '뱌 뷰 뵤', 'ぴ': '퍄 퓨 표', 'み': '먀 뮤 묘', 'り': '랴 류 료',
 }.items():
     _KANA.update({stem + small: reading for small, reading in zip('ゃゅょ', readings.split())})
 _KANA.update(dict(zip(
     'いぇ うぃ うぇ うぉ ふぁ ふぃ ふぇ ふぉ ふゅ てぃ でぃ とぅ どぅ しぇ じぇ ちぇ つぁ つぃ つぇ つぉ ゔぁ ゔぃ ゔぇ ゔぉ ゔゅ くぁ くぃ くぇ くぉ ぐぁ'.split(),
     '예 위 웨 워 파 피 페 포 퓨 티 디 투 두 셰 제 체 차 치 체 초 바 비 베 보 뷰 콰 퀴 퀘 쿼 과'.split())))
+# Marks a verb-ending う (思う, 迷う) that is pronounced, unlike a long vowel.
+_VERB_U = '\ue000'
+_SMALL = set('ぁぃぅぇぉゃゅょ')
+# Authored Korean lyric readings drop Japanese long vowels (どうして -> 도시테, モール -> 모루).
+# Keys are the lengthening kana; values are the preceding Hangul vowel indexes it extends.
+# いい and 嬉しい keep their second い, which authored readings usually write out.
+_LONG = {'う': (8, 12, 13, 17, 18), 'お': (8, 12), 'え': (5, 7)}
+
+
+def _vowel(output):
+    if not output or len(output[-1]) != 1 or not 0 <= ord(output[-1]) - 0xAC00 < 11172:
+        return -1
+    return (ord(output[-1]) - 0xAC00) % 588 // 28
 
 
 def _final(output, batchim, standalone):
@@ -41,20 +54,22 @@ def kana_to_hangul(text):
     output, index = [], 0
     while index < len(text):
         char = text[index]
-        if char == 'っ':
-            following = text[index + 1:index + 2]
-            final = 1 if following in 'かきくけこがぎぐげご' and following else 17 if following in 'ぱぴぷぺぽばびぶべぼ' and following else 19
-            _final(output, final, '읏')
+        vowel = _vowel(output)
+        open_syllable = vowel >= 0 and (ord(output[-1]) - 0xAC00) % 28 == 0
+        if char == _VERB_U:
+            output.append('우')
+        elif char == 'っ':
+            _final(output, 19, '읏')
         elif char == 'ん':
-            following = text[index + 1:index + 2]
-            nasal = bool(following) and following in 'まみむめもばびぶべぼぱぴぷぺぽ'
-            _final(output, 16 if nasal else 4, '음' if nasal else '응')
+            _final(output, 4, '응')
         elif char == 'ー':
-            offset = ord(output[-1]) - 0xAC00 if output and len(output[-1]) == 1 else -1
-            vowels = {0: '아', 1: '애', 2: '아', 3: '애', 4: '어', 5: '에', 6: '어', 7: '에',
-                      8: '오', 9: '아', 10: '애', 11: '에', 12: '오', 13: '우', 14: '어',
-                      15: '에', 16: '이', 17: '우', 18: '으', 19: '이', 20: '이'}
-            output.append(vowels[(offset % 588) // 28] if 0 <= offset < 11172 else char)
+            # A lengthened e is written as 이 (ゲーム -> 게이무); other long vowels are dropped.
+            if vowel in (5, 7):
+                output.append('이')
+            elif vowel < 0:
+                output.append(char)
+        elif open_syllable and vowel in _LONG.get(char, ()) and text[index + 1:index + 2] not in _SMALL:
+            pass
         else:
             pair = text[index:index + 2]
             if len(pair) == 2 and pair in _KANA:
@@ -69,7 +84,7 @@ def kana_to_hangul(text):
 
 def japanese_to_hangul(text, converter):
     """Preserve non-Japanese content; use isolated particle hints, not a grammar model."""
-    output = []
+    readings = []
     previous = ''
     for token in converter.convert(text):
         original = token['orig']
@@ -78,6 +93,9 @@ def japanese_to_hangul(text, converter):
         # after Japanese text; ambiguous or song-specific readings remain approximate.
         if original in ('は', 'へ') and previous and ('\u3040' <= previous[-1] <= '\u9fff'):
             reading = 'わ' if original == 'は' else 'え'
-        output.append(kana_to_hangul(reading))
+        if original.endswith('う') and reading.endswith('う') and reading[-2:-1] not in _SMALL and any('\u4e00' <= c <= '\u9fff' for c in original):
+            reading = reading[:-1] + _VERB_U
+        readings.append(reading)
         previous = original
-    return ''.join(output)
+    # Convert once so a sokuon or long vowel at a token boundary joins the previous syllable.
+    return kana_to_hangul(''.join(readings))

@@ -14,7 +14,6 @@ from dependencies import load, verify, fingerprint, source_fingerprint
 from patch_ivlyrics_sync import patch_tree
 from prepare_release import validate_source_archive
 from youtube_toolchain import prepare_youtube_tools
-from desktop_overlay_package import prepare_desktop_overlay
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / 'work' / 'downloads'
@@ -50,9 +49,6 @@ def main():
     if output.exists() or updater.exists():
         raise FileExistsError('Installer artifacts already exist; choose a new candidate directory or version')
     dependencies = load()
-    if ('desktop_overlay' in dependencies['components'] and
-            (release.get('public_release_ready') is not False or not output_dir.is_relative_to(ROOT / 'work'))):
-        raise ValueError('Existing overlay is restricted to a private local candidate under work')
     components = dependencies['components']
     lock = dependencies['artifacts']
     proof = json.loads((ROOT / 'work/compatibility.json').read_text(encoding='utf-8'))
@@ -94,7 +90,6 @@ def main():
     prepare_youtube_tools(PAYLOAD, CACHE, dependencies)
     sources = PAYLOAD / 'third_party_sources'
     sources.mkdir()
-    overlay_receipt = prepare_desktop_overlay(PAYLOAD, output_dir, dependencies, release)
     source_artifacts = {item['source_artifact'] for item in components.values() if 'source_artifact' in item}
     source_artifacts.update(name for name in lock if name.endswith('.tar.gz'))
     for name in sorted(source_artifacts):
@@ -128,7 +123,6 @@ def main():
     (output_dir / 'INSTALLER-SHA256SUMS.txt').write_text(
         f'{digest}  {output.name}\n{updater_digest}  {updater.name}\n', encoding='utf-8')
     print(json.dumps({'installer': str(output), 'bytes': output.stat().st_size, 'sha256': digest,
-                      'desktop_overlay': overlay_receipt,
                       'public_release_ready': release.get('public_release_ready', False)}))
 
 

@@ -10,12 +10,18 @@ import shutil
 import subprocess
 import threading
 import time
+import urllib.error
 from urllib.parse import parse_qs, urlsplit
+import urllib.request
 
 _jobs = threading.BoundedSemaphore(1)
 _cache = {}
 _lock = threading.Lock()
 APP_ROOT = Path(__file__).resolve().parent
+# A skipped track's extraction can still hold the engine; wait for it instead of failing the new track at once.
+BUSY_WAIT = 25
+# Persist only yt-dlp's player-script and signature cache so later lookups skip the cold JS solve.
+CACHE_DIR = Path(os.environ.get('LOCALAPPDATA', str(APP_ROOT))) / 'ivLyricsHangul' / 'yt-dlp-cache'
 
 
 def resolve_engine(app_root=None):
@@ -45,7 +51,7 @@ def resolve_engine(app_root=None):
     return [executable], runtime_args
 
 
-def run_extractor(command, timeout=45):
+def run_extractor(command, timeout=60):
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8',
                                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
     try:
@@ -73,7 +79,7 @@ def run_extractor(command, timeout=45):
 
 def select_stream(data, video_id, now=None):
     now = time.time() if now is None else now
-    if data.get('id') != video_id or data.get('availability') not in ('public', 'unlisted') or data.get('age_limit', 0):
+    if data.get('id') != video_id or data.get('availability') not in ('public', 'unlisted', None) or data.get('age_limit', 0):
         raise LookupError('로그인이나 연령 확인이 없는 공개 영상만 대체 재생할 수 있습니다.')
     candidates = []
     for fmt in data.get('formats', []):
@@ -99,6 +105,30 @@ def select_stream(data, video_id, now=None):
             'expires_at': expiry, 'title': str(data.get('title') or video_id)[:300]}
 
 
+# A freshly issued googlevideo URL answers 403 for roughly 1-4 s (measured 2026-10-28 on
+# four public videos), so an immediate <audio> load fails while a retry works.
+READY_WAIT = 10
+
+
+def wait_until_served(url, deadline=None, opener=urllib.request.urlopen, sleep=time.sleep, clock=time.monotonic):
+    """Return True once a two-byte range request succeeds; give up quietly at the deadline."""
+    deadline = clock() + (READY_WAIT if deadline is None else deadline)
+    while True:
+        request = urllib.request.Request(url, headers={'Range': 'bytes=0-1', 'User-Agent': 'Mozilla/5.0'})
+        try:
+            with opener(request, timeout=5) as response:
+                if response.status in (200, 206):
+                    return True
+        except urllib.error.HTTPError as error:
+            if error.code != 403:
+                return False
+        except OSError:
+            return False
+        if clock() + 0.5 > deadline:
+            return False
+        sleep(0.5)
+
+
 def youtube_stream(video_id):
     if not isinstance(video_id, str) or not re.fullmatch(r'[\w-]{11}', video_id, flags=re.ASCII):
         raise ValueError('올바른 YouTube 영상 ID가 필요합니다.')
@@ -107,18 +137,19 @@ def youtube_stream(video_id):
         cached = _cache.get(video_id)
         if cached and cached['expires_at'] > now + 60 and cached['_cached_until'] > now:
             return {k: v for k, v in cached.items() if not k.startswith('_')}
-    if not _jobs.acquire(blocking=False):
+    if not _jobs.acquire(timeout=BUSY_WAIT):
         raise RuntimeError('다른 영상의 대체 스트림을 확인 중입니다. 잠시 후 다시 시도해 주세요.')
     try:
         engine, runtime_args = resolve_engine()
-        command = [*engine, '--ignore-config', '--no-plugin-dirs', '--no-remote-components', '--no-cache-dir',
+        command = [*engine, '--ignore-config', '--no-plugin-dirs', '--no-remote-components', '--cache-dir', str(CACHE_DIR),
                    '--skip-download', '--dump-single-json', '--no-playlist',
-                   '--no-warnings', '--socket-timeout', '10', '--retries', '0', *runtime_args,
+                   '--no-warnings', '--socket-timeout', '10', '--retries', '2', '--extractor-retries', '2', *runtime_args,
                    'https://www.youtube.com/watch?v=' + video_id]
         code, output = run_extractor(command)
         if code or len(output) > 8_000_000:
             raise LookupError('공개 영상의 스트림을 확인하지 못했습니다. 로그인 제한이나 엔진 상태를 확인해 주세요.')
         result = select_stream(json.loads(output), video_id)
+        wait_until_served(result['url'])
         with _lock:
             _cache[video_id] = {**result, '_cached_until': time.time() + 300}
             while len(_cache) > 32:

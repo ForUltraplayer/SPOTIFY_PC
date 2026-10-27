@@ -35,7 +35,6 @@ FILES = (
     'tests/ui/package.json', 'tests/ui/package-lock.json',
     'scripts/test_start.ps1',
     'scripts/youtube_toolchain.py',
-    'scripts/desktop_overlay_package.py', 'scripts/test_desktop_overlay_package.py',
     'installer/desktop-overlay.ps1', 'scripts/test_desktop_overlay.ps1',
     'installer/payload-transaction.ps1', 'scripts/test_payload_transaction.ps1', 'scripts/test_upgrade_matrix.ps1',
     'youtube-now-playing.js', 'youtube-now-playing.css', 'test_youtube_now_playing.cjs',

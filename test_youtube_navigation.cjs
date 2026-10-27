@@ -32,6 +32,21 @@ test('video retry preserves the current recording, position and pause intent',()
     assert.equal(loads[0].args.seconds,83);assert.equal(loads[0].args.autoplay,false);assert.equal(context.queueIndex,0);
 });
 
+test('a transient first-load failure retries once silently, then shows the error',async()=>{
+    const item={kind:'youtube',videoId:'rKQptWhAvO0'};let retries=0,renders=0;
+    const context=vm.createContext({queue:[item],queueIndex:0,active:true,state:{ready:true},lastError:'Error',
+        autoRetried:null,autoRetryTimer:null,setTimeout:(fn)=>{context.pending=fn;return 1;},
+        renderStatus(){renders++;},retryCurrentPlayback(){retries++;}});
+    vm.runInContext(functionSource('autoRetryOnce'),context);
+    assert.equal(context.autoRetryOnce(),true);assert.equal(context.lastError,'');assert.equal(context.state.ready,false);
+    assert.equal(context.autoRetryOnce(),true,'a second failure while the retry is pending stays silent');
+    context.pending();assert.equal(retries,1);
+    assert.equal(context.autoRetryOnce(),false,'a failure after the retry surfaces the error');
+    context.queue=[{kind:'youtube',videoId:'abcdefghijk'}];context.autoRetried=null;
+    assert.equal(context.autoRetryOnce(),true,'a new track gets its own retry');
+    context.active=false;context.autoRetried=null;assert.equal(context.autoRetryOnce(),false);
+});
+
 function functionSource(name) {
     const start = source.indexOf('function ' + name + '(');
     if (start < 0) return null;
@@ -245,7 +260,9 @@ function modeHarness(options = {}) {
         directCard: { replaceChildren() {}, append() {} }, el: element,
         ivLyrics: { update: (item, state) => calls.push(['lyrics', item.videoId, state.seconds, state.playing]) },
         open: () => calls.push('open'), renderStatus() {}, updateBar() {}, notify: message => calls.push(['notice', message]),
-        ensureFrame: () => calls.push('ensure-frame'), fetch: options.fetch || (async () => response('audio')), ...options.context,
+        ensureFrame: () => calls.push('ensure-frame'), fetch: options.fetch || (async () => response('audio')),
+        // The silent first-load retry has its own test; keep these paths on their explicit error behaviour.
+        autoRetried: null, autoRetryTimer: null, clearTimeout() {}, autoRetryOnce: () => false, ...options.context,
     });
     for (const name of ['readPlaybackMode', 'updateModeControls', 'cancelStream', 'clearAudio', 'send', 'updateAudio', 'applyAudioResume', 'setPlaybackMode'])
         vm.runInContext(functionSource(name), context);

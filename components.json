@@ -65,21 +65,6 @@
       "license": "MIT with bundled third-party notices",
       "binary_member": "node-v24.22.1-win-x64/node.exe",
       "license_member": "node-v24.22.1-win-x64/LICENSE"
-    },
-    "desktop_overlay": {
-      "version": "1.2.11",
-      "repository": "ivLis-Studio/ivLyrics-overlay",
-      "track": "release",
-      "source_revision": "a7f9a0ae71b3ab792b34493aa0084882c93fa620",
-      "local_build": "56ef338343c8",
-      "local_binary": "work/local-overlay/56ef338343c8/lyrics-plus-overlay.exe",
-      "local_source_archive": "work/local-overlay/56ef338343c8/ivLyrics-overlay-1.2.11-hangul-56ef338343c8-source.zip",
-      "sha256": "56ef338343c8eea6da88943d08dd6f6384e71f8aa4d865d481fc6c57d71d64ed",
-      "bytes": 16217600,
-      "source_sha256": "f7c2802583674a95a0dd012c16ad304ef6dee243efd90fbbce16af58e0ee163a",
-      "source_bytes": 2827278,
-      "license_status": "upstream-license-unconfirmed",
-      "delivery": "local-candidate-only"
     }
   },
   "artifacts": {

@@ -27,6 +27,9 @@ VIAddVersionKey "LegalCopyright" "2026 ForUltraplayer"
 !define MUI_FINISHPAGE_RUN "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"
 !define MUI_FINISHPAGE_RUN_PARAMETERS '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File $\"$INSTDIR\start.ps1$\"'
 !define MUI_FINISHPAGE_RUN_TEXT "Spotify 한글 가사 실행"
+; The desktop overlay is optional and distributed separately from this installer.
+!define MUI_FINISHPAGE_LINK "데스크톱 가사창(선택) 받기"
+!define MUI_FINISHPAGE_LINK_LOCATION "https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${PAYLOAD_DIR}\LICENSE"
 !insertmacro MUI_PAGE_DIRECTORY
@@ -159,9 +162,12 @@ Section "Uninstall"
   nsExec::ExecToLog /TIMEOUT=600000 '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\installer\payload-transaction.ps1" -Mode Cleanup -InstallRoot "$INSTDIR"'
   Pop $0
   ${If} $0 != 0
-    MessageBox MB_ICONSTOP "업데이트 복구 기록 정리에 실패했습니다. 설치 파일로 복구한 뒤 다시 제거해 주세요." /SD IDOK
+    ; A damaged or stale update record must not make the app impossible to remove.
+    ; The record folder beside the installation is left untouched for inspection.
+    MessageBox MB_ICONEXCLAMATION|MB_YESNO "업데이트 복구 기록을 정리하지 못했습니다.$\r$\n$\r$\n기록 폴더는 그대로 두고 제거를 계속할까요? '아니요'를 누르면 제거를 중단합니다." /SD IDNO IDYES continueUninstall
     SetErrorLevel 1
     Abort
+    continueUninstall:
   ${EndIf}
   ReadRegStr $0 HKCU "Software\SpotifyHangul" "InstallDir"
   ${If} $0 == $INSTDIR

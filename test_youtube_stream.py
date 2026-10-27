@@ -33,6 +33,34 @@ class PublicStreamTests(unittest.TestCase):
     def setUp(self):
         streams._cache.clear()
         streams._jobs = threading.BoundedSemaphore(1)
+        # Never probe real googlevideo hosts from unit tests.
+        self.served = patch('youtube_stream.wait_until_served', return_value=True)
+        self.served.start()
+        self.addCleanup(patch.stopall)
+
+    def test_fresh_url_is_returned_only_after_the_403_window_or_the_deadline(self):
+        import urllib.error
+        clock = [0.0]
+        def answer(codes):
+            def opener(request, timeout):
+                self.assertEqual(request.get_header('Range'), 'bytes=0-1')
+                code = codes.pop(0)
+                if code >= 400:
+                    raise urllib.error.HTTPError(request.full_url, code, 'x', {}, None)
+                response = Mock(status=code)
+                response.__enter__ = Mock(return_value=response); response.__exit__ = Mock(return_value=False)
+                return response
+            return opener
+        sleep = lambda seconds: clock.__setitem__(0, clock[0] + seconds)
+        now = lambda: clock[0]
+        self.served.stop()
+        self.assertTrue(streams.wait_until_served('https://r.googlevideo.com/v', 10, answer([403, 403, 206]), sleep, now))
+        self.assertEqual(clock[0], 1.0)
+        clock[0] = 0.0
+        self.assertFalse(streams.wait_until_served('https://r.googlevideo.com/v', 2, answer([403] * 10), sleep, now))
+        self.assertLessEqual(clock[0], 2.0)
+        self.assertFalse(streams.wait_until_served('https://r.googlevideo.com/v', 10, answer([404]), sleep, now))
+        self.served.start()
 
     def test_input_never_becomes_an_arbitrary_extractor_url_or_option(self):
         with patch('youtube_stream.run_extractor') as run:
@@ -48,6 +76,9 @@ class PublicStreamTests(unittest.TestCase):
             with self.subTest(changes=changes), self.assertRaises(LookupError):
                 streams.select_stream(data, VIDEO, now=1000)
         data = metadata(); data['availability'] = 'unlisted'
+        self.assertEqual(streams.select_stream(data, VIDEO, now=1000)['video_id'], VIDEO)
+        # yt-dlp leaves availability unset when the watch page omits it; that is not a login gate.
+        data = metadata(); data['availability'] = None
         self.assertEqual(streams.select_stream(data, VIDEO, now=1000)['video_id'], VIDEO)
 
     def test_highest_supported_opus_is_selected_instead_of_aac_or_encrypted_media(self):
@@ -103,7 +134,8 @@ class PublicStreamTests(unittest.TestCase):
             self.assertIn('--no-playlist', args)
             self.assertIn('--no-plugin-dirs', args)
             self.assertIn('--no-remote-components', args)
-            self.assertIn('--no-cache-dir', args)
+            self.assertEqual(args[args.index('--cache-dir') + 1], str(streams.CACHE_DIR))
+            self.assertEqual(args[args.index('--retries') + 1], '2')
             self.assertFalse(any('cookie' in arg for arg in args))
             self.assertEqual(args[-1], 'https://www.youtube.com/watch?v=' + VIDEO)
 
@@ -136,7 +168,8 @@ class PublicStreamTests(unittest.TestCase):
     def test_busy_engine_does_not_start_an_unbounded_second_process(self):
         streams._jobs.acquire()
         try:
-            with patch('youtube_stream.run_extractor') as run, self.assertRaises(RuntimeError):
+            with (patch('youtube_stream.BUSY_WAIT', 0.01), patch('youtube_stream.run_extractor') as run,
+                  self.assertRaises(RuntimeError)):
                 streams.youtube_stream(VIDEO)
             run.assert_not_called()
         finally:
@@ -156,7 +189,7 @@ class PublicStreamTests(unittest.TestCase):
         process.communicate.return_value = ('{"public":"metadata"}', 'diagnostic-with-synthetic-token')
         with patch('youtube_stream.subprocess.Popen', return_value=process) as popen:
             self.assertEqual(streams.run_extractor(['owned-extractor']), (0, '{"public":"metadata"}'))
-        process.communicate.assert_called_once_with(timeout=45)
+        process.communicate.assert_called_once_with(timeout=60)
         self.assertEqual(popen.call_args.args[0], ['owned-extractor'])
         process.kill.assert_not_called()
 

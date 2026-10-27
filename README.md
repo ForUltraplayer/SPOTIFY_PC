@@ -4,14 +4,14 @@
 
 Spotify 데스크톱 가사 화면에 일본어 노래의 한글 발음을 같이 띄워 줍니다. 한음, 나무위키에 올라와 있는 한글 발음을 가져와 Spotify 가사와 줄 단위로 맞춥니다.
 
-[SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) 기반이고, 현재 공개 버전은 0.7.0 베타입니다.
+[SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) 기반이고, 현재 공개 버전은 0.7.2 베타입니다.
 
-**[⬇ 다운로드 (v0.7.0)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.0)**
+**[⬇ 다운로드 (v0.7.2)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.2)**
 
-0.6.0, 0.6.1, 0.6.3에서 중간 버전 없이 바로 업데이트할 수 있습니다. Spotify와 오버레이를 종료하고 0.7.0 Setup.exe를 기존 설치 폴더에 다시 설치하세요.
+0.7.0 설치본은 바로가기로 실행하면 0.7.2로 자동 업데이트됩니다. 0.6.0, 0.6.1, 0.6.3에서도 중간 버전 없이 바로 업데이트할 수 있습니다. 직접 설치하려면 Spotify를 종료하고 0.7.2 Setup.exe를 기존 설치 폴더에 다시 설치하세요.
 
 > [!NOTE]
-> 0.7.0은 YouTube 링크 재생과 혼합 목록, 기존 데스크톱 오버레이를 포함한 공개 베타입니다. 원본 오버레이의 재배포 라이선스 확인은 남아 있습니다. 구성 요소별 안내는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 참고하세요.
+> 0.7.2부터 데스크톱 가사창(오버레이)은 설치 파일에 포함하지 않습니다. 재생 버튼을 추가한 수정본은 [ivLyrics-overlay 포크 릴리스](https://github.com/ForUltraplayer/ivLyrics-overlay/releases)에서 따로 받을 수 있습니다. 원본 오버레이 저장소에는 라이선스가 명시돼 있지 않습니다. 구성 요소별 안내는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 참고하세요.
 
 안드로이드 버전: [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)
 
@@ -19,7 +19,7 @@ Spotify 데스크톱 가사 화면에 일본어 노래의 한글 발음을 같�
 
 Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다.
 
-1. `SpotifyHangul-0.7.0-Setup.exe`를 받아 실행합니다.
+1. `SpotifyHangul-0.7.2-Setup.exe`를 받아 실행합니다.
 2. 설치 폴더를 고릅니다. 기본값은 `%LOCALAPPDATA%\Programs\SpotifyHangul`입니다.
 3. 설치 중에 공식 Spotify 파일(약 150 MB)을 내려받습니다.
 
@@ -46,22 +46,24 @@ Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다.
 - 곡 제목 복사 (재생바 제목 우클릭, 곡 메뉴, 프로필 메뉴)
 
 <details>
-<summary>0.7.0 추가 기능</summary>
+<summary>0.7.x 추가 기능</summary>
 
 - YouTube 링크를 Spotify 곡과 같은 목록에서 재생하고 목록을 파일로 내보내거나 가져오기
 - 음원 스트리밍과 영상 플레이어 전환, 기존 재생바와 ivLyrics 가사 연결
 - 곡별 초 단위 가사 싱크 조절과 되돌리기
-- 기존 데스크톱 오버레이의 재생 조작과 버튼 간격 설정
+- 별도로 받은 데스크톱 가사창이 있으면 함께 실행하고 재생 버튼 연결
 - 설치 실패와 중단 시 이전 파일 및 설치 등록 복원
+- 0.7.2: YouTube 음원 첫 재생 실패 수정 (새 음원 주소가 재생 가능해질 때까지 대기, 실패 시 한 번 자동 재시도)
+- 0.7.2: 자동 발음을 한음·나무위키 표기 관례(장음 생략, 촉음 받침 ㅅ)에 맞춤
 
-설치 파일에는 Python과 Node를 포함합니다. 작은 오버레이 창에서는 버튼 간격을 늘릴 때 가사 영역이 줄어들 수 있어 창 높이를 확보해야 합니다. 별도 깨끗한 PC의 첫 실행은 아직 확인하지 않았습니다. 구현과 제약은 [YouTube 연결 안내](docs/YOUTUBE_LINKS.md), [배포 준비](docs/DISTRIBUTION_PLAN.md), [검증 기록](docs/VERIFICATION.md)을 참고하세요.
+설치 파일에는 Python과 Node를 포함합니다. 데스크톱 가사창은 `lyrics-plus-overlay.exe`를 `%LOCALAPPDATA%\lyrics-plus-overlay\` 폴더에 두면 바로가기로 실행할 때 함께 시작합니다. 별도 깨끗한 PC의 첫 실행은 아직 확인하지 않았습니다. 구현과 제약은 [YouTube 연결 안내](docs/YOUTUBE_LINKS.md), [배포 준비](docs/DISTRIBUTION_PLAN.md), [검증 기록](docs/VERIFICATION.md)을 참고하세요.
 
 </details>
 
 ## 업데이트 / 제거
 
-- **0.7.0 베타 설치 / 업데이트**: Spotify와 오버레이를 종료하고 `SpotifyHangul-0.7.0-Setup.exe`를 같은 폴더에 다시 설치합니다. 이전 0.7.0 시험판에서도 같은 방법을 사용합니다.
-- **자동 업데이트**: 바로가기로 실행하면 새 버전을 확인하고 내려받습니다 (마지막 확인에서 8 시간 이후 재조회, Spotify 종료 후 다음 실행 전에 적용). 0.7.0 업데이터는 GitHub의 정식 릴리스만 선택하므로 이번 베타 설치에는 `Update.exe` 대신 `Setup.exe`를 사용하세요. 0.6.1과 0.6.3의 기존 업데이터는 공개 베타도 선택합니다.
+- **직접 설치 / 업데이트**: Spotify와 오버레이를 종료하고 `SpotifyHangul-0.7.2-Setup.exe`를 같은 폴더에 다시 설치합니다.
+- **자동 업데이트**: 바로가기로 실행하면 새 버전을 확인하고 내려받습니다 (마지막 확인에서 8 시간 이후 재조회, Spotify 종료 후 다음 실행 전에 적용). 0.7.0부터 업데이터는 GitHub의 시험판(prerelease) 표시가 없는 릴리스만 선택합니다. 0.7.0에 포함됐던 데스크톱 가사창은 업데이트 때 설치 폴더에서 제거되며, 따로 받아 둔 가사창은 그대로 둡니다.
 - **제거**: Windows 설정 > 앱 > 설치된 앱에서 **Spotify 한글 가사**를 제거합니다. 기존 Spotify와 발음 캐시는 남습니다.
 
 통합 Spotify 자체의 자동 업데이트는 패치 유지를 위해 막아 둡니다. Spotify 버전은 새 설치본으로 올라갑니다.
@@ -101,7 +103,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_bootstrap.p
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_auto_update.ps1
 ```
 
-공개한 0.7.0 올인원 빌드는 검증한 기존 오버레이 실행 파일과 대응 소스를 로컬 입력으로 사용합니다. 이 입력은 릴리스의 `SpotifyHangul-0.7.0-DesktopOverlay.zip`에 별도로 제공합니다. 저장소를 복제한 것만으로 동일한 올인원 설치본을 만들 수는 없습니다. 입력을 준비한 개발 환경에서는 `work/` 아래의 새 후보 폴더에 빌드합니다.
+0.7.2부터 설치본은 데스크톱 오버레이를 포함하지 않아 저장소와 공개 다운로드만으로 빌드할 수 있습니다. 빌드는 `work/` 아래의 새 후보 폴더에 만듭니다.
 
 ```powershell
 python scripts/build_spotx_adapter.py

@@ -75,7 +75,10 @@
                 session = value; nextDesktopConfig = 0; seen.clear();
             }
             const paired = session;
-            if (Date.now() >= nextDesktopConfig) {
+            // Hand the control token only to an overlay the user enabled in ivLyrics;
+            // otherwise any local process on that port would receive it.
+            if (host.OverlaySender?.enabled === false) desktopConnected = false;
+            else if (Date.now() >= nextDesktopConfig) {
                 nextDesktopConfig = Date.now() + 10000;
                 const port = Number(host.OverlaySender?.port || 15000);
                 if (Number.isInteger(port) && port >= 1 && port <= 65535) {

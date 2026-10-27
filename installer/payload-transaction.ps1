@@ -371,7 +371,15 @@ function Invoke-PayloadTransaction($Transaction,[string]$Payload,[scriptblock]$I
                 $relative=$entry.Name.Replace('/','\')
                 $target=[IO.Path]::GetFullPath((Join-Path $base $relative))
                 if ([IO.Path]::IsPathRooted($relative) -or -not $target.StartsWith($base+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'The old package manifest escapes the installation.' }
-                if ((Test-Path -LiteralPath $target -PathType Leaf) -and (Get-PayloadHash $target) -ceq $entry.Value) { Remove-Item -LiteralPath $target -Force }
+                if ((Test-Path -LiteralPath $target -PathType Leaf) -and (Get-PayloadHash $target) -ceq $entry.Value) {
+                    Remove-Item -LiteralPath $target -Force
+                    # Drop folders this leaves empty (0.7.2 removed desktop-overlay), never the root.
+                    $parent=Split-Path -Parent $target
+                    while ($parent.Length -gt $base.Length -and -not @(Get-ChildItem -LiteralPath $parent -Force).Count) {
+                        Remove-Item -LiteralPath $parent -Force
+                        $parent=Split-Path -Parent $parent
+                    }
+                }
             }
         }
         Copy-PayloadTree $Payload $Transaction.Root
