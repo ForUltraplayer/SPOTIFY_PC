@@ -13,8 +13,6 @@ Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://
 > [!NOTE]
 > From 0.7.2 the desktop lyrics overlay is no longer bundled. A modified build with playback buttons is available separately from the [ivLyrics-overlay fork releases](https://github.com/ForUltraplayer/ivLyrics-overlay/releases). The original overlay repository does not declare a license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for component notices.
 
-Android version: [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)
-
 ## Install
 
 No need to install Spotify, SpotX or Python first.

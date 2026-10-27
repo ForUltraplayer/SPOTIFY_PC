@@ -13,8 +13,6 @@ Spotify 데스크톱 가사 화면에 일본어 노래의 한글 발음을 같�
 > [!NOTE]
 > 0.7.2부터 데스크톱 가사창(오버레이)은 설치 파일에 포함하지 않습니다. 재생 버튼을 추가한 수정본은 [ivLyrics-overlay 포크 릴리스](https://github.com/ForUltraplayer/ivLyrics-overlay/releases)에서 따로 받을 수 있습니다. 원본 오버레이 저장소에는 라이선스가 명시돼 있지 않습니다. 구성 요소별 안내는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 참고하세요.
 
-안드로이드 버전: [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)
-
 ## 설치
 
 Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다.
