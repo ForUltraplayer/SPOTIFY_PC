@@ -4,14 +4,14 @@
 
 Spotify 데스크톱 가사 화면에 일본어 노래의 한글 발음을 같이 띄워 줍니다. 한음, 나무위키에 올라와 있는 한글 발음을 가져와 Spotify 가사와 줄 단위로 맞춥니다.
 
-[SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) 기반이고, 현재 공개 버전은 0.6.3 베타입니다.
+[SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) 기반이고, 현재 공개 버전은 0.7.0 베타입니다.
 
-**[⬇ 다운로드 (v0.6.3)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.3)**
+**[⬇ 다운로드 (v0.7.0)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.0)**
 
-0.6.2의 업데이트 오류는 0.6.3에서 수정했습니다. 0.6.0과 0.6.1에서 중간 버전 없이 바로 업데이트할 수 있습니다.
+0.6.0, 0.6.1, 0.6.3에서 중간 버전 없이 바로 업데이트할 수 있습니다. Spotify와 오버레이를 종료하고 0.7.0 Setup.exe를 기존 설치 폴더에 다시 설치하세요.
 
 > [!NOTE]
-> `main`의 개발 소스는 0.7.0입니다. YouTube 링크 재생과 혼합 목록, 기존 데스크톱 오버레이 연결을 포함하며 구버전 업데이트 검증을 마쳤습니다. 원본 오버레이의 재배포 라이선스 확인이 남아 공개 설치본은 0.6.3으로 유지합니다.
+> 0.7.0은 YouTube 링크 재생과 혼합 목록, 기존 데스크톱 오버레이를 포함한 공개 베타입니다. 원본 오버레이의 재배포 라이선스 확인은 남아 있습니다. 구성 요소별 안내는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 참고하세요.
 
 안드로이드 버전: [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)
 
@@ -19,7 +19,7 @@ Spotify 데스크톱 가사 화면에 일본어 노래의 한글 발음을 같�
 
 Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다.
 
-1. `SpotifyHangul-0.6.3-Setup.exe`를 받아 실행합니다.
+1. `SpotifyHangul-0.7.0-Setup.exe`를 받아 실행합니다.
 2. 설치 폴더를 고릅니다. 기본값은 `%LOCALAPPDATA%\Programs\SpotifyHangul`입니다.
 3. 설치 중에 공식 Spotify 파일(약 150 MB)을 내려받습니다.
 
@@ -46,7 +46,7 @@ Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다.
 - 곡 제목 복사 (재생바 제목 우클릭, 곡 메뉴, 프로필 메뉴)
 
 <details>
-<summary>0.7.0 개발 소스의 추가 기능</summary>
+<summary>0.7.0 추가 기능</summary>
 
 - YouTube 링크를 Spotify 곡과 같은 목록에서 재생하고 목록을 파일로 내보내거나 가져오기
 - 음원 스트리밍과 영상 플레이어 전환, 기존 재생바와 ivLyrics 가사 연결
@@ -60,8 +60,8 @@ Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다.
 
 ## 업데이트 / 제거
 
-- **0.6.1 이후**: 바로가기로 실행하면 새 버전을 확인하고 내려받습니다 (마지막 확인에서 8 시간 이후 재조회, Spotify 종료 후 다음 실행 전에 적용).
-- **수동 업데이트 / 0.6.0 이하**: Spotify를 끄고 `SpotifyHangul-0.6.3-Update.exe`를 실행하거나 Setup.exe를 같은 폴더에 다시 설치합니다. 중간 버전을 거칠 필요 없습니다.
+- **0.7.0 베타 설치 / 업데이트**: Spotify와 오버레이를 종료하고 `SpotifyHangul-0.7.0-Setup.exe`를 같은 폴더에 다시 설치합니다. 이전 0.7.0 시험판에서도 같은 방법을 사용합니다.
+- **자동 업데이트**: 바로가기로 실행하면 새 버전을 확인하고 내려받습니다 (마지막 확인에서 8 시간 이후 재조회, Spotify 종료 후 다음 실행 전에 적용). 0.7.0 업데이터는 GitHub의 정식 릴리스만 선택하므로 이번 베타 설치에는 `Update.exe` 대신 `Setup.exe`를 사용하세요. 0.6.1과 0.6.3의 기존 업데이터는 공개 베타도 선택합니다.
 - **제거**: Windows 설정 > 앱 > 설치된 앱에서 **Spotify 한글 가사**를 제거합니다. 기존 Spotify와 발음 캐시는 남습니다.
 
 통합 Spotify 자체의 자동 업데이트는 패치 유지를 위해 막아 둡니다. Spotify 버전은 새 설치본으로 올라갑니다.
@@ -101,7 +101,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_bootstrap.p
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_auto_update.ps1
 ```
 
-현재 0.7.0 올인원 빌드는 검증한 기존 오버레이 실행 파일과 대응 소스를 로컬 입력으로 사용합니다. 이 입력은 재배포 라이선스 확인 전이라 저장소에 포함하지 않았습니다. 저장소를 복제한 것만으로 동일한 올인원 설치본을 만들 수는 없습니다. 입력을 준비한 개발 환경에서는 `work/` 아래의 새 후보 폴더에 빌드합니다.
+공개한 0.7.0 올인원 빌드는 검증한 기존 오버레이 실행 파일과 대응 소스를 로컬 입력으로 사용합니다. 이 입력은 릴리스의 `SpotifyHangul-0.7.0-DesktopOverlay.zip`에 별도로 제공합니다. 저장소를 복제한 것만으로 동일한 올인원 설치본을 만들 수는 없습니다. 입력을 준비한 개발 환경에서는 `work/` 아래의 새 후보 폴더에 빌드합니다.
 
 ```powershell
 python scripts/build_spotx_adapter.py

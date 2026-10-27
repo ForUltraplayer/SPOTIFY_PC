@@ -4,14 +4,14 @@
 
 Shows the Korean (Hangul) pronunciation of Japanese songs in the Spotify desktop lyrics view. Pronunciation is pulled from Haneum and Namuwiki and matched line by line against Spotify's lyrics.
 
-Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Public version: 0.6.3 beta.
+Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Public version: 0.7.0 beta.
 
-**[⬇ Download (v0.6.3)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.6.3)**
+**[⬇ Download (v0.7.0)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.0)**
 
-Version 0.6.3 fixes the update failure in 0.6.2. Users on 0.6.0 or 0.6.1 can upgrade directly without installing an intermediate version.
+Users on 0.6.0, 0.6.1, or 0.6.3 can upgrade directly. Close Spotify and the overlay, then run the 0.7.0 Setup.exe into the existing installation folder.
 
 > [!NOTE]
-> The development source on `main` is 0.7.0. It includes YouTube links, mixed playlists, and integration with the existing desktop overlay, with legacy upgrade checks completed. Public installers remain on 0.6.3 while redistribution licensing for the original overlay is being verified.
+> Version 0.7.0 is a public beta with YouTube links, mixed playlists, and the existing desktop overlay. Redistribution licensing for the original overlay remains unconfirmed. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for component notices.
 
 Android version: [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)
 
@@ -19,7 +19,7 @@ Android version: [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_AND
 
 No need to install Spotify, SpotX or Python first.
 
-1. Download and run `SpotifyHangul-0.6.3-Setup.exe`.
+1. Download and run `SpotifyHangul-0.7.0-Setup.exe`.
 2. Pick an install folder (default: `%LOCALAPPDATA%\Programs\SpotifyHangul`).
 3. The installer downloads the official Spotify files (~150 MB).
 
@@ -46,7 +46,7 @@ Per-song source URLs and automatic pronunciation are under **한글 발음 자�
 - Copy song title (right-click the title in the playback bar, song menu, profile menu)
 
 <details>
-<summary>Additional features in the 0.7.0 development source</summary>
+<summary>Additional features in 0.7.0</summary>
 
 - Play YouTube links alongside Spotify tracks, with playlist import and export
 - Switch between audio streaming and the video player, using the existing playback bar and ivLyrics
@@ -60,8 +60,8 @@ Local installers include Python and Node. Small overlay windows may reduce the l
 
 ## Update / Uninstall
 
-- **0.6.1 and later**: the shortcut checks for and downloads new versions when launched, at least 8 hours after the previous check. Updates apply before the next launch after Spotify closes.
-- **Manual update / 0.6.0 and earlier**: close Spotify and run `SpotifyHangul-0.6.3-Update.exe`, or reinstall Setup.exe into the same folder. No intermediate version is needed.
+- **Install / update to the 0.7.0 beta**: close Spotify and the overlay, then run `SpotifyHangul-0.7.0-Setup.exe` into the same folder. Use the same method for earlier 0.7.0 test builds.
+- **Automatic updates**: the shortcut checks for and downloads new versions when launched, at least 8 hours after the previous check. Updates apply before the next launch after Spotify closes. The 0.7.0 updater selects stable GitHub releases only, so use `Setup.exe` instead of `Update.exe` for this beta. The older 0.6.1 and 0.6.3 updaters also select public prereleases.
 - **Uninstall**: Windows Settings > Apps > Installed apps > **Spotify 한글 가사**. Your existing Spotify and pronunciation cache are kept.
 
 Spotify's own auto-update is blocked to keep the patches. New Spotify versions come with new installer releases.
@@ -101,7 +101,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_bootstrap.p
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_auto_update.ps1
 ```
 
-The current 0.7.0 all-in-one build uses a verified original-overlay executable and corresponding source as local inputs. These inputs are excluded from the repository pending redistribution license verification. A fresh clone alone cannot reproduce that installer. With the local inputs prepared, use a new candidate directory under `work/`.
+The published 0.7.0 all-in-one build uses a verified original-overlay executable and corresponding source as local inputs. These are provided separately in the release asset `SpotifyHangul-0.7.0-DesktopOverlay.zip`. A fresh clone alone cannot reproduce that installer. With the local inputs prepared, use a new candidate directory under `work/`.
 
 ```powershell
 python scripts/build_spotx_adapter.py
