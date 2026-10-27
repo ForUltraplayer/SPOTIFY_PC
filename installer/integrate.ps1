@@ -123,7 +123,7 @@ try {
             Invoke-Spicetify -Arguments @('config','extensions','hangul-lyrics.js-')
             if (Test-Path -LiteralPath $extension) { Remove-Item -LiteralPath $extension }
         }
-        Invoke-Spicetify -Arguments @('-n','apply')
+        if (Test-Path -LiteralPath $state.SpotifyExe) { Invoke-Spicetify -Arguments @('-n','apply') }
         Restore-Shortcut
         exit 0
     }

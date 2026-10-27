@@ -34,3 +34,11 @@ ivLyrics의 LyricsPlus 제공자와 결과 계약을 참조하는 호환 어댑�
 PyKakasi, jaconv, Deprecated와 wrapt의 원본 소스 배포 압축도 third_party_sources에 제공한다. 각 설치 패키지의 dist-info 고지를 유지한다. 빌드에 사용한 공개 URL과 SHA-256은 licenses/distribution-inputs.json에 보존한다. 안드로이드의 현재 대응 소스와 APK 배포는 https://github.com/ForUltraplayer/SPOTIFY_ANDROID 에서 관리한다.
 
 버전 0.6.0은 Spotify 본체를 설치 중 공식 서버에서 내려받아 검증한 다음 로컬에서 패치한다. Spotify 바이너리는 소스 압축과 Setup.exe에 포함하지 않는다. SpotX 원본은 [기준 커밋](https://github.com/SpotX-Official/SpotX/tree/3cfbdfd1fac3dc755155e434116e28b51acfec07)에 고정하며 원본의 전체 설치 스크립트를 실행하지 않는다. 패치 전용 분리 방식과 외부 서비스 조건의 검토 한계는 docs/SPOTX_INTEGRATION.md에 기록한다.
+
+## 0.7.0 로컬 설치 후보의 기존 데스크톱 오버레이
+
+기존 Tauri 기반 [ivLyrics 데스크톱 오버레이](https://github.com/ivLis-Studio/ivLyrics-overlay)를 자체 WPF 시제품으로 교체하지 않고 `desktop-overlay` 폴더에 포함한다. 원래 앱 식별자와 설정 경로를 유지하며 별도 설치본과 사용자 설정을 덮어쓰지 않는다. 실제 실행 파일과 소스 압축의 해시 및 원본 커밋은 `desktop-overlay/receipt.json`에 기록한다. 전체 고정 소스와 로컬 변경 및 파일별 해시는 `third_party_sources`에 포함한다.
+
+이 오버레이의 원본 저장소에서는 재배포 라이선스 선언을 확인하지 못했다. 원래 ivLyrics의 LGPL-2.1 고지를 별도 네이티브 앱의 허락으로 확장하지 않는다. 이번 구성은 공개 배포 전 로컬 검증 후보이며, 작성자의 허락이나 라이선스 근거가 확인되기 전 공개 배포 가능으로 표시하지 않는다. 빌더는 이 구성의 산출물을 프로젝트 `work` 아래에서만 만들 수 있게 제한한다.
+
+기존 오버레이의 UI와 원본 업데이터를 유지한다. 오버레이 자체에서 원본 업데이트를 수동 적용하면 로컬 재생 조작과 외형 수정이 원본으로 바뀔 수 있다. WebView2 Runtime은 기존 Tauri 앱의 실행 요구 사항이다. 오버레이 시작 도구는 새 부팅 자동 시작이나 실패 후 자동 재시작을 등록하지 않는다.

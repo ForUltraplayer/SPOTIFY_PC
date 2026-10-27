@@ -10,6 +10,9 @@ Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://
 
 Version 0.6.3 fixes the update failure in 0.6.2. Users on 0.6.0 or 0.6.1 can upgrade directly without installing an intermediate version.
 
+> [!NOTE]
+> The development source on `main` is 0.7.0. It includes YouTube links, mixed playlists, and integration with the existing desktop overlay, with legacy upgrade checks completed. Public installers remain on 0.6.3 while redistribution licensing for the original overlay is being verified.
+
 Android version: [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)
 
 ## Install
@@ -41,6 +44,19 @@ Per-song source URLs and automatic pronunciation are under **한글 발음 자�
 - Retries failed lookups (up to 3 times, 2 s apart)
 - Automatic pronunciation for lines missing from the source (off by default)
 - Copy song title (right-click the title in the playback bar, song menu, profile menu)
+
+<details>
+<summary>Additional features in the 0.7.0 development source</summary>
+
+- Play YouTube links alongside Spotify tracks, with playlist import and export
+- Switch between audio streaming and the video player, using the existing playback bar and ivLyrics
+- Adjust per-track lyric timing in seconds, with undo
+- Playback controls and control spacing in the existing desktop overlay
+- Restore previous files and installation registration after failed or interrupted installs
+
+Local installers include Python and Node. Small overlay windows may reduce the lyric area when control spacing increases; leave enough window height. First launch on a separate clean PC remains untested. See [YouTube integration](docs/YOUTUBE_LINKS.md), [distribution preparation](docs/DISTRIBUTION_PLAN.md), and [verification](docs/VERIFICATION.md) for implementation details and limits (Korean).
+
+</details>
 
 ## Update / Uninstall
 
@@ -85,14 +101,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_bootstrap.p
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_auto_update.ps1
 ```
 
-Build output goes to `dist/`.
+The current 0.7.0 all-in-one build uses a verified original-overlay executable and corresponding source as local inputs. These inputs are excluded from the repository pending redistribution license verification. A fresh clone alone cannot reproduce that installer. With the local inputs prepared, use a new candidate directory under `work/`.
 
 ```powershell
 python scripts/build_spotx_adapter.py
 python scripts/fetch_distribution_inputs.py
+npm ci --ignore-scripts --prefix tests/ui
 python scripts/check_compatibility.py
-python scripts/prepare_release.py
-python scripts/build_installer.py
+python scripts/prepare_release.py --output-dir work/release-candidates/candidate-1
+python scripts/build_installer.py --output-dir work/release-candidates/candidate-1
 ```
 
 | Path | Role |
@@ -103,6 +120,7 @@ python scripts/build_installer.py
 | `start.ps1`, `stop.ps1` | Start / stop |
 | `installer/` | NSIS installer |
 | `scripts/` | Release and build scripts |
+| `overlay/` | Independent WPF prototype source, excluded from the product |
 
 Release process: [docs/RELEASE.md](docs/RELEASE.md) (Korean).
 

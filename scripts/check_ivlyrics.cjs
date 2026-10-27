@@ -8,12 +8,17 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const root = process.argv[2];
 const source = name => fs.readFileSync(path.join(root, name), 'utf8');
-for (const name of ['index.js', 'LyricsService.js', 'AIAddonManager.js', 'LyricsAddonManager.js', 'Addon_Lyrics_LyricsPlus.js']) {
+for (const name of ['index.js', 'OptionsMenu.js', 'Pages.js', 'LyricsService.js', 'AIAddonManager.js', 'LyricsAddonManager.js', 'Addon_Lyrics_LyricsPlus.js']) {
     new vm.Script(source(name), { filename: name });
 }
 for (const method of ['getTranslation', 'setTranslation', 'getTranslationCacheId']) {
     assert.match(source('LyricsService.js'), new RegExp('\\b' + method + '\\s*\\('), 'Missing cache contract: '+method);
 }
+for (const method of ['getSafePlayerProgress', 'getPlayerPlaybackSnapshot', 'resolveStablePlaybackTrack', 'getCurrentTrackInfo', 'getLyricsFromProviders']) {
+    assert.match(source('LyricsService.js'), new RegExp('\\b' + method + '\\s*\\('), 'Missing link-player lyrics contract: '+method);
+}
+assert.match(source('index.js'), /window\.lyricContainer\s*=\s*this/, 'Missing mounted lyrics-container contract');
+assert.match(source('index.js'), /schedulePlaybackTrackResolution\s*\(/, 'Missing lyrics track-transition contract');
 assert.match(source('AIAddonManager.js'), /\bregister\s*\(addon\)/);
 const window = { LyricsAddonManager: { register(addon) { window.provider = addon; } } };
 const context = { window, console, URL, atob, setTimeout() { throw Error('Unexpected registration wait'); } };

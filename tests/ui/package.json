@@ -1,0 +1,11 @@
+{
+  "name": "spotify-hangul-ui-contract-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinned development-only React fixtures for the lyric sync UI contracts.",
+  "devDependencies": {
+    "linkedom": "0.18.12",
+    "react": "19.1.0",
+    "react-test-renderer": "19.1.0"
+  }
+}

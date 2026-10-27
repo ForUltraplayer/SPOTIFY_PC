@@ -11,10 +11,11 @@ import sys
 import tempfile
 import zipfile
 from dependencies import ROOT, load, verify, fingerprint, source_fingerprint
+from patch_ivlyrics_sync import patch_tree
 
 
-def run(command):
-    subprocess.run(command, cwd=ROOT, check=True, timeout=240)
+def run(command, env=None):
+    subprocess.run(command, cwd=ROOT, check=True, timeout=240, env=env)
 
 
 def main():
@@ -25,7 +26,7 @@ def main():
     data = load(args.manifest)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     report = {'result': 'failed', 'manifest': fingerprint(data), 'baseline': fingerprint(load()),
-              'source': source_fingerprint(), 'runtime_playback': 'pending',
+              'source': source_fingerprint(), 'runtime_playback': 'pending', 'ui_tests_required': True,
               'time': datetime.now(timezone.utc).isoformat()}
     try:
         for name, asset in data['artifacts'].items():
@@ -36,11 +37,16 @@ def main():
         with tempfile.TemporaryDirectory(prefix='contracts-', dir=ROOT / 'work') as area:
             with zipfile.ZipFile(ROOT / 'work/downloads' / iv['source_artifact']) as archive:
                 # Read only the exact files exercised by the contract check; never execute archive installers.
-                for name in ('index.js', 'LyricsService.js', 'AIAddonManager.js', 'LyricsAddonManager.js', 'Addon_Lyrics_LyricsPlus.js'):
+                for name in ('index.js', 'Pages.js', 'OptionsMenu.js', 'Utils.js', 'LyricsService.js', 'AIAddonManager.js', 'LyricsAddonManager.js', 'Addon_Lyrics_LyricsPlus.js'):
                     matches = [entry for entry in archive.namelist() if entry.count('/') == 1 and entry.endswith('/'+name)]
                     if len(matches) != 1: raise ValueError('Upstream layout changed: '+name)
                     Path(area, name).write_bytes(archive.read(matches[0]))
+            patch_tree(area)
             run(['node', 'scripts/check_ivlyrics.cjs', area])
+            run(['node', '--test', 'test_extension.cjs', 'test_youtube_library.cjs', 'test_youtube_overlay.cjs',
+                 'test_youtube_ivlyrics.cjs', 'test_youtube_navigation.cjs', 'test_youtube_desktop.cjs',
+                 'test_ivlyrics_sync.cjs', 'test_ivlyrics_sync_ui.cjs', 'test_ivlyrics_sync_patch.cjs', 'test_youtube_now_playing.cjs'],
+                env=dict(os.environ, IVLYRICS_SOURCE_DIR=area, IVLYRICS_REQUIRE_UI_TESTS='1'))
             cli = data['components']['spicetify']
             with zipfile.ZipFile(ROOT / 'work/downloads' / cli['artifact']) as archive:
                 Path(area, 'spicetify.exe').write_bytes(archive.read('spicetify.exe'))
@@ -55,8 +61,11 @@ def main():
                 raise ValueError('SpotX adapter changed: '+name)
         run([sys.executable, '-m', 'unittest', 'discover', '-s', '.', '-p', 'test_bridge.py'])
         run([sys.executable, '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_dependencies.py'])
-        run(['node', '--test', 'test_extension.cjs'])
-        for name in ('test_installer.ps1', 'test_bootstrap.ps1', 'test_auto_update.ps1', 'test_managed_ivlyrics.ps1'):
+        run([sys.executable, '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_release_sources.py'])
+        run([sys.executable, '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_desktop_overlay_package.py'])
+        run([sys.executable, '-m', 'unittest', 'test_playlist_files', 'test_youtube_stream', 'test_playback_control', 'test_playback_http'])
+        for name in ('test_installer.ps1', 'test_bootstrap.ps1', 'test_auto_update.ps1', 'test_managed_ivlyrics.ps1', 'test_start.ps1',
+                     'test_desktop_overlay.ps1', 'test_payload_transaction.ps1'):
             command = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/'+name]
             if name == 'test_auto_update.ps1':
                 command += ['-VerifiedInstaller', str(ROOT/'work/downloads'/next(iter(data['test_fixtures'])))]

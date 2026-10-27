@@ -36,6 +36,50 @@
     "nsis": {
       "version": "3.13",
       "artifact": "nsis-3.13.zip"
+    },
+    "yt_dlp": {
+      "version": "2026.10.26",
+      "repository": "yt-dlp/yt-dlp",
+      "track": "release",
+      "revision": "f264a6cbd1f630894da0f368df00f8aae50140e0",
+      "artifact": "wheels/yt_dlp-2026.10.26-py3-none-any.whl",
+      "source_artifact": "yt_dlp-2026.10.26.tar.gz",
+      "license": "Unlicense",
+      "required_ejs_version": "0.8.0",
+      "delivery": "embedded-python-module"
+    },
+    "yt_dlp_ejs": {
+      "version": "0.8.0",
+      "artifact": "wheels/yt_dlp_ejs-0.8.0-py3-none-any.whl",
+      "source_artifact": "yt_dlp_ejs-0.8.0.tar.gz",
+      "license": "Unlicense with bundled MIT and ISC notices",
+      "delivery": "embedded-python-module"
+    },
+    "node": {
+      "version": "24.22.1",
+      "repository": "nodejs/node",
+      "track": "release",
+      "release_line": "24-lts",
+      "artifact": "node-v24.22.1-win-x64.zip",
+      "source_artifact": "node-v24.22.1.tar.xz",
+      "license": "MIT with bundled third-party notices",
+      "binary_member": "node-v24.22.1-win-x64/node.exe",
+      "license_member": "node-v24.22.1-win-x64/LICENSE"
+    },
+    "desktop_overlay": {
+      "version": "1.2.11",
+      "repository": "ivLis-Studio/ivLyrics-overlay",
+      "track": "release",
+      "source_revision": "a7f9a0ae71b3ab792b34493aa0084882c93fa620",
+      "local_build": "56ef338343c8",
+      "local_binary": "work/local-overlay/56ef338343c8/lyrics-plus-overlay.exe",
+      "local_source_archive": "work/local-overlay/56ef338343c8/ivLyrics-overlay-1.2.11-hangul-56ef338343c8-source.zip",
+      "sha256": "56ef338343c8eea6da88943d08dd6f6384e71f8aa4d865d481fc6c57d71d64ed",
+      "bytes": 16217600,
+      "source_sha256": "f7c2802583674a95a0dd012c16ad304ef6dee243efd90fbbce16af58e0ee163a",
+      "source_bytes": 2827278,
+      "license_status": "upstream-license-unconfirmed",
+      "delivery": "local-candidate-only"
     }
   },
   "artifacts": {
@@ -103,6 +147,36 @@
       "url": "https://codeload.github.com/spicetify/cli/zip/c3fd98f6fbf922ae944d1ecd64f97c380d04368e",
       "sha256": "64a7490b4746288dc561ac6086b63e991f9a3e49d9dae6e0b05a7e6882f21469",
       "bytes": 2184177
+    },
+    "wheels/yt_dlp-2026.10.26-py3-none-any.whl": {
+      "url": "https://files.pythonhosted.org/packages/7f/3d/16ea7d5638cf585991f2c5705e8083688dde633d32d0871f2404e0f4d827/yt_dlp-2026.10.26-py3-none-any.whl",
+      "sha256": "a05c5b5d8562f7e8a62f5334348b406af4930d56d3a65f8021d14af0e22339ae",
+      "bytes": 3186201
+    },
+    "yt_dlp-2026.10.26.tar.gz": {
+      "url": "https://files.pythonhosted.org/packages/83/31/4be3987022a6244550ab6a3afe45ad10ac10b5e5ab8874bd8eecc7f8b937/yt_dlp-2026.10.26.tar.gz",
+      "sha256": "abe5c6b94c3b2f0560500add1c42e0a97641752743a5b65588ac2007a6e23eb6",
+      "bytes": 3048880
+    },
+    "wheels/yt_dlp_ejs-0.8.0-py3-none-any.whl": {
+      "url": "https://files.pythonhosted.org/packages/e3/bd/520769863744b669440a924271a6159ddd82ad5ae26b4ac4d4b69e9f8d44/yt_dlp_ejs-0.8.0-py3-none-any.whl",
+      "sha256": "79300e5fca7f937a1eeede11f0456862c1b41107ce1d726871e0207424f4bdb4",
+      "bytes": 53443
+    },
+    "yt_dlp_ejs-0.8.0.tar.gz": {
+      "url": "https://files.pythonhosted.org/packages/d3/e6/cceb9530e8f4e5940f6f7822d90e9d94f1b85343329a16baaf47bbbb3de1/yt_dlp_ejs-0.8.0.tar.gz",
+      "sha256": "d5fa1639f63b5c4af8d932495f60689d5370f1a095782c944f7f62a303eb104e",
+      "bytes": 96571
+    },
+    "node-v24.22.1-win-x64.zip": {
+      "url": "https://nodejs.org/dist/v24.22.1/node-v24.22.1-win-x64.zip",
+      "sha256": "d2046d28c2c3dcd211ac5145c0bf30e2047ef9dfb306693c8c6e2eccd8b95fa5",
+      "bytes": 37748064
+    },
+    "node-v24.22.1.tar.xz": {
+      "url": "https://nodejs.org/dist/v24.22.1/node-v24.22.1.tar.xz",
+      "sha256": "4f5379796280cdaeb0c2f358fd04b6a16cc4fb7dfa83b5a8c91a9d963b435231",
+      "bytes": 57669336
     }
   },
   "test_fixtures": {

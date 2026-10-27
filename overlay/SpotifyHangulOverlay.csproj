@@ -1,0 +1,25 @@
+<!-- @file SpotifyHangulOverlay.csproj
+     @author: ForUltraplayer
+     @brief Build the independently authored Windows desktop lyrics overlay. -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>SpotifyHangulOverlay</AssemblyName>
+    <RootNamespace>SpotifyHangulOverlay</RootNamespace>
+    <Version>0.1.0</Version>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+    <!-- The application is WPF; WinForms supplies only the notification icon. WPF DPI comes from the manifest. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+    <Copyright>Copyright (C) 2026 ForUltraplayer. GPL-3.0-or-later.</Copyright>
+  </PropertyGroup>
+  <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>
+</Project>

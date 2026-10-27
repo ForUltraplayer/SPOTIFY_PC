@@ -41,9 +41,9 @@ def fingerprint(data):
 def source_fingerprint():
     # Bind an inspection report to the checkout whose contracts were tested.
     names = sorted({str(p.relative_to(ROOT)).replace('\\', '/')
-                    for pattern in ('*.py', '*.ps1', '*.js', '*.cjs', 'scripts/*.py', 'scripts/*.ps1',
-                                    'scripts/*.cjs', 'installer/*.ps1', 'installer/*.nsi', 'third_party/spotx/*')
-                    for p in ROOT.glob(pattern) if p.is_file()} | {'components.json', 'release.json', 'requirements.txt'})
+                    for pattern in ('*.py', '*.ps1', '*.js', '*.css', '*.cjs', 'scripts/*.py', 'scripts/*.ps1',
+                                    'scripts/*.cjs', 'installer/*.ps1', 'installer/*.nsi', 'tests/ui/*.json', 'third_party/spotx/*')
+                    for p in ROOT.glob(pattern) if p.is_file()} | {'components.json', 'release.json', 'requirements.txt', 'youtube-player.html'})
     digest = hashlib.sha256()
     for name in names:
         digest.update(name.encode())

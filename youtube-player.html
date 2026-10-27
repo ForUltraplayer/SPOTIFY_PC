@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- @file youtube-player.html
+     @author: ForUltraplayer
+     @brief Isolate the standard streaming YouTube player and its controls from Spotify extensions. -->
+<html lang="ko"><head><meta charset="utf-8"><meta name="referrer" content="strict-origin-when-cross-origin"><title>YouTube 링크 음악</title>
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font:14px system-ui}#player{width:100%;height:100%;min-height:200px;border:0;display:block;box-sizing:border-box}#error{position:absolute;top:0;left:0;padding:12px;background:#222;display:none}</style></head>
+<body><div id="player"></div><div id="error" role="alert"></div><script>
+(() => {
+ 'use strict';
+ const HOST='https://xpui.app.spotify.com';
+ const session=new URLSearchParams(location.hash.slice(1)).get('session');
+ let player,ready=false,lastError=null,lastCode=null,videoQuality='unknown';
+ const send=extra=>{
+   if(!session)return;
+   const video=ready?player.getVideoData():{};
+   parent.postMessage({type:'spotify-hangul-youtube-state',session,ready,error:lastError,errorCode:lastCode,
+     state:ready?player.getPlayerState():-1,seconds:ready?player.getCurrentTime():0,
+     duration:ready?player.getDuration():0,volume:ready?player.getVolume():25,
+     muted:ready?player.isMuted():false,quality:videoQuality,
+     videoId:video.video_id||'',title:video.title||'',author:video.author||'',...extra},HOST);
+ };
+ const fail=(message,code=null)=>{lastError=message;lastCode=code;const box=document.getElementById('error');box.textContent=message;box.style.display='block';send({event:'error'});};
+ function command(data){
+   if(!ready)return; // The parent restores its latest position and intent after ready.
+   switch(data.command){
+    case 'load':{
+     if(!/^[\w-]{11}$/.test(data.videoId))return;
+     lastError=null;lastCode=null;videoQuality='unknown';document.getElementById('error').style.display='none';
+     const args={videoId:data.videoId,startSeconds:Math.max(0,Number(data.seconds)||0)};
+     if(Number.isFinite(data.volume))player.setVolume(Math.max(0,Math.min(100,data.volume)));
+     if(typeof data.muted==='boolean'){if(data.muted)player.mute();else player.unMute();}else if(data.autoplay)player.unMute();
+     if(data.autoplay)player.loadVideoById(args);else player.cueVideoById(args);
+     break;
+    }
+    case 'play':if(data.muted===true)player.mute();else player.unMute();player.playVideo();break;
+    case 'pause':player.pauseVideo();break;
+    case 'stop':player.stopVideo();break;
+    case 'seek':if(Number.isFinite(data.seconds))player.seekTo(Math.max(0,Math.min(player.getDuration(),data.seconds)),true);break;
+    case 'volume':if(Number.isFinite(data.volume))player.setVolume(Math.max(0,Math.min(100,data.volume)));break;
+    case 'mute':data.muted?player.mute():player.unMute();break;
+   }
+   send({event:'command',command:data.command});
+ }
+ window.addEventListener('message',event=>{
+   if(event.origin!==HOST||event.source!==parent||event.data?.session!==session||event.data?.type!=='spotify-hangul-youtube-command')return;
+   command(event.data);
+ });
+ window.onYouTubeIframeAPIReady=()=>{
+   player=new YT.Player('player',{width:'100%',height:'100%',playerVars:{origin:location.origin,controls:1,autoplay:0,playsinline:1},events:{
+    onReady:()=>{ready=true;player.setVolume(25);send({event:'ready'});},
+    onStateChange:e=>send({event:'state',value:e.data}),
+    onError:e=>fail(({100:'삭제되거나 비공개인 영상입니다.',101:'이 영상은 외부 플레이어 재생이 허용되지 않습니다.',150:'이 영상은 외부 플레이어 재생이 허용되지 않습니다.',153:'YouTube가 플레이어 출처를 확인하지 못했습니다.'})[e.data]||'YouTube 재생 오류: '+e.data,e.data),
+    onPlaybackQualityChange:e=>{videoQuality=e.data;send({event:'quality'});},
+    onAutoplayBlocked:()=>send({event:'autoplay-blocked'})
+   }});
+ };
+ const script=document.createElement('script');script.src='https://www.youtube.com/iframe_api';script.onerror=()=>fail('YouTube 플레이어에 연결하지 못했습니다.');document.head.append(script);
+ const timer=setInterval(()=>send({event:'tick'}),500);
+ setTimeout(()=>{if(!ready)fail('YouTube 플레이어 응답이 지연됩니다. 네트워크 연결을 확인해 주세요.');},20000);
+ window.addEventListener('pagehide',()=>{clearInterval(timer);player?.destroy?.();},{once:true});
+})();
+</script></body></html>

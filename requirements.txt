@@ -2,3 +2,5 @@ pykakasi==2.3.0
 jaconv==0.5.0
 Deprecated==3.0.0
 wrapt==2.5.1
+yt-dlp==2026.10.26
+yt-dlp-ejs==0.8.0

@@ -16,15 +16,17 @@ on:
         type: string
   push:
     branches: [main]
-    paths: ['components.json', 'release.json', 'requirements.txt', '*.py', '*.js', '*.ps1', '*.cjs', 'installer/**', 'scripts/**', 'third_party/**', '.github/workflows/dependencies.yml']
+    paths: ['components.json', 'release.json', 'requirements.txt', '*.py', '*.js', '*.css', '*.html', '*.ps1', '*.cjs', 'installer/**', 'scripts/**', 'tests/ui/**', 'third_party/**', '.github/workflows/dependencies.yml']
   pull_request:
-    paths: ['components.json', 'release.json', 'requirements.txt', '*.py', '*.js', '*.ps1', '*.cjs', 'installer/**', 'scripts/**', 'third_party/**', '.github/workflows/dependencies.yml']
+    paths: ['components.json', 'release.json', 'requirements.txt', '*.py', '*.js', '*.css', '*.html', '*.ps1', '*.cjs', 'installer/**', 'scripts/**', 'tests/ui/**', 'third_party/**', '.github/workflows/dependencies.yml']
 permissions:
   contents: read
 jobs:
   inspect:
     runs-on: windows-latest
     timeout-minutes: 20
+    env:
+      IVLYRICS_REQUIRE_UI_TESTS: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,6 +36,8 @@ jobs:
         with:
           node-version: '22'
       - run: python -m pip install -r requirements.txt
+      - name: Install locked UI test fixtures
+        run: npm ci --ignore-scripts --prefix tests/ui
       - name: Detect original project updates
         run: python scripts/upstream_updates.py check
         env:

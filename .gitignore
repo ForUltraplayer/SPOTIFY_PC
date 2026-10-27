@@ -4,6 +4,10 @@ dist/
 __pycache__/
 *.py[cod]
 vendor/
+node_modules/
+# Keep generated prototype binaries local; source remains reviewable.
+/overlay/bin/
+/overlay/obj/
 runtime/
 cache.json
 aliases.json

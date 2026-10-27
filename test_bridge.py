@@ -10,7 +10,43 @@ from bridge import (LyricDocument, extract_pairs, align_lines, match_pairs, Read
                     pykakasi, monitor_lifetime, title_candidates, lyric_search_queries, HaneumDocument, SupersededLookup)
 from phonetics import kana_to_hangul, japanese_to_hangul
 import urllib.parse
-from unittest.mock import Mock
+from unittest.mock import Mock, MagicMock, patch
+from bridge import youtube_metadata
+from youtube_stream import select_stream, youtube_stream
+
+
+class YouTubeStreamTests(unittest.TestCase):
+    def fixture(self):
+        return {'id': '_-uHa5KiR90', 'availability': 'public', 'age_limit': 0, 'duration': 244,
+                'formats': [{'format_id': '251', 'vcodec': 'none', 'acodec': 'opus', 'abr': 136,
+                             'has_drm': False, 'url': 'https://r1.googlevideo.com/videoplayback?expire=2000'}]}
+
+    def test_opus_selection_excludes_aac_drm_and_external_hosts(self):
+        data = self.fixture()
+        data['formats'] += [{**data['formats'][0], 'abr': 999, 'has_drm': True},
+                            {**data['formats'][0], 'abr': 999, 'url': 'https://googlevideo.com.evil.test/x'},
+                            {**data['formats'][0], 'abr': 999, 'acodec': 'mp4a.40.2'}]
+        self.assertEqual(select_stream(data, '_-uHa5KiR90', now=1000)['bitrate_kbps'], 136)
+
+    def test_private_age_restricted_and_changed_id_are_not_resolved(self):
+        for changes in ({'availability': 'private'}, {'age_limit': 18}, {'id': 'abcdefghijk'}):
+            with self.subTest(changes=changes), self.assertRaises(LookupError):
+                select_stream({**self.fixture(), **changes}, '_-uHa5KiR90', now=1000)
+
+    def test_expired_or_unsupported_audio_is_not_returned(self):
+        with self.assertRaises(LookupError):
+            select_stream(self.fixture(), '_-uHa5KiR90', now=1990)
+        data = self.fixture()
+        data['formats'][0]['acodec'] = 'mp4a.40.2'
+        with self.assertRaises(LookupError):
+            select_stream(data, '_-uHa5KiR90', now=1000)
+
+    def test_stream_rejects_urls_before_starting_an_external_process(self):
+        with patch('youtube_stream.subprocess.run') as run:
+            for value in ('https://youtube.com/watch?v=_-uHa5KiR90', '../private', '', None):
+                with self.assertRaises(ValueError):
+                    youtube_stream(value)
+            run.assert_not_called()
 
 
 PAIRS = [("月の道を歩く", "츠키노 미치오 아루쿠"), ("青い鳥が飛ぶ", "아오이 토리가 토부"),
@@ -515,6 +551,38 @@ class ReaderTests(unittest.TestCase):
         server = Mock()
         monitor_lifetime(server, check=lambda: False, interval=0.001, idle_timeout=0.003, startup_timeout=0.002)
         server.shutdown.assert_called_once()
+
+
+class YouTubeMetadataTests(unittest.TestCase):
+    def setUp(self):
+        youtube_metadata.cache_clear()
+
+    def test_metadata_rejects_arbitrary_urls_before_network_access(self):
+        with patch('bridge.urllib.request.build_opener') as opener:
+            for value in ('https://127.0.0.1/', '../private', '', None, 'rKQptWhAvO0/other'):
+                with self.assertRaises(ValueError):
+                    youtube_metadata(value)
+            opener.assert_not_called()
+
+    def test_metadata_uses_fixed_public_oembed_and_caches_only_metadata(self):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps({'title': 'cover', 'author_name': 'performer'}).encode()
+        with patch('bridge.urllib.request.build_opener') as opener:
+            opener.return_value.open.return_value = response
+            first = youtube_metadata('rKQptWhAvO0')
+            self.assertEqual(first, {'video_id': 'rKQptWhAvO0', 'title': 'cover', 'author': 'performer'})
+            self.assertEqual(youtube_metadata('rKQptWhAvO0'), first)
+            opener.return_value.open.assert_called_once()
+            request = opener.return_value.open.call_args.args[0]
+            self.assertTrue(request.full_url.startswith('https://www.youtube.com/oembed?'))
+
+    def test_metadata_response_size_is_bounded(self):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b'x' * 65537
+        with patch('bridge.urllib.request.build_opener') as opener:
+            opener.return_value.open.return_value = response
+            with self.assertRaises(ValueError):
+                youtube_metadata('rKQptWhAvO0')
 
 
 if __name__ == '__main__':

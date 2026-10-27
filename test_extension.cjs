@@ -7,6 +7,151 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
+const linkModel = require('./youtube-links.js');
+
+test('link player accepts canonical YouTube, Music and short links without media downloads', () => {
+    for (const value of ['https://www.youtube.com/watch?v=rKQptWhAvO0', 'https://music.youtube.com/watch?v=rKQptWhAvO0&list=PLtest', 'https://youtu.be/rKQptWhAvO0?t=3', 'https://www.youtube.com/shorts/rKQptWhAvO0']) {
+        assert.equal(linkModel.youtubeId(value), 'rKQptWhAvO0');
+    }
+});
+test('link player rejects unrelated, credentialed and executable URLs', () => {
+    for (const value of ['javascript:alert(1)', 'file:///C:/music.mp3', 'http://youtube.com/watch?v=rKQptWhAvO0', 'https://youtube.com.evil.test/watch?v=rKQptWhAvO0', 'https://name:password@youtube.com/watch?v=rKQptWhAvO0', 'https://youtube.com/playlist?list=PLtest']) assert.equal(linkModel.youtubeId(value), null);
+});
+test('mixed link lists preserve Spotify identities and discard unsupported items', () => {
+    const value = linkModel.library({ schema: 1, playlists: [{ id: 'test', name: 'mixed', tracks: [{ kind: 'youtube', videoId: 'rKQptWhAvO0', title: 'cover' }, { kind: 'spotify', uri: 'spotify:track:6x7SB38tuekpu4xpH9OIPY', title: 'original' }, { kind: 'spotify', uri: 'https://evil.test/' }] }] });
+    assert.deepEqual(value.playlists[0].tracks.map(t => t.kind), ['youtube', 'spotify']);
+    assert.equal(value.playlists[0].tracks[1].uri, 'spotify:track:6x7SB38tuekpu4xpH9OIPY');
+});
+test('link queue has bounded end, repeat-one, repeat-all and nonrepeating shuffle contracts', () => {
+    assert.equal(linkModel.nextIndex(1, 2, 1, 'off', false), -1);
+    assert.equal(linkModel.nextIndex(1, 2, 0, 'one', false), 1);
+    assert.equal(linkModel.nextIndex(1, 2, 1, 'all', false), 0);
+    assert.equal(linkModel.nextIndex(0, 2, -1, 'all', false), 1);
+    for (let i = 0; i < 4; i++) assert.notEqual(linkModel.nextIndex(i, 4, 1, 'off', true, () => 0.5), i);
+    assert.equal(linkModel.nextIndex(0, 0, 1, 'all', true), -1);
+});
+test('malformed persisted link lists recover without activating playback', () => {
+    for (const value of [null, {}, { schema: 2, playlists: [] }, { schema: 1, playlists: [null] }]) assert.deepEqual(linkModel.library(value), { schema: 1, playlists: [{ id: 'default', name: '링크 음악', tracks: [] }] });
+});
+
+const nativeItems = [
+    { kind: 'spotify', uri: 'spotify:track:6x7SB38tuekpu4xpH9OIPY', entryKey: 'first' },
+    { kind: 'spotify', uri: 'spotify:track:6x7SB38tuekpu4xpH9OIPY', entryKey: 'duplicate' },
+];
+test('playlist bindings survive storage and do not accept unrelated source identities', () => {
+    const value = linkModel.library({ schema: 1, playlists: [
+        { id: 'native', name: 'mix', sourceUri: 'spotify:playlist:5C3W78fpJbRdLpbr7kvAMe', tracks: [{ kind: 'youtube', videoId: 'rKQptWhAvO0', after: 'duplicate' }] },
+        { id: 'bad', sourceUri: 'https://evil.test', tracks: [] },
+    ] });
+    assert.equal(value.playlists[0].sourceUri, 'spotify:playlist:5C3W78fpJbRdLpbr7kvAMe');
+    assert.equal(value.playlists[0].tracks[0].after, 'duplicate');
+    assert.equal(value.playlists[1].sourceUri, undefined);
+});
+test('native playlist order stays live and duplicate recordings have distinct insertion anchors', () => {
+    const links = [{ kind: 'youtube', videoId: 'rKQptWhAvO0', after: 'first' }];
+    assert.deepEqual(linkModel.merge(nativeItems, links).map(t => t.entryKey || t.videoId), ['first', 'rKQptWhAvO0', 'duplicate']);
+    assert.deepEqual(linkModel.merge([...nativeItems].reverse(), links).map(t => t.entryKey || t.videoId), ['duplicate', 'first', 'rKQptWhAvO0']);
+    assert.equal(nativeItems.length, 2);
+    assert.equal(links[0].after, 'first');
+});
+test('removed native anchors keep links available at the end rather than losing their recordings', () => {
+    const links = [{ kind: 'youtube', videoId: 'rKQptWhAvO0', after: 'removed' }, { kind: 'youtube', videoId: 'abcdefghijk', after: '' }];
+    assert.deepEqual(linkModel.merge(nativeItems, links).map(t => t.entryKey || t.videoId), ['abcdefghijk', 'first', 'duplicate', 'rKQptWhAvO0']);
+});
+test('moving YouTube entries across native rows changes local anchors without reordering Spotify data', () => {
+    const links = [{ kind: 'youtube', videoId: 'rKQptWhAvO0', after: 'first' }];
+    const moved = linkModel.place(nativeItems, links, 'rKQptWhAvO0', 2);
+    assert.deepEqual(linkModel.merge(nativeItems, moved).map(t => t.entryKey || t.videoId), ['first', 'duplicate', 'rKQptWhAvO0']);
+    assert.equal(moved[0].after, 'duplicate');
+    const top = linkModel.place(nativeItems, moved, 'rKQptWhAvO0', 0);
+    assert.equal(top[0].after, '');
+    assert.deepEqual(linkModel.merge(nativeItems, top).map(t => t.entryKey || t.videoId), ['rKQptWhAvO0', 'first', 'duplicate']);
+    assert.deepEqual(nativeItems.map(t => t.entryKey), ['first', 'duplicate']);
+    assert.equal(links[0].after, 'first');
+});
+test('a shared mixed order can move Spotify and YouTube entries without changing the source playlist', () => {
+    const links = [{ kind: 'youtube', videoId: 'rKQptWhAvO0', after: 'first' }];
+    const live = linkModel.merge(nativeItems, links);
+    const order = linkModel.reorder(live, 'sp:duplicate', 0);
+    assert.deepEqual(linkModel.merge(nativeItems, links, order).map(linkModel.rowKey), ['sp:duplicate', 'sp:first', 'yt:rKQptWhAvO0']);
+    assert.deepEqual(nativeItems.map(t => t.entryKey), ['first', 'duplicate']);
+    const changed = [{ ...nativeItems[0], entryKey: 'new' }, nativeItems[1]];
+    assert.deepEqual(linkModel.merge(changed, links, order).map(linkModel.rowKey), ['sp:duplicate', 'yt:rKQptWhAvO0', 'sp:new']);
+});
+test('imported local native snapshots and search metadata survive a full library reload', () => {
+    const result=linkModel.library({schema:1,playlists:[{id:'imported',local:true,name:'restored',nativeTracks:[{...nativeItems[0],title:'Native',duration:42,album:'Album',image:'https://i.scdn.co/image/abc?token=discard'}],tracks:[{kind:'youtube',videoId:'_-uHa5KiR90',lyricTitle:'フィナーレ。',lyricArtist:'eill'}],order:['yt:_-uHa5KiR90','sp:first']}]});
+    const playlist=result.playlists[0];
+    assert.equal(playlist.local,true);assert.equal(playlist.nativeTracks[0].entryKey,'first');
+    assert.equal(playlist.nativeTracks[0].image,'https://i.scdn.co/image/abc');
+    assert.equal(playlist.tracks[0].lyricArtist,'eill');
+    assert.deepEqual(linkModel.merge(playlist.nativeTracks,playlist.tracks,playlist.order).map(linkModel.rowKey),['yt:_-uHa5KiR90','sp:first']);
+});
+test('native playlist integration waits for router and topbar readiness before creating UI', () => {
+    for (const history of [null, { listen() {} }]) {
+        const delays = [];
+        const api = { Player: {}, Topbar: {}, Menu: {}, Platform: { History: history } };
+        vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'youtube-links.js'), 'utf8'), {
+            window: { Spicetify: api }, Spicetify: api,
+            document: { querySelector: () => null, createElement: () => assert.fail('UI created before readiness') },
+            setTimeout: (_fn, delay) => delays.push(delay),
+        });
+        assert.deepEqual(delays, [1000]);
+    }
+});
+
+function loadYouTubeFrame() {
+    const html = fs.readFileSync(path.join(__dirname, 'youtube-player.html'), 'utf8');
+    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+    assert.equal(scripts.length, 1);
+    const messages=[],listeners = new Map(), calls = [], parent = { postMessage(value) {messages.push(value);} };
+    let playerConfig;
+    const player = {
+        getVideoData: () => ({ video_id: 'rKQptWhAvO0' }), getPlayerState: () => 2,
+        getCurrentTime: () => 0, getDuration: () => 194, getVolume: () => 25,
+        isMuted: () => false, getPlaybackQuality: () => 'large',
+        setVolume: value => calls.push(['volume', value]), unMute: () => calls.push(['unmute']),
+        playVideo: () => calls.push(['play']), pauseVideo: () => calls.push(['pause']),
+        loadVideoById: value => calls.push(['load', value.videoId]),
+        cueVideoById: value => calls.push(['cue', value.videoId]),
+        seekTo: value => calls.push(['seek', value]),
+    };
+    const window = { addEventListener: (type, listener) => listeners.set(type, listener) };
+    const context = vm.createContext({ window, parent, location: { hash: '#session=trusted-session', origin: 'http://127.0.0.1:19643' }, URLSearchParams,
+        document: { getElementById: () => ({ style: {}, textContent: '' }), createElement: () => ({}), head: { append() {} } },
+        YT: { Player: function (_id, config) { playerConfig = config; return player; } },
+        setInterval: () => 1, setTimeout: () => 1, clearInterval() {}, console,
+    });
+    new vm.Script(scripts[0][1], { filename: 'youtube-player.html' }).runInContext(context);
+    window.onYouTubeIframeAPIReady(); playerConfig.events.onReady(); calls.length = 0;
+    return { listener: listeners.get('message'), calls, parent, config:playerConfig, messages };
+}
+test('standard player reports embed errors and video quality events for the fallback boundary', () => {
+    const frame=loadYouTubeFrame();frame.config.events.onError({data:150});
+    assert.equal(frame.messages.at(-1).errorCode,150);
+    frame.config.events.onPlaybackQualityChange({data:'hd720'});
+    assert.equal(frame.messages.at(-1).quality,'hd720');
+});
+test('isolated player ignores untrusted origins, frames and session identifiers', () => {
+    const frame = loadYouTubeFrame();
+    const data = { type: 'spotify-hangul-youtube-command', session: 'trusted-session', command: 'play' };
+    frame.listener({ origin: 'https://evil.test', source: frame.parent, data });
+    frame.listener({ origin: 'https://xpui.app.spotify.com', source: {}, data });
+    frame.listener({ origin: 'https://xpui.app.spotify.com', source: frame.parent, data: { ...data, session: 'other' } });
+    assert.deepEqual(frame.calls, []);
+    frame.listener({ origin: 'https://xpui.app.spotify.com', source: frame.parent, data });
+    assert.deepEqual(frame.calls, [['unmute'], ['play']]);
+});
+test('trusted link player commands reject invalid media identities and bound seeking', () => {
+    const frame = loadYouTubeFrame();
+    const send = extra => frame.listener({ origin: 'https://xpui.app.spotify.com', source: frame.parent,
+        data: { type: 'spotify-hangul-youtube-command', session: 'trusted-session', ...extra } });
+    send({ command: 'load', videoId: 'https://evil.test/' });
+    assert.deepEqual(frame.calls, []);
+    send({ command: 'load', videoId: 'rKQptWhAvO0', autoplay: false });
+    send({ command: 'seek', seconds: 500 });
+    send({ command: 'volume', volume: -10 });
+    assert.deepEqual(frame.calls, [['cue', 'rKQptWhAvO0'], ['seek', 194], ['volume', 0]]);
+});
 
 function loadExtension(record, response) {
     let saved = record;
@@ -35,6 +180,99 @@ function loadExtension(record, response) {
     Object.defineProperty(cache, 'harness', { value: { context, values, notices, listeners, delays, getSaved: () => saved } });
     return cache;
 }
+
+function linkLoaderHarness({ health, failScript = false, existing = false } = {}) {
+    const cache = loadExtension(null, null), { context } = cache.harness, scripts = [], timers = [], requests = [];
+    const currentHealth = { app: 'ivLyricsHangul', version: require('./release.json').helper_version, protocol: 1,
+        capabilities: ['youtube-links-v1', 'mixed-playlists-v1', 'playback-control-v1', 'lyric-sync-v1'] };
+    const makeScript = () => {
+        const listeners = new Map();
+        const script = { dataset: {}, removed: false,
+            addEventListener(type, listener) { listeners.set(type, listener); },
+            removeEventListener(type, listener) { if (listeners.get(type) === listener) listeners.delete(type); },
+            remove() { script.removed = true; },
+            emit(type) { script['on' + type]?.(); listeners.get(type)?.(); } };
+        return script;
+    };
+    const existingScript = existing ? makeScript() : null;
+    if (existingScript) { existingScript.src = 'http://127.0.0.1:19643/youtube/extension.js'; scripts.push(existingScript); }
+    context.window.document = {
+        querySelector() { return scripts.find(script => !script.removed); },
+        createElement(name) { assert.equal(name, 'script'); return makeScript(); },
+        head: { append(script) { scripts.push(script); Promise.resolve().then(() => script.emit(failScript ? 'error' : 'load')); } },
+    };
+    context.setTimeout = (fn, ms) => { const timer = { fn, ms, cancelled: false }; timers.push(timer); return timer; };
+    context.clearTimeout = timer => { if (timer) timer.cancelled = true; };
+    context.fetch = async (url, options) => {
+        requests.push({ url, credentials: options.credentials });
+        const value = typeof health === 'function' ? health(requests.length, currentHealth) : health || currentHealth;
+        return { ok: true, json: async () => value };
+    };
+    const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+    const retry = async () => {
+        await flush(); const timer = timers.find(timer => !timer.cancelled && timer.ms === 2000);
+        assert.ok(timer, 'A bounded two-second retry was scheduled'); timer.cancelled = true; timer.fn(); await flush();
+    };
+    return { context, window: context.window, scripts, timers, requests, existingScript, flush, retry,
+        load: () => context.window.HangulLyricsProvider.ensureLinkPlayer() };
+}
+
+test('installed extension loads the local link feature once across concurrent initializations', async () => {
+    const h = linkLoaderHarness();
+    const first = h.load(), second = h.load();
+    assert.equal(first, second); await first;
+    await h.load();
+    assert.equal(h.requests.length, 1); assert.equal(h.scripts.length, 1);
+    assert.equal(h.requests[0].url, 'http://127.0.0.1:19643/health');
+    assert.equal(h.requests[0].credentials, 'omit');
+    assert.equal(h.scripts[0].src, 'http://127.0.0.1:19643/youtube/extension.js');
+    assert.equal(h.window.SpotifyHangulLinkLoader.loaded, true);
+    assert.equal(h.timers.filter(t => !t.cancelled).length, 0);
+});
+
+test('normal pronunciation-provider registration bootstraps links without invoking provider settings', async () => {
+    const h = linkLoaderHarness();
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'hangul-lyrics.js'), 'utf8'), h.context);
+    await h.window.SpotifyHangulLinkLoader.promise;
+    assert.equal(h.requests.length, 1); assert.equal(h.scripts.length, 1);
+    assert.equal(h.window.SpotifyHangulLinkLoader.loaded, true);
+});
+
+test('installed extension waits for a late helper with bounded two-second retry intervals', async () => {
+    const h = linkLoaderHarness({ health: (count, value) => { if (count < 3) throw new TypeError('helper not ready'); return value; } });
+    const task = h.load(); await h.flush(); assert.equal(h.scripts.length, 0);
+    await h.retry(); assert.equal(h.scripts.length, 0);
+    await h.retry(); await task;
+    assert.equal(h.requests.length, 3); assert.equal(h.scripts.length, 1);
+    assert.equal(h.window.SpotifyHangulLinkLoader.attempts, 3);
+});
+
+test('installed extension stops after three extra script failures and does not restart an initialization storm', async () => {
+    const h = linkLoaderHarness({ failScript: true });
+    const task = h.load(); const failure = assert.rejects(task, /YouTube/);
+    for (let i = 0; i < 3; i++) await h.retry(); await failure;
+    assert.equal(h.requests.length, 4); assert.equal(h.scripts.length, 4);
+    assert.equal(h.scripts.every(script => script.removed), true);
+    assert.equal(h.window.SpotifyHangulLinkLoader.attempts, 4);
+    await assert.rejects(h.load(), /YouTube/);
+    assert.equal(h.requests.length, 4);
+    assert.equal(h.timers.filter(t => !t.cancelled).length, 0);
+});
+
+test('installed extension rejects incompatible helper capabilities without injecting a script', async () => {
+    const h = linkLoaderHarness({ health: (_count, value) => ({ ...value, capabilities: value.capabilities.join(',') }) });
+    const task = h.load(); const failure = assert.rejects(task, /도우미 버전/);
+    for (let i = 0; i < 3; i++) await h.retry(); await failure;
+    assert.equal(h.requests.length, 4); assert.equal(h.scripts.length, 0);
+});
+
+test('installed extension reuses an existing loading script and an already active controller', async () => {
+    const h = linkLoaderHarness({ existing: true }); const task = h.load(); await h.flush();
+    assert.equal(h.scripts.length, 1); h.existingScript.emit('load'); await task;
+    assert.equal(h.window.SpotifyHangulLinkLoader.loaded, true);
+    const active = linkLoaderHarness(); active.window.SpotifyHangulLinks = {};
+    await active.load(); assert.equal(active.requests.length, 0); assert.equal(active.scripts.length, 0);
+});
 
 test('stored pronunciation labels are hidden without changing the original cache record', async () => {
     const record = { phonetic: ['〔문장 전체〕기존 발음', '[문장 전체] 다른 발음', '', '원래 발음'],

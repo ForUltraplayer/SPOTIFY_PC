@@ -10,6 +10,9 @@ Spotify 데스크톱 가사 화면에 일본어 노래의 한글 발음을 같�
 
 0.6.2의 업데이트 오류는 0.6.3에서 수정했습니다. 0.6.0과 0.6.1에서 중간 버전 없이 바로 업데이트할 수 있습니다.
 
+> [!NOTE]
+> `main`의 개발 소스는 0.7.0입니다. YouTube 링크 재생과 혼합 목록, 기존 데스크톱 오버레이 연결을 포함하며 구버전 업데이트 검증을 마쳤습니다. 원본 오버레이의 재배포 라이선스 확인이 남아 공개 설치본은 0.6.3으로 유지합니다.
+
 안드로이드 버전: [SPOTIFY_ANDROID](https://github.com/ForUltraplayer/SPOTIFY_ANDROID)
 
 ## 설치
@@ -41,6 +44,19 @@ Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다.
 - 조회 실패 시 자동 재시도 (2초 간격 최대 3회)
 - 자동 발음: 자료에 없는 줄을 사전으로 변환 (기본 꺼짐)
 - 곡 제목 복사 (재생바 제목 우클릭, 곡 메뉴, 프로필 메뉴)
+
+<details>
+<summary>0.7.0 개발 소스의 추가 기능</summary>
+
+- YouTube 링크를 Spotify 곡과 같은 목록에서 재생하고 목록을 파일로 내보내거나 가져오기
+- 음원 스트리밍과 영상 플레이어 전환, 기존 재생바와 ivLyrics 가사 연결
+- 곡별 초 단위 가사 싱크 조절과 되돌리기
+- 기존 데스크톱 오버레이의 재생 조작과 버튼 간격 설정
+- 설치 실패와 중단 시 이전 파일 및 설치 등록 복원
+
+설치 파일에는 Python과 Node를 포함합니다. 작은 오버레이 창에서는 버튼 간격을 늘릴 때 가사 영역이 줄어들 수 있어 창 높이를 확보해야 합니다. 별도 깨끗한 PC의 첫 실행은 아직 확인하지 않았습니다. 구현과 제약은 [YouTube 연결 안내](docs/YOUTUBE_LINKS.md), [배포 준비](docs/DISTRIBUTION_PLAN.md), [검증 기록](docs/VERIFICATION.md)을 참고하세요.
+
+</details>
 
 ## 업데이트 / 제거
 
@@ -85,14 +101,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_bootstrap.p
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test_auto_update.ps1
 ```
 
-빌드 결과는 `dist/`에 생성됩니다.
+현재 0.7.0 올인원 빌드는 검증한 기존 오버레이 실행 파일과 대응 소스를 로컬 입력으로 사용합니다. 이 입력은 재배포 라이선스 확인 전이라 저장소에 포함하지 않았습니다. 저장소를 복제한 것만으로 동일한 올인원 설치본을 만들 수는 없습니다. 입력을 준비한 개발 환경에서는 `work/` 아래의 새 후보 폴더에 빌드합니다.
 
 ```powershell
 python scripts/build_spotx_adapter.py
 python scripts/fetch_distribution_inputs.py
+npm ci --ignore-scripts --prefix tests/ui
 python scripts/check_compatibility.py
-python scripts/prepare_release.py
-python scripts/build_installer.py
+python scripts/prepare_release.py --output-dir work/release-candidates/candidate-1
+python scripts/build_installer.py --output-dir work/release-candidates/candidate-1
 ```
 
 | 경로 | 역할 |
@@ -103,6 +120,7 @@ python scripts/build_installer.py
 | `start.ps1`, `stop.ps1` | 실행 / 중지 |
 | `installer/` | NSIS 설치 프로그램 |
 | `scripts/` | 배포, 빌드 스크립트 |
+| `overlay/` | 제품에 포함하지 않는 독립 WPF 시제품 소스 |
 
 배포 절차는 [docs/RELEASE.md](docs/RELEASE.md) 참고.
 

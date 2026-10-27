@@ -1,6 +1,7 @@
 # @file build_installer.py
 # @author: ForUltraplayer
 # @brief Assemble an isolated Windows runtime and build a per-user NSIS installer.
+import argparse
 import hashlib
 import json
 import os
@@ -10,6 +11,10 @@ import subprocess
 import sys
 import zipfile
 from dependencies import load, verify, fingerprint, source_fingerprint
+from patch_ivlyrics_sync import patch_tree
+from prepare_release import validate_source_archive
+from youtube_toolchain import prepare_youtube_tools
+from desktop_overlay_package import prepare_desktop_overlay
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / 'work' / 'downloads'
@@ -34,13 +39,27 @@ def extract(archive, destination, strip_root=False):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--output-dir', type=Path, default=ROOT / 'dist')
+    parser.add_argument('--source-archive', type=Path)
+    args = parser.parse_args()
     release = json.loads((ROOT / 'release.json').read_text(encoding='utf-8-sig'))
+    output_dir = args.output_dir.resolve()
+    output = output_dir / f'SpotifyHangul-{release["version"]}-Setup.exe'
+    updater = output_dir / f'SpotifyHangul-{release["version"]}-Update.exe'
+    if output.exists() or updater.exists():
+        raise FileExistsError('Installer artifacts already exist; choose a new candidate directory or version')
     dependencies = load()
+    if ('desktop_overlay' in dependencies['components'] and
+            (release.get('public_release_ready') is not False or not output_dir.is_relative_to(ROOT / 'work'))):
+        raise ValueError('Existing overlay is restricted to a private local candidate under work')
     components = dependencies['components']
     lock = dependencies['artifacts']
     proof = json.loads((ROOT / 'work/compatibility.json').read_text(encoding='utf-8'))
-    if proof.get('result') != 'passed' or proof.get('manifest') != fingerprint(dependencies) or proof.get('source') != source_fingerprint():
+    if proof.get('result') != 'passed' or proof.get('ui_tests_required') is not True or proof.get('manifest') != fingerprint(dependencies) or proof.get('source') != source_fingerprint():
         raise ValueError('Run check_compatibility.py for the current manifest and source before building')
+    source_bundle = args.source_archive or output_dir / f'SpotifyHangul-{release["version"]}-source-preview.zip'
+    validate_source_archive(source_bundle, release['version'])
     for name, metadata in lock.items():
         verify(CACHE / name, metadata)
     if PAYLOAD.exists():
@@ -49,7 +68,7 @@ def main():
         shutil.rmtree(PAYLOAD)
     PAYLOAD.mkdir(parents=True)
     (PAYLOAD / '.builder-owned').write_text('SpotifyHangul build payload\n')
-    for name in ('bridge.py', 'phonetics.py', 'hangul-lyrics.js', 'start.ps1', 'stop.ps1', 'auto-update.ps1',
+    for name in ('bridge.py', 'youtube_stream.py', 'playlist_files.py', 'playback_control.py', 'phonetics.py', 'hangul-lyrics.js', 'youtube-links.js', 'youtube-ivlyrics.js', 'youtube-library.js', 'youtube-overlay-controls.js', 'youtube-desktop-bridge.js', 'youtube-now-playing.js', 'youtube-now-playing.css', 'youtube-player.html', 'start.ps1', 'stop.ps1', 'auto-update.ps1',
                  'LICENSE', 'THIRD_PARTY_NOTICES.md', 'release.json', 'components.json'):
         shutil.copy2(ROOT / name, PAYLOAD / name)
     shutil.copytree(ROOT / 'installer', PAYLOAD / 'installer')
@@ -60,6 +79,7 @@ def main():
     (PAYLOAD / 'runtime' / pth).write_text(pth.replace('._pth', '.zip')+'\n.\n..\n../vendor\n', encoding='ascii')
     extract(CACHE / components['spicetify']['artifact'], PAYLOAD / 'tools')
     extract(CACHE / components['ivlyrics']['source_artifact'], PAYLOAD / 'ivLyrics', strip_root=True)
+    patch_tree(PAYLOAD / 'ivLyrics')
     managed = {'app': 'SpotifyHangul', 'version': components['ivlyrics']['version'],
                'revision': components['ivlyrics']['revision'],
                'files': {str(p.relative_to(PAYLOAD / 'ivLyrics')).replace('\\', '/'): hashlib.sha256(p.read_bytes()).hexdigest()
@@ -71,14 +91,14 @@ def main():
     subprocess.run([sys.executable, '-m', 'pip', 'install', '--no-index', '--no-compile', '--ignore-installed', '--no-deps',
                     '--find-links', str(CACHE / 'wheels'), '--target', str(PAYLOAD / 'vendor'),
                     '-r', str(ROOT / 'requirements.txt')], env=build_environment, check=True)
+    prepare_youtube_tools(PAYLOAD, CACHE, dependencies)
     sources = PAYLOAD / 'third_party_sources'
     sources.mkdir()
-    for name in lock:
-        if name.endswith('.tar.gz') or name.endswith('-source.zip'):
-            shutil.copy2(CACHE / name, sources / name)
-    source_bundle = ROOT / 'dist' / f'SpotifyHangul-{release["version"]}-source-preview.zip'
-    if not source_bundle.exists():
-        raise ValueError('Run prepare_release.py before building the installer')
+    overlay_receipt = prepare_desktop_overlay(PAYLOAD, output_dir, dependencies, release)
+    source_artifacts = {item['source_artifact'] for item in components.values() if 'source_artifact' in item}
+    source_artifacts.update(name for name in lock if name.endswith('.tar.gz'))
+    for name in sorted(source_artifacts):
+        shutil.copy2(CACHE / name, sources / name)
     shutil.copy2(source_bundle, sources / source_bundle.name)
     (PAYLOAD / 'licenses' / 'distribution-inputs.json').write_text(json.dumps(lock, indent=2), encoding='utf-8')
     extract(CACHE / components['nsis']['artifact'], TOOLS / 'nsis', strip_root=True)
@@ -95,20 +115,21 @@ def main():
     manifest = {str(p.relative_to(PAYLOAD)).replace('\\', '/'): hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in PAYLOAD.rglob('*') if p.is_file() and '__pycache__' not in p.parts}
     (PAYLOAD / 'package-manifest.json').write_text(json.dumps(manifest, indent=2), encoding='utf-8')
-    output = ROOT / 'dist' / f'SpotifyHangul-{release["version"]}-Setup.exe'
+    output_dir.mkdir(parents=True, exist_ok=True)
     arguments = [str(TOOLS / 'nsis' / 'makensis.exe'), '/V2', '/INPUTCHARSET', 'UTF8',
                  f'/DPAYLOAD_DIR={PAYLOAD}', f'/DOUTPUT_FILE={output}', f'/DAPP_VERSION={release["version"]}',
                  str(ROOT / 'installer' / 'setup.nsi')]
     subprocess.run(arguments, check=True)
     digest = hashlib.sha256(output.read_bytes()).hexdigest()
-    updater = ROOT / 'dist' / f'SpotifyHangul-{release["version"]}-Update.exe'
     subprocess.run([str(TOOLS / 'nsis' / 'makensis.exe'), '/V2', '/INPUTCHARSET', 'UTF8',
                     f'/DPAYLOAD_DIR={PAYLOAD}', f'/DOUTPUT_FILE={updater}', f'/DAPP_VERSION={release["version"]}',
                     str(ROOT / 'installer' / 'update-launcher.nsi')], check=True)
     updater_digest = hashlib.sha256(updater.read_bytes()).hexdigest()
-    (ROOT / 'dist' / 'INSTALLER-SHA256SUMS.txt').write_text(
+    (output_dir / 'INSTALLER-SHA256SUMS.txt').write_text(
         f'{digest}  {output.name}\n{updater_digest}  {updater.name}\n', encoding='utf-8')
-    print(json.dumps({'installer': str(output), 'bytes': output.stat().st_size, 'sha256': digest}))
+    print(json.dumps({'installer': str(output), 'bytes': output.stat().st_size, 'sha256': digest,
+                      'desktop_overlay': overlay_receipt,
+                      'public_release_ready': release.get('public_release_ready', False)}))
 
 
 if __name__ == '__main__':

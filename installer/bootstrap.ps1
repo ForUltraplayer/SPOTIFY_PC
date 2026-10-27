@@ -133,6 +133,8 @@ try {
         $legacyHook=Join-Path $root 'installer\integrate.ps1'
         Stop-ManagedHelper
         Stop-ExactSpotify (Join-Path $client 'Spotify.exe')
+        $overlayHelper=Join-Path $root 'installer\desktop-overlay.ps1'
+        if (Test-Path -LiteralPath $overlayHelper) { . $overlayHelper; Stop-BundledDesktopOverlay -InstallRoot $root }
         if (Test-Path -LiteralPath (Join-Path $root 'legacy-install-state.json')) {
             & $powershell -NoProfile -ExecutionPolicy Bypass -File $legacyHook -Mode Uninstall -InstallRoot $root -StateFile 'legacy-install-state.json'
             if ($LASTEXITCODE -ne 0) { throw '기존 버전의 연결 해제에 실패했습니다.' }
@@ -234,6 +236,13 @@ try {
     $ivLyricsTransaction=Install-ManagedIvLyrics $root $config
     Copy-Item -LiteralPath (Join-Path $root 'hangul-lyrics.js') -Destination (Join-Path $config 'Extensions\hangul-lyrics.js') -Force
     Invoke-Cli @('config','custom_apps','ivLyrics','extensions','hangul-lyrics.js')
+    if (Test-Path -LiteralPath (Join-Path $root 'youtube-links.js')) {
+        foreach ($asset in @('youtube-player.html','youtube-ivlyrics.js','youtube-library.js','youtube-overlay-controls.js','youtube-desktop-bridge.js','youtube_stream.py','playlist_files.py','playback_control.py')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $root $asset))) { throw ('YouTube 연결 파일이 없습니다: '+$asset) }
+        }
+        Copy-Item -LiteralPath (Join-Path $root 'youtube-links.js') -Destination (Join-Path $config 'Extensions\youtube-links.js') -Force
+        Invoke-Cli @('config','extensions','youtube-links.js')
+    }
     Stop-ExactSpotify (Join-Path $client 'Spotify.exe')
     Invoke-Cli (Get-ManagedApplyArguments $client (Join-Path $config 'config-xpui.ini') $components.spicetify.version $rebuildState)
     Assert-CombinedClient

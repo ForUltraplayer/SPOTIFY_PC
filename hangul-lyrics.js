@@ -21,6 +21,58 @@
         }
     }
     const currentResult = () => trackResults.get(activeTrackId()) || null;
+    function ensureLinkPlayer() {
+        if (window.SpotifyHangulLinks) return Promise.resolve();
+        const document = window.document;
+        if (!document?.head || !document.createElement) return Promise.resolve();
+        if (window.SpotifyHangulLinkLoader?.promise) return window.SpotifyHangulLinkLoader.promise;
+        const loader = { attempts: 0, loaded: false, promise: null };
+        window.SpotifyHangulLinkLoader = loader;
+        const url = BASE + '/youtube/extension.js';
+        const loadScript = () => new Promise((resolve, reject) => {
+            if (window.SpotifyHangulLinks) { resolve(); return; }
+            const existing = document.querySelector?.('script[src="' + url + '"]');
+            if (existing?.dataset?.hangulLoaded === 'true') { resolve(); return; }
+            const script = existing || document.createElement('script');
+            let complete = false;
+            const finish = error => {
+                if (complete) return;
+                complete = true; clearTimeout(timer);
+                script.removeEventListener?.('load', loaded);
+                script.removeEventListener?.('error', failed);
+                if (!existing) { script.onload = null; script.onerror = null; }
+                if (error) { if (!existing) script.remove?.(); reject(error); }
+                else { if (script.dataset) script.dataset.hangulLoaded = 'true'; resolve(); }
+            };
+            const loaded = () => finish();
+            const failed = () => finish(new Error('YouTube 기능 모듈을 불러오지 못했습니다.'));
+            const timer = setTimeout(() => finish(new Error('YouTube 기능 모듈 응답 시간이 초과됐습니다.')), 5000);
+            if (existing) {
+                script.addEventListener?.('load', loaded, { once: true });
+                script.addEventListener?.('error', failed, { once: true });
+            } else {
+                script.src = url; script.onload = loaded; script.onerror = failed;
+                document.head.append(script);
+            }
+        });
+        loader.promise = (async () => {
+            for (let attempt = 0; attempt < 4; attempt++) {
+                loader.attempts++;
+                try {
+                    const health = await request('/health', null, { timeoutMs: 1500 });
+                    const capabilities = ['youtube-links-v1', 'mixed-playlists-v1', 'playback-control-v1', 'lyric-sync-v1'];
+                    if (health.app !== 'ivLyricsHangul' || health.version !== addon.version || health.protocol !== 1 || !Array.isArray(health.capabilities)
+                        || !capabilities.every(value => health.capabilities?.includes(value)))
+                        throw new Error('도우미 버전이 다릅니다. Spotify 한글 가사를 종료한 뒤 다시 실행해 주세요.');
+                    await loadScript(); loader.loaded = true; return;
+                } catch (error) {
+                    if (attempt === 3) throw error;
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            }
+        })();
+        return loader.promise;
+    }
     const lyricLookups = new Map();
     const mirrorCooldowns = new Map();
     const cleanLookupTitle = value => String(value || '')
@@ -308,9 +360,9 @@
     }
 
     const storage = () => Spicetify.LocalStorage;
-    const currentKey = () => Spicetify.Player.data?.item?.uri || '';
+    const currentKey = () => window.SpotifyHangulLinks?.currentTrack?.()?.uri || Spicetify.Player.data?.item?.uri || '';
     function currentTitle() {
-        const item = Spicetify.Player.data?.item;
+        const item = window.SpotifyHangulLinks?.currentTrack?.() || Spicetify.Player.data?.item;
         return item?.name || item?.metadata?.title || window.LyricsService?.getCurrentTrackInfo?.()?.title || '';
     }
     async function copyCurrentTitle() {
@@ -419,13 +471,14 @@
         id: ID,
         name: '기존 한글 발음 가사',
         author: 'ForUltraplayer',
-        version: '0.6.3',
+        version: '0.7.0',
         description: { ko: '웹에 작성된 한글 발음을 가져옵니다. AI·API 키·유료 호출 없이 원문과 대조합니다.',
             en: 'Existing web-authored Hangul readings; no AI or paid API.' },
         supports: { pronunciation: true, translate: false, metadata: false, tmi: false,
             lyricsStudy: false, characterPronunciation: false, culturalAnnotations: false, wordSupplements: false },
         async init() {
             const manager = window.AIAddonManager;
+            void ensureLinkPlayer().catch(error => console.warn('[SpotifyHangul] ' + error.message));
             installFooterTitleCopy();
             installLyricsPlusFallback();
             setFastLoading(storage().get(PREFIX + 'fast-loading') !== 'false');
@@ -501,12 +554,14 @@
             return { phonetic: result.phonetic, hangulReading: metadata };
         }
     };
-    window.HangulLyricsProvider = { addon, getLastResult: currentResult, getLookupStatus: uri => lyricLookups.get(uri || currentKey()) || null };
+    window.HangulLyricsProvider = { addon, getLastResult: currentResult, getLookupStatus: uri => lyricLookups.get(uri || currentKey()) || null,
+        ensureLinkPlayer };
     let attempts = 0;
     const register = () => {
         if (window.AIAddonManager && window.Spicetify?.LocalStorage && window.LyricsService?.cache?.getTranslation) {
             filterCachedPronunciation();
             window.AIAddonManager.register(addon);
+            void ensureLinkPlayer().catch(error => console.warn('[SpotifyHangul] ' + error.message));
         } else if (++attempts < 120) setTimeout(register, 500);
     };
     register();

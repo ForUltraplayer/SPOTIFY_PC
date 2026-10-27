@@ -13,6 +13,8 @@ $root=[IO.Path]::GetFullPath($InstallRoot).TrimEnd('\')
 $lock=$null
 $applyLock=$null
 $cache=$null
+$previousProcessDirectory=[Environment]::CurrentDirectory
+$previousLocation=Get-Location
 
 function Get-Sha256([string]$Path) {
     $stream=[IO.File]::OpenRead($Path)
@@ -48,7 +50,7 @@ function Get-InstalledVersion {
 
 function Select-UpdateAsset($Releases,[version]$CurrentVersion) {
     $candidates=@(foreach ($release in $Releases) {
-        if ($release.draft -or [string]$release.tag_name -notmatch '^v(\d+\.\d+\.\d+)$') { continue }
+        if ($release.draft -or $release.prerelease -or [string]$release.tag_name -notmatch '^v(\d+\.\d+\.\d+)$') { continue }
         $version=$Matches[1]
         if ([version]$version -le $CurrentVersion) { continue }
         $name='SpotifyHangul-'+$version+'-Setup.exe'
@@ -85,6 +87,9 @@ function Report-UpdateError([string]$Message) {
 }
 
 try {
+    $updateDirectory=[IO.Path]::GetTempPath()
+    Set-Location -LiteralPath $updateDirectory
+    [Environment]::CurrentDirectory=$updateDirectory
     Assert-Installation
     $current=Get-InstalledVersion
     $algorithm=[Security.Cryptography.SHA256]::Create()
@@ -200,4 +205,6 @@ try {
 } finally {
     if ($lock) { $lock.Dispose() }
     if ($applyLock) { $applyLock.Dispose() }
+    try { if (Test-Path -LiteralPath $previousLocation.Path) { Set-Location -LiteralPath $previousLocation.Path } } catch { }
+    try { if ([IO.Directory]::Exists($previousProcessDirectory)) { [Environment]::CurrentDirectory=$previousProcessDirectory } } catch { }
 }

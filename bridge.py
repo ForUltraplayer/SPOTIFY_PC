@@ -24,6 +24,9 @@ import urllib.parse
 import urllib.request
 from functools import lru_cache
 from phonetics import japanese_to_hangul, kana_to_hangul
+from youtube_stream import youtube_stream
+from playlist_files import save_export
+from playback_control import PlaybackControlSession
 
 sys.path.insert(0, str(Path(__file__).parent / 'vendor'))
 try:
@@ -34,10 +37,16 @@ _kana_converter = None
 _kana_lock = threading.Lock()
 _request_context = threading.local()
 
-VERSION = "0.6.3"
+VERSION = "0.7.0"
+PROTOCOL = 1
+CAPABILITIES = ('youtube-links-v1', 'mixed-playlists-v1', 'playback-control-v1', 'lyric-sync-v1')
+INSTALLATION_ID = hashlib.sha256(os.path.normcase(str(Path(__file__).resolve().parent)).encode('utf-8')).hexdigest()[:16]
 MATCHING_VERSION = "0.3.1"  # Search changes do not invalidate compatible client pronunciation caches.
 PORT = 19643
 ORIGIN = "https://xpui.app.spotify.com"
+DESKTOP_ORIGINS = frozenset(('http://tauri.localhost', 'https://tauri.localhost', 'tauri://localhost',
+                             'http://spotify-hangul-overlay.localhost'))
+CONTROL_PATHS = frozenset(('/playback-state', '/playback-command'))
 JAPANESE = re.compile(r"[\u3040-\u30ff\u3400-\u9fff]")
 HANGUL = re.compile(r"[가-힣]")
 # Equivalent old/new Japanese glyphs encountered in existing lyric providers.
@@ -144,6 +153,28 @@ class CheckedRedirect(urllib.request.HTTPRedirectHandler):
 
 
 OPENER = urllib.request.build_opener(CheckedRedirect)
+
+
+@lru_cache(maxsize=256)
+def youtube_metadata(video_id):
+    """Resolve public metadata only; never fetch or persist media files."""
+    if not isinstance(video_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{11}', video_id):
+        raise ValueError('YouTube 영상 ID가 올바르지 않습니다.')
+    url = 'https://www.youtube.com/oembed?' + urllib.parse.urlencode({
+        'url': 'https://www.youtube.com/watch?v=' + video_id, 'format': 'json'})
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *_args, **_kwargs):
+            raise ValueError('YouTube 메타데이터 주소가 변경되었습니다.')
+
+    request = urllib.request.Request(url, headers={'User-Agent': 'SpotifyHangulLyrics', 'Accept': 'application/json'})
+    with urllib.request.build_opener(NoRedirect).open(request, timeout=10) as response:
+        raw = response.read(65537)
+        if len(raw) > 65536:
+            raise ValueError('YouTube 메타데이터 크기를 초과했습니다.')
+        data = json.loads(raw)
+    return {'video_id': video_id, 'title': str(data.get('title') or video_id)[:300],
+            'author': str(data.get('author_name') or 'YouTube')[:200]}
 
 
 def fetch_page(url):
@@ -720,6 +751,7 @@ def monitor_lifetime(server, check=spotify_running, interval=5, idle_timeout=30,
 
 def serve(port=PORT, lifetime=True):
     reader = Reader()
+    playback = PlaybackControlSession()
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):
             pass  # No lyric text or requests in logs.
@@ -732,8 +764,9 @@ def serve(port=PORT, lifetime=True):
             self.send_header("Cache-Control", "no-store")
             if code == 429:
                 self.send_header('Retry-After', '1')
-            if self.headers.get("Origin") == ORIGIN:
-                self.send_header("Access-Control-Allow-Origin", ORIGIN)
+            origin = self.headers.get('Origin')
+            if origin == ORIGIN or (self.path in CONTROL_PATHS and origin in DESKTOP_ORIGINS):
+                self.send_header("Access-Control-Allow-Origin", origin)
                 self.send_header("Vary", "Origin")
             self.end_headers()
             self.wfile.write(data)
@@ -742,40 +775,122 @@ def serve(port=PORT, lifetime=True):
             return self.headers.get("Origin") in (None, ORIGIN) and self.headers.get("Host") in (
                 f"127.0.0.1:{port}", f"localhost:{port}")
 
+        def valid_control_origin(self):
+            return self.headers.get('Host') in (f'127.0.0.1:{port}', f'localhost:{port}') and (
+                self.headers.get('Origin') == ORIGIN or
+                (self.path in CONTROL_PATHS and self.headers.get('Origin') in DESKTOP_ORIGINS))
+
+        def control_request(self, method):
+            if not self.valid_control_origin():
+                return self.send_json(403, {'error': '허용되지 않은 재생 제어 요청입니다.'})
+            token = self.headers.get('X-Hangul-Overlay-Token')
+            try:
+                if self.path == '/playback-session' and method == 'POST':
+                    if self.headers.get('X-Hangul-Lyrics-Client') != 'ivlyrics':
+                        raise PermissionError('재생 연결 클라이언트가 올바르지 않습니다.')
+                else:
+                    playback.authorize(token)
+                if method == 'GET':
+                    if self.path == '/playback-state':
+                        return self.send_json(200, {'state': playback.state(token)})
+                    if self.path == '/playback-commands':
+                        return self.send_json(200, playback.drain(token))
+                    return self.send_json(405, {'error': '지원하지 않는 요청 방식입니다.'})
+                length = int(self.headers.get('Content-Length', '0'))
+                if not 0 < length <= 4096:
+                    raise ValueError('재생 제어 요청 크기가 올바르지 않습니다.')
+                params = json.loads(self.rfile.read(length))
+                if not isinstance(params, dict):
+                    raise ValueError('재생 제어 형식이 올바르지 않습니다.')
+                if self.path == '/playback-session':
+                    result = playback.register(params.get('instance'))
+                elif self.path == '/playback-state' and self.headers.get('Origin') == ORIGIN:
+                    result = {'state': playback.publish(token, params)}
+                elif self.path == '/playback-command':
+                    result = playback.enqueue(token, params.get('action'), params.get('trackUri'))
+                else:
+                    return self.send_json(405, {'error': '지원하지 않는 요청 방식입니다.'})
+                return self.send_json(200, result)
+            except PermissionError as error:
+                return self.send_json(403, {'error': str(error)})
+            except LookupError as error:
+                return self.send_json(409, {'error': str(error)})
+            except (ValueError, TypeError) as error:
+                return self.send_json(400, {'error': str(error)})
+            except RuntimeError as error:
+                return self.send_json(429, {'error': str(error)})
+
         def do_OPTIONS(self):
-            if not self.valid_origin():
+            control = self.path.startswith('/playback-')
+            if not (self.valid_control_origin() if control else self.valid_origin()):
                 return self.send_json(403, {"error": "허용되지 않은 요청입니다."})
             self.send_response(204)
-            self.send_header("Access-Control-Allow-Origin", ORIGIN)
+            self.send_header("Access-Control-Allow-Origin", self.headers.get('Origin') or ORIGIN)
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Hangul-Lyrics-Client")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Hangul-Lyrics-Client, X-Hangul-Overlay-Token" if control else "Content-Type, X-Hangul-Lyrics-Client")
             self.send_header("Access-Control-Allow-Private-Network", "true")
             self.end_headers()
 
         def do_GET(self):
+            if self.path in ('/playback-state', '/playback-commands'):
+                return self.control_request('GET')
             if not self.valid_origin():
                 return self.send_json(403, {"error": "허용되지 않은 요청입니다."})
+            static = {'/youtube/player': ('youtube-player.html', 'text/html; charset=utf-8'),
+                      '/youtube/extension.js': ('youtube-links.js', 'text/javascript; charset=utf-8'),
+                      '/youtube/ivlyrics.js': ('youtube-ivlyrics.js', 'text/javascript; charset=utf-8'),
+                      '/youtube/library.js': ('youtube-library.js', 'text/javascript; charset=utf-8'),
+                      '/youtube/overlay.js': ('youtube-overlay-controls.js', 'text/javascript; charset=utf-8'),
+                      '/youtube/desktop.js': ('youtube-desktop-bridge.js', 'text/javascript; charset=utf-8')}
+            static.update({'/youtube/now-playing.js': ('youtube-now-playing.js', 'text/javascript; charset=utf-8'),
+                           '/youtube/now-playing.css': ('youtube-now-playing.css', 'text/css; charset=utf-8')})
+            asset = static.get(urllib.parse.urlsplit(self.path).path)
+            if asset:
+                try:
+                    data = (Path(__file__).parent / asset[0]).read_bytes()
+                except FileNotFoundError:
+                    return self.send_json(404, {'error': '링크 음악 파일이 설치되지 않았습니다.'})
+                self.send_response(200)
+                self.send_header('Content-Type', asset[1])
+                self.send_header('Content-Length', str(len(data)))
+                self.send_header('Cache-Control', 'no-store')
+                self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
+                if self.headers.get('Origin') == ORIGIN:
+                    self.send_header('Access-Control-Allow-Origin', ORIGIN)
+                self.end_headers()
+                return self.wfile.write(data)
             if self.path != "/health":
                 return self.send_json(404, {"error": "경로가 없습니다."})
             last = reader.last or {}
             return self.send_json(200, {"app": "ivLyricsHangul", "version": VERSION, "pid": os.getpid(),
+                                       "protocol": PROTOCOL, "capabilities": CAPABILITIES, "installation_id": INSTALLATION_ID,
                                        "cached": len(reader.cache), "last": {key: last[key] for key in
                                        ("title", "source_url", "matched", "total", "coverage", "status", "cache",
                                         "reading_kind", "generated_lines", "unresolved_lines", "attempts", "best", "errors") if key in last}})
 
         def do_POST(self):
+            if self.path in ('/playback-session', '/playback-state', '/playback-command'):
+                return self.control_request('POST')
             if not self.valid_origin() or self.headers.get("X-Hangul-Lyrics-Client") != "ivlyrics":
                 return self.send_json(403, {"error": "허용되지 않은 요청입니다."})
-            if self.path != "/resolve":
+            if self.path not in ("/resolve", "/youtube/metadata", "/youtube/stream", "/youtube/export"):
                 return self.send_json(404, {"error": "경로가 없습니다."})
             try:
                 length = int(self.headers.get("Content-Length", "0"))
-                if not 0 < length <= 100000:
+                if not 0 < length <= (3_000_000 if self.path == '/youtube/export' else 100000):
                     raise ValueError("요청 크기가 올바르지 않습니다.")
                 params = json.loads(self.rfile.read(length))
                 if not isinstance(params, dict):
                     raise ValueError("요청 형식이 올바르지 않습니다.")
-                self.send_json(200, reader.resolve(params))
+                if self.path == '/youtube/metadata':
+                    result = youtube_metadata(params.get('video_id'))
+                elif self.path == '/youtube/stream':
+                    result = youtube_stream(params.get('video_id'))
+                elif self.path == '/youtube/export':
+                    result = save_export(params, STATE)
+                else:
+                    result = reader.resolve(params)
+                self.send_json(200, result)
             except SupersededLookup as error:
                 self.send_json(409, {"error": str(error), 'superseded': True})
             except LookupError as error:

@@ -19,6 +19,7 @@ $root=Join-Path $area '기존 설치'
 '{"version":"0.5.1"}' | Set-Content -LiteralPath (Join-Path $root 'release.json') -Encoding UTF8
 $fixture=if($VerifiedInstaller){$VerifiedInstaller}else{Join-Path $project 'dist\SpotifyHangul-0.6.0-Setup.exe'}
 if (-not (Test-Path -LiteralPath $fixture)) { throw 'The verified previous installer fixture is required.' }
+$fixture=(Get-Item -LiteralPath $fixture).FullName
 $release=[PSCustomObject]@{tag_name='v0.6.0';draft=$false;assets=@([PSCustomObject]@{
     name='SpotifyHangul-0.6.0-Setup.exe';browser_download_url='https://github.com/ForUltraplayer/SPOTIFY_PC/releases/download/v0.6.0/SpotifyHangul-0.6.0-Setup.exe';
     digest=('sha256:'+(Get-Sha256 $fixture));size=(Get-Item -LiteralPath $fixture).Length})}
@@ -38,6 +39,14 @@ if (Select-UpdateAsset @($wrong) ([version]'0.5.1')) { throw 'Missing digest acc
 $wrong.draft=$true
 $wrong.assets[0].digest=$release.assets[0].digest
 if (Select-UpdateAsset @($wrong) ([version]'0.5.1')) { throw 'Draft release accepted.' }; $passed++
+$wrong.draft=$false
+$wrong | Add-Member -NotePropertyName prerelease -NotePropertyValue $true -Force
+if (Select-UpdateAsset @($wrong) ([version]'0.5.1')) { throw 'Public prerelease accepted by stable updater.' }; $passed++
+$wrong.prerelease=$false
+$wrong.tag_name='v0.6.0-rc.1'
+if (Select-UpdateAsset @($wrong) ([version]'0.5.1')) { throw 'RC tag accepted by stable updater.' }; $passed++
+$wrong.tag_name='v0.6.0'
+if ((Select-UpdateAsset @($wrong) ([version]'0.5.1')).version -ne '0.6.0') { throw 'Stable release rejected after prerelease filtering.' }; $passed++
 $release | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $area 'release.json') -Encoding UTF8
 $driver=Join-Path $area 'driver.ps1'
 @'
@@ -66,7 +75,9 @@ function Get-CimInstance {
 function Start-Process {
     param($FilePath,$ArgumentList,$WindowStyle,[switch]$PassThru)
     if ($Scenario -notin @('Install','Stale','InstallFail','Timeout')) { throw 'Unexpected installer execution' }
-    [PSCustomObject]@{exe=$FilePath;arguments=$ArgumentList} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Area 'executed.json') -Encoding UTF8
+    $cwd=[Environment]::CurrentDirectory.TrimEnd('\')
+    if ($cwd -ieq $Root -or $cwd.StartsWith($Root+'\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Updater kept the installation directory open while waiting for rollback.' }
+    [PSCustomObject]@{exe=$FilePath;arguments=$ArgumentList;workingDirectory=$cwd;providerDirectory=(Get-Location).Path} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Area 'executed.json') -Encoding UTF8
     if ($Scenario -in @('Install','Stale')) {
         '{"version":"0.6.0"}' | Set-Content -LiteralPath (Join-Path $Root 'release.json')
         '{"Version":"0.6.0"}' | Set-Content -LiteralPath (Join-Path $Root 'install-state.json')
@@ -75,6 +86,8 @@ function Start-Process {
     $process | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value { param($Timeout) return (-not $this.TimedOut) }
     return $process
 }
+Set-Location -LiteralPath $Root
+[Environment]::CurrentDirectory=$Root
 & $Updater -Mode $Action -InstallRoot $Root -IgnoreInterval -Interactive:$Interactive -ErrorFile (Join-Path $Area 'error.txt') -RequestedVersion $RequestedVersion
 exit $LASTEXITCODE
 '@ | Set-Content -LiteralPath $driver -Encoding UTF8
