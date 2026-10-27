@@ -27,7 +27,7 @@ class PlaylistFilesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as area:
             result = save_export(example(), Path(area))
             path = Path(result['path'])
-            self.assertEqual(path.parent, Path(area) / 'exports')
+            self.assertTrue(path.parent.samefile(Path(area) / 'exports'))
             self.assertEqual(path.name, result['filename'])
             self.assertEqual(path.stat().st_size, result['bytes'])
             self.assertEqual(json.loads(path.read_text(encoding='utf-8')), example())
