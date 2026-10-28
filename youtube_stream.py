@@ -102,7 +102,37 @@ def select_stream(data, video_id, now=None):
         raise LookupError('영상 스트림 주소가 만료되었습니다. 다시 재생해 주세요.')
     return {'video_id': video_id, 'url': best['url'], 'codec': 'opus',
             'bitrate_kbps': float(best.get('abr') or 0), 'duration': duration,
-            'expires_at': expiry, 'title': str(data.get('title') or video_id)[:300]}
+            'expires_at': expiry, 'title': str(data.get('title') or video_id)[:300], 'itag': str(best.get('format_id') or '')}
+
+
+# YouTube's own player turns a loud video down to its loudness target (only down, never up), while
+# the direct Opus stream plays as published, so loud songs sounded louder in audio mode. The watch
+# page carries the value the player uses, per format when YouTube measured each format.
+PLAYER_RESPONSE = re.compile(r'var ytInitialPlayerResponse\s*=\s*')
+
+
+def player_response(video_id, opener=urllib.request.urlopen):
+    """The watch page's player data, or None when it cannot be read."""
+    request = urllib.request.Request('https://www.youtube.com/watch?v=' + video_id, headers={
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134 Safari/537.36'})
+    try:
+        with opener(request, timeout=8) as response:
+            page = response.read(4_000_000).decode('utf-8', 'replace')
+        match = PLAYER_RESPONSE.search(page)
+        return json.JSONDecoder().raw_decode(page, match.end())[0] if match else None
+    except (OSError, ValueError):
+        return None
+
+
+def volume_gain(player, itag):
+    """The volume factor YouTube's player applies to this format: 1.0 unless the video is too loud."""
+    player = player if isinstance(player, dict) else {}
+    formats = (player.get('streamingData') or {}).get('adaptiveFormats') or []
+    values = [fmt.get('loudnessDb') for fmt in formats if str(fmt.get('itag')) == str(itag)]
+    values.append(((player.get('playerConfig') or {}).get('audioConfig') or {}).get('loudnessDb'))
+    loudness = next((float(value) for value in values if isinstance(value, (int, float)) and math.isfinite(value)
+                     and -60 <= value <= 60), 0.0)
+    return round(10 ** (-loudness / 20), 4) if loudness > 0 else 1.0
 
 
 # A freshly issued googlevideo URL answers 403 for roughly 1-4 s (measured 2026-10-28 on
@@ -140,6 +170,10 @@ def youtube_stream(video_id):
     if not _jobs.acquire(timeout=BUSY_WAIT):
         raise RuntimeError('다른 영상의 대체 스트림을 확인 중입니다. 잠시 후 다시 시도해 주세요.')
     try:
+        # Read the watch page alongside the extractor so the lookup takes no longer.
+        page = {}
+        reader = threading.Thread(target=lambda: page.update(player=player_response(video_id)), daemon=True)
+        reader.start()
         engine, runtime_args = resolve_engine()
         command = [*engine, '--ignore-config', '--no-plugin-dirs', '--no-remote-components', '--cache-dir', str(CACHE_DIR),
                    '--skip-download', '--dump-single-json', '--no-playlist',
@@ -150,6 +184,8 @@ def youtube_stream(video_id):
             raise LookupError('공개 영상의 스트림을 확인하지 못했습니다. 로그인 제한이나 엔진 상태를 확인해 주세요.')
         result = select_stream(json.loads(output), video_id)
         wait_until_served(result['url'])
+        reader.join(timeout=5)
+        result['volume_gain'] = volume_gain(page.get('player'), result['itag'])
         with _lock:
             _cache[video_id] = {**result, '_cached_until': time.time() + 300}
             while len(_cache) > 32:

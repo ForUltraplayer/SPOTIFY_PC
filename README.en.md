@@ -4,11 +4,11 @@
 
 Shows the Korean (Hangul) pronunciation of Japanese songs in the Spotify desktop lyrics view. Pronunciation is pulled from Haneum and Namuwiki and matched line by line against Spotify's lyrics.
 
-Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Public version: 0.7.4.
+Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Public version: 0.7.5.
 
-**[⬇ Download (v0.7.4)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.4)**
+**[⬇ Download (v0.7.5)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.5)**
 
-0.7.0 and later installs update automatically when launched from the shortcut. Users on 0.6.0, 0.6.1, or 0.6.3 can also upgrade directly. To install manually, close Spotify, then run the 0.7.4 Setup.exe into the existing installation folder.
+0.7.0 and later installs update automatically when launched from the shortcut. Users on 0.6.0, 0.6.1, or 0.6.3 can also upgrade directly. To install manually, close Spotify, then run the 0.7.5 Setup.exe into the existing installation folder.
 
 > [!NOTE]
 > The desktop lyrics overlay is installed separately. Download the installer of the modified build with playback buttons (`lyrics-plus-overlay_…_x64-setup.exe`) from the [ivLyrics-overlay fork releases](https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest), install it, then turn on **General > Desktop overlay** in the ivLyrics settings, as with the original ivLyrics. The original overlay repository does not declare a license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for component notices.
@@ -17,7 +17,7 @@ Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://
 
 No need to install Spotify, SpotX or Python first.
 
-1. Download and run `SpotifyHangul-0.7.4-Setup.exe`.
+1. Download and run `SpotifyHangul-0.7.5-Setup.exe`.
 2. Pick an install folder (default: `%LOCALAPPDATA%\Programs\SpotifyHangul`).
 3. The installer downloads the official Spotify files (~150 MB).
 
@@ -60,6 +60,9 @@ Per-song source URLs and automatic pronunciation are under **한글 발음 자�
 - 0.7.4: ask before updating, then download with progress, install, and relaunch
 - 0.7.4: show the installed version and check for updates from Spotify's profile menu
 - 0.7.4: start the installed desktop overlay when lyrics open (or 「가사 열기」 on a YouTube track) while **Desktop overlay** is on
+- 0.7.5: YouTube audio mode no longer plays louder than Spotify songs; it applies the YouTube player's loudness normalization
+- 0.7.5: the volume slider now gives YouTube audio and video about the same loudness as Spotify songs at the same position
+- 0.7.5: Spotify songs and YouTube links share one volume; a change made on a YouTube link carries over to the next Spotify song
 
 Local installers include Python and Node. Install the desktop overlay with the installer from the [fork releases](https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest) and turn it on in the ivLyrics settings. First launch on a separate clean PC remains untested. See [YouTube integration](docs/YOUTUBE_LINKS.md), [distribution preparation](docs/DISTRIBUTION_PLAN.md), and [verification](docs/VERIFICATION.md) for implementation details and limits (Korean).
 
@@ -67,7 +70,7 @@ Local installers include Python and Node. Install the desktop overlay with the i
 
 ## Update / Uninstall
 
-- **Manual install / update**: close Spotify and the overlay, then run `SpotifyHangul-0.7.4-Setup.exe` into the same folder.
+- **Manual install / update**: close Spotify and the overlay, then run `SpotifyHangul-0.7.5-Setup.exe` into the same folder.
 - **Automatic updates**: the shortcut checks for new versions when launched, at least 4 hours after the previous check. From 0.7.4 it asks first; on Yes it downloads, closes Spotify, installs, and relaunches. 0.7.3 and earlier download silently every 8 hours and apply before the next launch. The profile menu entry 「업데이트 확인」 checks right away. From 0.7.0 the updater selects only GitHub releases not marked as prerelease. The overlay bundled with 0.7.0 is removed from the install folder on update; a separately installed overlay is left alone.
 - **Uninstall**: Windows Settings > Apps > Installed apps > **Spotify 한글 가사**. Your existing Spotify and pronunciation cache are kept.
 

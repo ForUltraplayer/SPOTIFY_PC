@@ -36,6 +36,9 @@ class PublicStreamTests(unittest.TestCase):
         # Never probe real googlevideo hosts from unit tests.
         self.served = patch('youtube_stream.wait_until_served', return_value=True)
         self.served.start()
+        # Nor fetch the real watch page for loudness.
+        self.page = patch('youtube_stream.player_response', return_value=None)
+        self.page.start()
         self.addCleanup(patch.stopall)
 
     def test_fresh_url_is_returned_only_after_the_403_window_or_the_deadline(self):
@@ -306,3 +309,35 @@ class ToolchainPackagingTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class LoudnessTests(unittest.TestCase):
+    def player(self, **audio_config):
+        return {'playerConfig': {'audioConfig': audio_config},
+                'streamingData': {'adaptiveFormats': [{'itag': 251, 'loudnessDb': 9.02}, {'itag': 140, 'loudnessDb': 7.0}]}}
+
+    def test_loud_video_is_lowered_like_the_official_player_and_quiet_video_is_not_raised(self):
+        self.assertEqual(streams.volume_gain(self.player(loudnessDb=7.36), '251'), 0.354)
+        self.assertEqual(streams.volume_gain(self.player(loudnessDb=7.36), '999'), 0.4285)
+        self.assertEqual(streams.volume_gain({'playerConfig': {'audioConfig': {'loudnessDb': -3.2}}}, '251'), 1.0)
+        for broken in (None, {}, {'playerConfig': {'audioConfig': {'loudnessDb': 'loud'}}},
+                       {'playerConfig': {'audioConfig': {'loudnessDb': float('nan')}}},
+                       {'playerConfig': {'audioConfig': {'loudnessDb': 400}}}):
+            self.assertEqual(streams.volume_gain(broken, '251'), 1.0)
+
+    def test_watch_page_player_data_is_read_without_trusting_the_rest_of_the_page(self):
+        page = (b'<script>var ytInitialPlayerResponse = {"playerConfig":{"audioConfig":{"loudnessDb":7.36}}};'
+                b'var other = {"x": 1};</script>')
+        opener = Mock(return_value=io.BytesIO(page))
+        player = streams.player_response(VIDEO, opener=opener)
+        self.assertEqual(player['playerConfig']['audioConfig']['loudnessDb'], 7.36)
+        self.assertEqual(opener.call_args[0][0].full_url, 'https://www.youtube.com/watch?v=' + VIDEO)
+        self.assertIsNone(streams.player_response(VIDEO, opener=Mock(return_value=io.BytesIO(b'<html>no player</html>'))))
+        self.assertIsNone(streams.player_response(VIDEO, opener=Mock(side_effect=OSError('offline'))))
+
+    def test_stream_result_carries_the_gain_for_the_selected_format(self):
+        streams._cache.clear()
+        with patch('youtube_stream.wait_until_served', return_value=True),                 patch('youtube_stream.player_response', return_value=self.player(loudnessDb=7.36)),                 patch('youtube_stream.Path.is_file', return_value=False),                 patch('youtube_stream.shutil.which', side_effect=lambda name: '/tools/' + name),                 patch('youtube_stream.time.time', return_value=1000),                 patch('youtube_stream.run_extractor', return_value=(0, json.dumps(metadata()))):
+            result = streams.youtube_stream(VIDEO)
+        self.assertEqual((result['itag'], result['volume_gain']), ('251', 0.354))
+        streams._cache.clear()

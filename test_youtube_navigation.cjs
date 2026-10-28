@@ -76,6 +76,8 @@ test('a player page that never reports ready is reopened at most twice per track
     assert.equal(context.frameReloads, 0, 'a new track gets its own reloads');
 });
 
+// The slider-to-YouTube volume tables and helpers are declarations, not single functions.
+const volumeSource = source.split(/\r?\n/).filter(line => /const (SPOTIFY_DB|AUDIO_DB|VIDEO_DB)=|function lookup\(|function linkVolume\(|const spotifyVolume=|const audioVolume=/.test(line)).join(';');
 function functionSource(name) {
     const start = source.indexOf('function ' + name + '(');
     if (start < 0) return null;
@@ -278,7 +280,7 @@ function modeHarness(options = {}) {
         removeAttribute(name) { if (name === 'src') this.src = ''; }, load() { this.currentTime = 0; this.readyState = 0; } };
     const response = path => ({ ok: true, json: async () => ({ url: 'https://fixture.' + 'googlevideo.com/' + path, codec: 'opus', bitrate_kbps: 136, duration: 194 }) });
     const context = vm.createContext({ BASE: 'http://127.0.0.1:19643', MODE_KEY: 'spotify-hangul:youtube-playback-mode:v1',
-        session: 'mode-test', URL, AbortController, DOMException, setTimeout, clearTimeout,
+        session: 'mode-test', URL, AbortController, DOMException, setTimeout, clearTimeout, audioGain: 1,
         active: true, kind: 'youtube', preferredMode: 'video', mediaMode: 'youtube', streamEpoch: 0,
         streamRequest: null, streamAttempted: false, pendingAudioSeek: null, playbackIntent: true, playing: true, lastError: '',
         queue: [{ kind: 'youtube', videoId: 'rKQptWhAvO0', title: 'Actual cover title' }], queueIndex: 0,
@@ -291,8 +293,10 @@ function modeHarness(options = {}) {
         open: () => calls.push('open'), renderStatus() {}, updateBar() {}, notify: message => calls.push(['notice', message]),
         ensureFrame: () => calls.push('ensure-frame'), fetch: options.fetch || (async () => response('audio')),
         // The silent first-load retry has its own test; keep these paths on their explicit error behaviour.
-        autoRetried: null, autoRetryTimer: null, clearTimeout() {}, autoRetryOnce: () => false, ...options.context,
+        autoRetried: null, autoRetryTimer: null, clearTimeout() {}, autoRetryOnce: () => false,
+        Spicetify: { Player: {}, Platform: {} }, originals: {}, ...options.context,
     });
+    vm.runInContext(volumeSource, context);
     for (const name of ['readPlaybackMode', 'updateModeControls', 'cancelStream', 'clearAudio', 'send', 'updateAudio', 'applyAudioResume', 'setPlaybackMode'])
         vm.runInContext(functionSource(name), context);
     vm.runInContext('async ' + functionSource('startDirect'), context);
@@ -400,7 +404,8 @@ test('video mode load inherits current audio volume and mute without changing ti
     h.audio.src = 'fixture-audio'; h.audio.currentTime = 91; h.audio.paused = true;
     h.context.setPlaybackMode('video');
     const loads = messages.filter(data => data.command === 'load');
-    assert.equal(loads.length, 1); assert.equal(loads[0].volume, 87); assert.equal(loads[0].muted, true);
+    // The player gets the setting that sounds like Spotify at 87; the slider keeps 87.
+    assert.equal(loads.length, 1); assert.equal(loads[0].volume, vm.runInContext('videoVolume(87)', h.context)); assert.ok(loads[0].volume < 87); assert.equal(loads[0].muted, true);
     assert.equal(loads[0].seconds, 91); assert.equal(loads[0].autoplay, false);
     assert.equal(h.context.state.volume, 87); assert.equal(h.context.queueIndex, 0);
     h.context.send('play'); assert.equal(messages.at(-1).muted, true);
@@ -438,8 +443,9 @@ test('cold iframe readiness restores parent volume and mute before the single pa
     h.context.send('load', { videoId: 'rKQptWhAvO0', seconds: 83, autoplay: false });
     assert.equal(child.calls.length, 0, 'the unready child must not apply an early command');
     child.ready();
-    assert.deepEqual(child.calls.filter(call => call[0] === 'cue' || call[0] === 'load'), [['cue', 83, 63, true]]);
-    assert.equal(child.read().volume, 63); assert.equal(child.read().muted, true);
+    const setting = vm.runInContext('videoVolume(63)', h.context);
+    assert.deepEqual(child.calls.filter(call => call[0] === 'cue' || call[0] === 'load'), [['cue', 83, setting, true]]);
+    assert.equal(child.read().volume, setting); assert.equal(child.read().muted, true);
     assert.equal(h.context.state.volume, 63); assert.equal(h.context.playbackIntent, false);
 });
 
@@ -468,4 +474,52 @@ test('YouTube lyric buttons open ivLyrics and ask its overlay sender to start th
     for (const wiring of ['onLyrics:openLyrics,', 'stopImmediatePropagation();openLyrics();return;', "id==='lyrics-button'&&active)action=openLyrics;", 'openLyrics,editLyricInfo'])
         assert.ok(source.includes(wiring), wiring);
     assert.ok(!source.includes('ivLyrics.open()}') && source.split('ivLyrics.open()').length === 2, 'every lyric entry point goes through openLyrics');
+});
+
+test('audio mode follows Spotify loudness for the slider and the official player gain while the slider keeps the user volume', async () => {
+    const loud = path => ({ ok: true, json: async () => ({ ...JSON.parse(JSON.stringify({ url: 'https://fixture.' + 'googlevideo.com/' + path, codec: 'opus', bitrate_kbps: 136, duration: 194 })), volume_gain: 0.4285 }) });
+    const h = modeHarness({ fetch: async () => loud('loud') }); h.context.setPlaybackMode('audio'); await h.settle();
+    const element = slider => vm.runInContext(`linkVolume(${slider},AUDIO_DB)/100`, h.context);
+    assert.ok(Math.abs(h.audio.volume - element(25) * 0.4285) < 1e-9); assert.ok(element(25) < 0.25 && element(100) === 1);
+    h.context.updateAudio(); assert.equal(h.context.state.volume, 25);
+    h.context.send('volume', { volume: 60 }); assert.ok(Math.abs(h.audio.volume - element(60) * 0.4285) < 1e-9);
+    h.context.updateAudio(); assert.equal(h.context.state.volume, 60);
+    for (const gain of [undefined, 0, 5, 'x']) {
+        const plain = modeHarness({ fetch: async () => ({ ok: true, json: async () => ({ url: 'https://fixture.' + 'googlevideo.com/plain', codec: 'opus', bitrate_kbps: 136, duration: 194, volume_gain: gain }) }) });
+        plain.context.setPlaybackMode('audio'); await plain.settle();
+        assert.ok(Math.abs(plain.audio.volume - vm.runInContext('linkVolume(25,AUDIO_DB)/100', plain.context)) < 1e-9, String(gain));
+    }
+});
+
+test('a YouTube item starts at Spotify volume and slider changes are written back for the next Spotify song', async () => {
+    const written = [];
+    const h = modeHarness({ context: { active: false, kind: null, preferredMode: 'audio', lyricAbort: null,
+        queueSource: null, lyrics: [], lyricsResult: null, lyricBox: { textContent: '' }, remember() {}, markPlaying() {},
+        state: { seconds: 0, duration: 194, volume: 25, muted: false },
+        Spicetify: { Platform: {}, Player: { getVolume: () => 0.4 } },
+        originals: { pause() {}, setVolume(value) { written.push(value); } } } });
+    vm.runInContext(functionSource('playCurrent'), h.context);
+    h.context.playCurrent(); await h.settle();
+    assert.equal(h.context.state.volume, 40);
+    assert.ok(Math.abs(h.audio.volume - vm.runInContext('audioVolume(40)', h.context)) < 1e-9);
+    h.context.send('volume', { volume: 70 });
+    assert.deepEqual(written, [0.7]); assert.equal(h.context.state.volume, 70);
+    assert.ok(Math.abs(h.audio.volume - vm.runInContext('audioVolume(70)', h.context)) < 1e-9);
+});
+
+test('leaving a YouTube item redraws the volume bar at the shared volume instead of the value saved when it started', () => {
+    const node = (tagName, extra = {}) => ({ tagName, isConnected: true, dataset: {}, attributes: {}, textContent: '', ...extra,
+        getAttribute(name) { return this.attributes[name] ?? null; }, setAttribute(name, value) { this.attributes[name] = value; },
+        removeAttribute(name) { delete this.attributes[name]; } });
+    const range = node('INPUT', { value: '0.3', max: '1' });
+    const properties = {}, visual = node('DIV', { style: { setProperty: (name, value) => { properties[name] = value; } } });
+    visual.attributes['data-testid'] = 'progress-bar';
+    const savedNodes = new Map([[range, { value: '0.6', max: '1', html: null, text: '', href: null, label: null, valueText: null, style: null }],
+        [visual, { html: null, text: '', href: null, label: null, valueText: null, style: '--progress-bar-transform: 60%;' }]]);
+    const volumeNodes = new Set([range, visual]);
+    const context = vm.createContext({ savedNodes, volumeNodes, Spicetify: { Player: { getVolume: () => 0.3 } } });
+    vm.runInContext(functionSource('restoreBar'), context);
+    context.restoreBar();
+    assert.equal(range.value, '0.3'); assert.equal(properties['--progress-bar-transform'], '30%');
+    assert.equal(savedNodes.size, 0); assert.equal(volumeNodes.size, 0);
 });
