@@ -1,5 +1,4 @@
 # @file test_playlist_files.py
-# @author: ForUltraplayer
 # @brief Verify full mixed-playlist snapshot validation and app-owned atomic exports.
 import copy
 import json

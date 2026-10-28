@@ -1,5 +1,4 @@
 ﻿# @file payload-transaction.ps1
-# @author: ForUltraplayer
 # @brief Stage verified application files and recover a complete installation after failure or interruption.
 param([ValidateSet('Apply','Commit','Recover','Rollback','Cleanup')][string]$Mode,
       [string]$InstallRoot,[string]$PayloadRoot,[int]$OwnerProcessId=$PID)

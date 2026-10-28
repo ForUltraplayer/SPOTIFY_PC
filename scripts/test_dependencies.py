@@ -1,5 +1,4 @@
 # @file test_dependencies.py
-# @author: ForUltraplayer
 # @brief Check manifest integrity and ensure detection failures cannot become successful promotions.
 import copy
 import json

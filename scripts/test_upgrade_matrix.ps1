@@ -1,5 +1,4 @@
 ﻿# @file test_upgrade_matrix.ps1
-# @author: ForUltraplayer
 # @brief Exercise shipped 0.6.x installers and updaters against one actual candidate, restoring host registration and shortcuts.
 param([Parameter(Mandatory=$true)][string]$CandidateInstaller,
       [string[]]$BaselineVersions=@('0.6.0','0.6.1','0.6.3'),
@@ -125,7 +124,6 @@ function Start-CallerCwdHolder([string]$Target,[string]$RowArea) {
     $release=Join-Path $RowArea 'caller-cwd-holder-release.signal'
     @'
 # @file caller-cwd-holder.ps1
-# @author: ForUltraplayer
 # @brief Hold only the isolated test application's current directory until released, with a bounded lifetime.
 param([string]$ReadyFile,[string]$ReleaseFile)
 $ErrorActionPreference='Stop'
@@ -257,7 +255,6 @@ try {
             $driver=Join-Path $rowArea 'updater-transport-driver.ps1'
             @'
 # @file updater-transport-driver.ps1
-# @author: ForUltraplayer
 # @brief Supply a future release while executing the exact shipped updater and genuine candidate Setup.exe.
 param($Updater,$Root,$ReleaseFile,$Candidate,$Action)
 $ErrorActionPreference='Stop'

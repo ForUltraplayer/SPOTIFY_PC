@@ -1,5 +1,4 @@
 ﻿# @file test_payload_transaction.ps1
-# @author: ForUltraplayer
 # @brief Exercise full application snapshots, stale-file ownership and interrupted update recovery in isolated folders.
 $ErrorActionPreference='Stop'
 $project=Split-Path -Parent $PSScriptRoot

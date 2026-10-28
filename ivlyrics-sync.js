@@ -1,5 +1,4 @@
 /** @file ivlyrics-sync.js
- * @author: ForUltraplayer
  * @brief Resolve the active recording and persist bounded whole-lyric timing adjustments through ivLyrics.
  */
 (() => {

@@ -1,5 +1,4 @@
 /** @file check_ivlyrics.cjs
- * @author: ForUltraplayer
  * @brief Exercise the actual upstream LyricsPlus parser and check Hangul integration contracts.
  */
 const fs = require('node:fs');

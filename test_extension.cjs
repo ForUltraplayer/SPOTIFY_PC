@@ -1,5 +1,4 @@
 /** @file test_extension.cjs
- * @author: ForUltraplayer
  * @brief Verify legacy-label filtering through the actual ivLyrics cache boundary.
  */
 const test = require('node:test');

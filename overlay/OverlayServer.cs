@@ -1,5 +1,4 @@
 // @file OverlayServer.cs
-// @author: ForUltraplayer
 // @brief Serve bounded loopback lyrics requests and authorize track-scoped playback controls.
 using System;
 using System.IO;

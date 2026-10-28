@@ -1,5 +1,4 @@
 # @file dependencies.yml
-# @author: ForUltraplayer
 # @brief Detect upstream changes daily and verify component candidates before source promotion.
 name: Component maintenance
 on:

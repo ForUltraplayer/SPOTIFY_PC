@@ -1,5 +1,4 @@
 # @file test_playback_http.py
-# @author: ForUltraplayer
 # @brief Verify real loopback HTTP pairing, cross-origin isolation, and consume-once playback commands.
 import http.client
 import json

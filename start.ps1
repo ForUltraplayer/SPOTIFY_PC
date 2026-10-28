@@ -1,5 +1,4 @@
 ﻿# @file start.ps1
-# @author: ForUltraplayer
 # @brief Start the local existing-lyrics reader together with Spotify, without autostart registration.
 param([switch]$NoErrorDialog)
 $ErrorActionPreference = 'Stop'

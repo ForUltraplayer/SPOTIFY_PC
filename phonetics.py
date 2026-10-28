@@ -1,5 +1,4 @@
 # @file phonetics.py
-# @author: ForUltraplayer
 # @brief Convert dictionary-provided Japanese kana into approximate Hangul offline.
 """Rule-based reading aid; song-specific kanji readings may differ from a dictionary."""
 import unicodedata

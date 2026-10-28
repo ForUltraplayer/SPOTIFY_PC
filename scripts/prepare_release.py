@@ -1,5 +1,4 @@
 # @file prepare_release.py
-# @author: ForUltraplayer
 # @brief Build a source-preview archive from an explicit public-file allowlist.
 import argparse
 import hashlib

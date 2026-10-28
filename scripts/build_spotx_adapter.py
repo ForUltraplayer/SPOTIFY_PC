@@ -1,5 +1,4 @@
 # @file build_spotx_adapter.py
-# @author: ForUltraplayer
 # @brief Reproduce a patch-only SpotX adapter from a hash-pinned MIT source.
 import hashlib
 import json

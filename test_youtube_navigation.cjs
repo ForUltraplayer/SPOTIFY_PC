@@ -1,5 +1,4 @@
 /** @file test_youtube_navigation.cjs
- * @author: ForUltraplayer
  * @brief Exercise actual link-player navigation handlers without reloading an active YouTube source.
  */
 const test = require('node:test');

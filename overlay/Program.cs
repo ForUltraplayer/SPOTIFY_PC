@@ -1,5 +1,4 @@
 // @file Program.cs
-// @author: ForUltraplayer
 // @brief Launch the owned overlay without elevated privileges or persistent startup settings.
 using System;
 using System.IO;

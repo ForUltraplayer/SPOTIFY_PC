@@ -1,5 +1,4 @@
 ﻿# @file integrate.ps1
-# @author: ForUltraplayer
 # @brief Integrate the bundled per-user application while preserving existing Spotify customizations.
 param(
     [ValidateSet('Prepare','Install','Uninstall')][string]$Mode = 'Install',

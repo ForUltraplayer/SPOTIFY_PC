@@ -1,5 +1,4 @@
 /** @file youtube-ivlyrics.js
- * @author: ForUltraplayer
  * @brief Adapt link playback to ivLyrics identity, clock, providers and cache without changing native Spotify player state.
  */
 (() => {

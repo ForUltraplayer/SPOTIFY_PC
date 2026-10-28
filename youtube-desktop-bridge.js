@@ -1,5 +1,4 @@
 /** @file youtube-desktop-bridge.js
- * @author: ForUltraplayer
  * @brief Pair the actual desktop overlay with a bounded loopback command queue and route actions to the current native or link player.
  */
 (() => {

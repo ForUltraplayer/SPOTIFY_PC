@@ -1,5 +1,4 @@
 # @file playback_control.py
-# @author: ForUltraplayer
 # @brief Authorize a short-lived local playback session and deliver bounded track-specific commands in memory.
 from collections import deque
 import math

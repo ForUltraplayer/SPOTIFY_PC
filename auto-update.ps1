@@ -1,5 +1,4 @@
 ﻿# @file auto-update.ps1
-# @author: ForUltraplayer
 # @brief Check the project GitHub releases, ask before updating, and install verified releases with visible progress.
 # Check without -Interactive (startup background check, -Manual) asks the user and installs right away;
 # -Interactive (Update.exe) and ApplyPending keep the silent download-then-install path.

@@ -1,5 +1,4 @@
 ﻿# @file test_bootstrap.ps1
-# @author: ForUltraplayer
 # @brief Check bootstrap boundaries and reject malformed Spotify installers before execution.
 param([string]$VerifiedInstaller)
 $ErrorActionPreference='Stop'

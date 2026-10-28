@@ -1,5 +1,4 @@
 /** @file youtube-overlay-controls.js
- * @author: ForUltraplayer
  * @brief Keep basic playback actions available on visible ivLyrics fullscreen lyrics surfaces without changing user settings.
  */
 (() => {

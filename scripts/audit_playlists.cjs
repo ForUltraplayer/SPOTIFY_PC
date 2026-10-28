@@ -1,5 +1,4 @@
 /** @file audit_playlists.cjs
- * @author: ForUltraplayer
  * @brief Audit private playlist metadata through the running Spotify lyric pipeline with checkpoints.
  */
 const fs = require('node:fs');

@@ -1,5 +1,4 @@
 # @file test_bridge.py
-# @author: ForUltraplayer
 # @brief Verify extraction, safe matching, cache behavior, and source URL restrictions.
 import tempfile
 import json

@@ -52,9 +52,8 @@ new file mode 100644
 index 0000000..1742365
 --- /dev/null
 +++ b/base/app/src/main/java/com/music/spotui/data/api/HangulReadingEngine.java
-@@ -0,0 +1,545 @@
+@@ -0,0 +1,544 @@
 +// @file HangulReadingEngine.java
-+// @author: ForUltraplayer
 +// @brief Match existing Korean readings to original Japanese lyrics, including covers.
 +package com.music.spotui.data.api;
 +
@@ -603,9 +602,8 @@ new file mode 100644
 index 0000000..e38a6b6
 --- /dev/null
 +++ b/base/app/src/main/java/com/music/spotui/data/api/HangulReadings.kt
-@@ -0,0 +1,112 @@
+@@ -0,0 +1,111 @@
 +// @file HangulReadings.kt
-+// @author: ForUltraplayer
 +// @brief Read authored Hangul lyrics with validated aliases and opt-in offline completion.
 +package com.music.spotui.data.api
 +
@@ -1001,9 +999,8 @@ new file mode 100644
 index 0000000..44b9d9b
 --- /dev/null
 +++ b/base/app/src/test/java/com/music/spotui/data/api/HangulReadingEngineTest.java
-@@ -0,0 +1,196 @@
+@@ -0,0 +1,195 @@
 +// @file HangulReadingEngineTest.java
-+// @author: ForUltraplayer
 +// @brief Regression checks for original-song readings, host detection and cover timing.
 +package com.music.spotui.data.api;
 +

@@ -1,5 +1,4 @@
 /** @file test_ivlyrics_sync_ui.cjs
- * @author: ForUltraplayer
  * @brief Exercise the actual React sync editor controls with bounded recording-specific storage.
  */
 const test = require('node:test');

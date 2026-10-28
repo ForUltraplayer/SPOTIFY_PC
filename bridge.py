@@ -1,5 +1,4 @@
 # @file bridge.py
-# @author: ForUltraplayer
 # @brief Read existing Japanese/Korean lyric pairs and match them to ivLyrics lines.
 """Loopback lyric reader with web-authored readings and an opt-in offline fallback."""
 import argparse

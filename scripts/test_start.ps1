@@ -1,5 +1,4 @@
 ﻿# @file test_start.ps1
-# @author: ForUltraplayer
 # @brief Validate helper ownership and capability checks without starting or stopping any applications.
 $ErrorActionPreference='Stop'
 $project=Split-Path -Parent $PSScriptRoot

@@ -1,5 +1,4 @@
 ﻿# @file test_auto_update.ps1
-# @author: ForUltraplayer
 # @brief Verify release identity, integrity checks, offline behavior and deferred automatic application.
 param([string]$VerifiedInstaller)
 $ErrorActionPreference='Stop'
@@ -51,7 +50,6 @@ $release | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $area '
 $driver=Join-Path $area 'driver.ps1'
 @'
 # @file driver.ps1
-# @author: ForUltraplayer
 # @brief Isolate the update script from live network and installer execution.
 param($Updater,$Root,$Area,$Fixture,$Scenario,$Action,[switch]$Interactive,[switch]$RespectInterval,[string]$RequestedVersion='0.0.0',
       [string]$Answer='None',[string]$Transfer='Ok',[switch]$Manual,[switch]$SpotifyRunning)

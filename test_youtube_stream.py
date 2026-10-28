@@ -1,5 +1,4 @@
 # @file test_youtube_stream.py
-# @author: ForUltraplayer
 # @brief Verify public-only Opus selection, bounded resolver attempts and nonpersistent stream references.
 import json
 import hashlib

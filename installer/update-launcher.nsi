@@ -1,5 +1,4 @@
 ; @file update-launcher.nsi
-; @author: ForUltraplayer
 ; @brief Download and install the latest project release into the existing per-user installation.
 Unicode true
 RequestExecutionLevel user

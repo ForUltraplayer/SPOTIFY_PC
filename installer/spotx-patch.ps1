@@ -1,5 +1,4 @@
 ﻿# @file spotx-patch.ps1
-# @author: ForUltraplayer
 # @brief Apply pinned SpotX patches only to a marked, isolated Spotify staging directory.
 param([Parameter(Mandatory=$true)][string]$StagingDirectory,
       [string]$SourceRoot,

@@ -1,5 +1,4 @@
 # @file check_compatibility.py
-# @author: ForUltraplayer
 # @brief Gate installer builds and component promotion on digest-bound regression and upstream contract checks.
 import argparse
 from datetime import datetime, timezone

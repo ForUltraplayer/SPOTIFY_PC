@@ -1,5 +1,4 @@
 <!-- @file SpotifyHangulOverlay.csproj
-     @author: ForUltraplayer
      @brief Build the independently authored Windows desktop lyrics overlay. -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>

@@ -1,5 +1,4 @@
 /** @file test_youtube_overlay.cjs
- * @author: ForUltraplayer
  * @brief Verify overlay control routing, conditional mounting and recoverable native icon updates.
  */
 const test = require('node:test');

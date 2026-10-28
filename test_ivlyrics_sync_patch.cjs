@@ -1,5 +1,4 @@
 /** @file test_ivlyrics_sync_patch.cjs
- * @author: ForUltraplayer
  * @brief Exercise the patched upstream identity and backup contracts against the pinned source.
  */
 const test = require('node:test');

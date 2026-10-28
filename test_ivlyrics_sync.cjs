@@ -1,5 +1,4 @@
 /** @file test_ivlyrics_sync.cjs
- * @author: ForUltraplayer
  * @brief Verify timing direction, recording ownership, persistence failures and serialized edits for the easy sync editor.
  */
 const test = require('node:test');

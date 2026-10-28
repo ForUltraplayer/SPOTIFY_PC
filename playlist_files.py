@@ -1,5 +1,4 @@
 # @file playlist_files.py
-# @author: ForUltraplayer
 # @brief Save validated mixed playlist snapshots in the app-owned export folder without arbitrary paths.
 from datetime import datetime, timezone
 import json

@@ -1,5 +1,4 @@
 # @file youtube_stream.py
-# @author: ForUltraplayer
 # @brief Resolve short-lived public Opus stream references without audio files, cookies or DRM handling.
 import json
 import math

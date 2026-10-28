@@ -1,5 +1,4 @@
 # @file patch_ivlyrics_sync.py
-# @author: ForUltraplayer
 # @brief Apply guarded local sync UI and identity fixes to a pinned ivLyrics source tree.
 from pathlib import Path
 

@@ -1,5 +1,4 @@
 # @file fetch_distribution_inputs.py
-# @author: ForUltraplayer
 # @brief Fetch pinned public distribution inputs and verify published package digests.
 import hashlib
 import json

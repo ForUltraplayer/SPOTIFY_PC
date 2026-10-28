@@ -1,5 +1,4 @@
 /** @file test_youtube_library.cjs
- * @author: ForUltraplayer
  * @brief Verify mixed playlist portability, import isolation and fixed-origin export behavior.
  */
 const test = require('node:test');

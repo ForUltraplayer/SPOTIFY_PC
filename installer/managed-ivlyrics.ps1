@@ -1,5 +1,4 @@
 # @file managed-ivlyrics.ps1
-# @author: ForUltraplayer
 # @brief Replace managed ivLyrics code transactionally without modifying Spotify profile data.
 
 function Assert-IvLyricsChild([string]$Parent, [string]$Path) {

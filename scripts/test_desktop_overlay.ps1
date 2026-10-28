@@ -1,5 +1,4 @@
 # @file test_desktop_overlay.ps1
-# @author: ForUltraplayer
 # @brief Check that launches never start the overlay and that only the 0.7.0 bundled copy is stopped.
 $ErrorActionPreference='Stop'
 $project=Split-Path -Parent $PSScriptRoot

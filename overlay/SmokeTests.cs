@@ -1,5 +1,4 @@
 // @file SmokeTests.cs
-// @author: ForUltraplayer
 // @brief Exercise payload compatibility, timing, URI supersession and playback authorization without external packages.
 using System;
 using System.Collections.Generic;

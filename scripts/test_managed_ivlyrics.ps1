@@ -1,5 +1,4 @@
 # @file test_managed_ivlyrics.ps1
-# @author: ForUltraplayer
 # @brief Verify code replacement, stale-file removal, integrity and rollback using isolated fixtures.
 $ErrorActionPreference='Stop'
 $project=Split-Path -Parent $PSScriptRoot

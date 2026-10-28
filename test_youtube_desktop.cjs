@@ -1,5 +1,4 @@
 /** @file test_youtube_desktop.cjs
- * @author: ForUltraplayer
  * @brief Verify authenticated desktop pairing, stale-command rejection and correct native/link control routing.
  */
 const test = require('node:test');

@@ -1,5 +1,4 @@
 /** @file test_youtube_now_playing.cjs
- * @author: ForUltraplayer
  * @brief Exercise the actual now-playing DOM component and preserve the embedded player's ownership.
  */
 const test = require('node:test');

@@ -1,5 +1,4 @@
 ﻿# @file bootstrap.ps1
-# @author: ForUltraplayer
 # @brief Install a managed Spotify/SpotX client and isolated Spicetify configuration in one application folder.
 param([ValidateSet('Prepare','Install','Uninstall')][string]$Mode='Install',
       [Parameter(Mandatory=$true)][string]$InstallRoot,

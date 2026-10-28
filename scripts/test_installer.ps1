@@ -1,5 +1,4 @@
 ﻿# @file test_installer.ps1
-# @author: ForUltraplayer
 # @brief Verify installer directory boundaries and helper process ownership without touching live applications.
 $ErrorActionPreference = 'Stop'
 $project = Split-Path -Parent $PSScriptRoot

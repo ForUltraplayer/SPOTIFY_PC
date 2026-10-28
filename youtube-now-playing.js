@@ -1,5 +1,4 @@
 /** @file youtube-now-playing.js
- * @author: ForUltraplayer
  * @brief Present the link player's current track using Spotify-like surfaces without owning media playback.
  */
 (() => {

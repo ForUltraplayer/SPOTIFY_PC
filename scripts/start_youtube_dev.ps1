@@ -1,5 +1,4 @@
 ﻿# @file start_youtube_dev.ps1
-# @author: ForUltraplayer
 # @brief Launch the requested experimental link player using the existing Spotify client and source helper without startup registration.
 param([switch]$Restart)
 $ErrorActionPreference='Stop'

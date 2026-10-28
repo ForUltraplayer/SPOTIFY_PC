@@ -1,5 +1,4 @@
 /** @file ivlyrics-sync-ui.js
- * @author: ForUltraplayer
  * @brief Add a direction-first lyric alignment editor to the existing ivLyrics sync controls.
  */
 (() => {

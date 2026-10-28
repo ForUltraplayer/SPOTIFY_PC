@@ -1,5 +1,4 @@
 # @file youtube_toolchain.py
-# @author: ForUltraplayer
 # @brief Assemble pinned Python extractor assets and Node with their original distribution notices.
 import hashlib
 import json

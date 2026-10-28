@@ -1,5 +1,4 @@
 # @file test_release_sources.py
-# @author: ForUltraplayer
 # @brief Ensure installer corresponding sources cannot lag behind validated application code.
 import hashlib
 import json

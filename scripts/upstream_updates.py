@@ -1,5 +1,4 @@
 # @file upstream_updates.py
-# @author: ForUltraplayer
 # @brief Detect upstream changes, stage immutable candidates and promote only inspected component manifests.
 import argparse
 import copy

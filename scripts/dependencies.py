@@ -1,5 +1,4 @@
 # @file dependencies.py
-# @author: ForUltraplayer
 # @brief Load the single distribution manifest and verify immutable build inputs.
 import hashlib
 import json

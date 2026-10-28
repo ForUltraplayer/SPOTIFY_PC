@@ -1,5 +1,4 @@
 /** @file test_youtube_ivlyrics.cjs
- * @author: ForUltraplayer
  * @brief Exercise ivLyrics link adapter identity, clock, cancellation and native delegation contracts.
  */
 const test = require('node:test');

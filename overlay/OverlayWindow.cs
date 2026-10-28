@@ -1,5 +1,4 @@
 // @file OverlayWindow.cs
-// @author: ForUltraplayer
 // @brief Render native desktop lyrics with transparent locking, safe controls and owned preferences.
 using System;
 using System.Collections.Generic;

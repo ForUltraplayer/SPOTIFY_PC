@@ -1,5 +1,4 @@
 /** @file hangul-lyrics.js
- * @author: ForUltraplayer
  * @brief Display existing web-authored Hangul readings through ivLyrics' provider contract.
  */
 (() => {

@@ -1,5 +1,4 @@
 // @file Protocol.cs
-// @author: ForUltraplayer
 // @brief Validate the published lyrics protocol and maintain track-scoped, expiring playback state.
 using System;
 using System.Collections.Generic;

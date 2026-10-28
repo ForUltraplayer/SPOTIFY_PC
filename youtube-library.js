@@ -1,5 +1,4 @@
 /** @file youtube-library.js
- * @author: ForUltraplayer
  * @brief Export and import complete local mixed playlists without Spotify server writes or stream URLs.
  */
 (() => {

@@ -1,5 +1,4 @@
 ﻿# @file update-ui.ps1
-# @author: ForUltraplayer
 # @brief Show the update prompt, download progress and installation status windows used by auto-update.ps1.
 Add-Type -AssemblyName System.Windows.Forms,System.Drawing
 [Windows.Forms.Application]::EnableVisualStyles()

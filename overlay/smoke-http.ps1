@@ -1,5 +1,4 @@
 ﻿# @file smoke-http.ps1
-# @author: ForUltraplayer
 # @brief Exercise the published executable on a separate loopback port and clean up only the test process.
 param([string]$Executable = "$PSScriptRoot\..\work\owned-overlay-build\SpotifyHangulOverlay.exe", [int]$Port = 15005)
 $ErrorActionPreference = 'Stop'

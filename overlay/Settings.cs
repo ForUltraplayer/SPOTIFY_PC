@@ -1,5 +1,4 @@
 // @file Settings.cs
-// @author: ForUltraplayer
 // @brief Store only this overlay's appearance and window preferences, never playback credentials.
 using System;
 using System.IO;

@@ -1,5 +1,4 @@
 # @file test_playback_control.py
-# @author: ForUltraplayer
 # @brief Verify expiring playback authorization, source identity and single-consumption command delivery.
 from concurrent.futures import ThreadPoolExecutor
 import json

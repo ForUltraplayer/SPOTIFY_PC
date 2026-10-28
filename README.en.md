@@ -138,6 +138,14 @@ Version 0.6.2 centralizes component versions and digests in `components.json`. S
 
 </details>
 
+## Disclaimer
+
+- This project is not affiliated with, endorsed by or sponsored by Spotify AB. Spotify is a trademark of Spotify AB.
+- The installer applies SpotX patches to the official Spotify client and blocks its automatic updates. Modifying the client and blocking ads may go against the [Spotify Terms of Use](https://www.spotify.com/us/legal/end-user-agreement/), and Spotify may restrict accounts that do so. Use it at your own risk.
+- Lyrics and Hangul readings belong to their respective rights holders. This project does not distribute lyrics; they are only looked up and cached on your own PC.
+- YouTube playback is subject to the YouTube Terms of Service.
+- Parts will be taken down on request from a rights holder. Please reach out through [Issues](https://github.com/ForUltraplayer/SPOTIFY_PC/issues).
+
 ## License
 
 GPL-3.0-or-later. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for bundled components. This does not grant any right to redistribute lyrics.

@@ -1,5 +1,4 @@
 ﻿# @file desktop-overlay.ps1
-# @author: ForUltraplayer
 # @brief Keep 0.7.0 launch compatibility and stop the overlay copy that 0.7.0 bundled, without touching a separately installed overlay.
 # Windows PowerShell must resolve its own utility/CIM/network modules when a
 # PowerShell 7 parent passed down a different PSModulePath.

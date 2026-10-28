@@ -1,5 +1,4 @@
 /** @file youtube-links.js
- * @author: ForUltraplayer
  * @brief Manage link-only mixed playlists and route native Spotify playbar controls to an isolated YouTube player.
  */
 (() => {

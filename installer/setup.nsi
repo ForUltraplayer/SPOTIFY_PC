@@ -1,5 +1,4 @@
 ; @file setup.nsi
-; @author: ForUltraplayer
 ; @brief Build a selectable-directory per-user installer with an embedded Python runtime.
 Unicode true
 RequestExecutionLevel user

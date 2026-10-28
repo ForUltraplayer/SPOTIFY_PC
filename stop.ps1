@@ -1,5 +1,4 @@
 ﻿# @file stop.ps1
-# @author: ForUltraplayer
 # @brief Stop only the verified local Hangul lyric reader, without changing startup settings.
 $ErrorActionPreference = 'Stop'
 $health = Invoke-RestMethod -Uri 'http://127.0.0.1:19643/health' -TimeoutSec 2

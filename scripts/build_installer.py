@@ -1,5 +1,4 @@
 # @file build_installer.py
-# @author: ForUltraplayer
 # @brief Assemble an isolated Windows runtime and build a per-user NSIS installer.
 import argparse
 import hashlib
