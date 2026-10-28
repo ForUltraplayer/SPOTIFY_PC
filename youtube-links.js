@@ -59,12 +59,12 @@ if(typeof window!=='undefined')(() => {
     'use strict';
     const BASE='http://127.0.0.1:19643',KEY='spotify-hangul:link-playlists:v1',MODE_KEY='spotify-hangul:youtube-playback-mode:v1',MODEL=SpotifyHangulLinkModel;
     function readPlaybackMode(){try{return localStorage.getItem(MODE_KEY)==='audio'?'audio':'video';}catch{return'video';}}
-    let adapterLoading=false;
+    let adapterLoading=false,moduleFailures=0;
     const init=()=>{
         if(!window.Spicetify?.Player||!Spicetify.Topbar||!Spicetify.Menu||typeof Spicetify.Platform?.History?.listen!=='function'||!document.querySelector('main')||!document.querySelector('[data-testid="now-playing-bar"]')){setTimeout(init,1000);return;}
         if(window.SpotifyHangulLinks)return;
         const dependency=[['SpotifyHangulIvLyrics','ivlyrics.js'],['SpotifyHangulLibrary','library.js'],['SpotifyHangulOverlayControls','overlay.js'],['SpotifyHangulDesktopBridge','desktop.js'],['SpotifyHangulNowPlaying','now-playing.js']].find(([name])=>!window[name]);
-        if(dependency){if(!adapterLoading){adapterLoading=true;const script=document.createElement('script');script.src=BASE+'/youtube/'+dependency[1];script.onload=()=>{adapterLoading=false;init();};script.onerror=()=>{adapterLoading=false;Spicetify.showNotification?.('YouTube 연결 모듈을 불러오지 못했습니다.',true);};document.head.append(script);}return;}
+        if(dependency){if(!adapterLoading){adapterLoading=true;const script=document.createElement('script');script.src=BASE+'/youtube/'+dependency[1];script.onload=()=>{adapterLoading=false;init();};script.onerror=()=>{adapterLoading=false;script.remove();moduleFailures++;if(moduleFailures===3)Spicetify.showNotification?.('YouTube 연결 모듈을 불러오지 못했습니다. 도우미가 준비되면 자동으로 다시 시도합니다.',true);if(moduleFailures<40)setTimeout(init,3000);};document.head.append(script);}return;}
         let nowPlayingStyle=null;if(!document.getElementById('spotify-hangul-now-playing-style')){nowPlayingStyle=document.createElement('link');nowPlayingStyle.id='spotify-hangul-now-playing-style';nowPlayingStyle.rel='stylesheet';nowPlayingStyle.href=BASE+'/youtube/now-playing.css';document.head.append(nowPlayingStyle);}
         let data,rawLibrary=null;try{rawLibrary=localStorage.getItem(KEY);data=MODEL.library(JSON.parse(rawLibrary));}catch{data=MODEL.library(null);}
         // A schema change or damaged entry falls back to fewer lists, and the next save would erase the rest; keep the first such original once.

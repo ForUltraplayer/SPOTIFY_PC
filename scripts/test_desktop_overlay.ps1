@@ -23,7 +23,7 @@ function Expect-Rejection([scriptblock]$Action) {
 }
 function Reset-Mocks {
     $script:mockProcesses=@();$script:mockStarted=$false;$script:mockMode='normal'
-    $script:mockStopped=@();$script:mockStartCount=0;$script:mockSleepCount=0;$script:mockListenerOwner=321
+    $script:mockStopped=@();$script:mockStartCount=0;$script:mockSleepCount=0;$script:mockListenerOwner=321;$script:mockRaceOwner='other.exe'
 }
 # Redirect only the per-user app folder lookup into the test area.
 function Get-UserDesktopOverlay {
@@ -35,6 +35,7 @@ function Get-CimInstance {
     if ($ClassName -ne 'Win32_Process') { throw 'Unbounded process lookup.' }
     if ($Filter -eq "name='lyrics-plus-overlay.exe'") { return $script:mockProcesses }
     if ($Filter -eq 'ProcessId=321' -and $script:mockStarted) { return [PSCustomObject]@{ExecutablePath=$exe;ProcessId=321} }
+    if ($Filter -eq 'ProcessId=444') { return [PSCustomObject]@{Name=$script:mockRaceOwner;ProcessId=444} }
     throw 'Unexpected process lookup.'
 }
 function Get-NetTCPConnection {
@@ -74,6 +75,9 @@ try {
     Reset-Mocks;$script:mockMode='race'
     Expect-Rejection { Start-UserDesktopOverlay }
     if ($script:mockStopped.Count -ne 1 -or $script:mockStopped[0] -ne 321) { throw 'Startup race did not clean only its own child.' };$script:passed++
+    # A concurrent launch that started the same overlay first is a success, not an error.
+    Reset-Mocks;$script:mockMode='race';$script:mockRaceOwner='lyrics-plus-overlay.exe'
+    if ((Start-UserDesktopOverlay).Status -ne 'started' -or $script:mockStopped.Count) { throw 'A concurrent launch of the same overlay was reported as a port conflict.' };$script:passed++
     Reset-Mocks;$script:mockMode='timeout'
     Expect-Rejection { Start-UserDesktopOverlay }
     if ($script:mockSleepCount -ne 20 -or $script:mockStopped.Count -ne 1 -or $script:mockStopped[0] -ne 321) { throw 'Startup timeout cleanup failed.' };$script:passed++

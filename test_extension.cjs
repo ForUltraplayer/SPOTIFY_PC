@@ -256,7 +256,12 @@ test('installed extension stops after three extra script failures and does not r
     assert.equal(h.window.SpotifyHangulLinkLoader.attempts, 4);
     await assert.rejects(h.load(), /YouTube/);
     assert.equal(h.requests.length, 4);
-    assert.equal(h.timers.filter(t => !t.cancelled).length, 0);
+    // Only one delayed recovery cycle is pending, not an immediate storm.
+    const pending = h.timers.filter(t => !t.cancelled);
+    assert.deepEqual(pending.map(t => t.ms), [30000]);
+    pending[0].cancelled = true; pending[0].fn(); await h.flush();
+    assert.equal(h.requests.length, 5, 'the recovery cycle checks the helper again');
+    assert.equal(h.window.SpotifyHangulLinkRecoveries, 1);
 });
 
 test('installed extension rejects incompatible helper capabilities without injecting a script', async () => {

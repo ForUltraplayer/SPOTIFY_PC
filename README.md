@@ -4,20 +4,20 @@
 
 Spotify 데스크톱 가사 화면에 일본어 노래의 한글 발음을 같이 띄워 줍니다. 한음, 나무위키에 올라와 있는 한글 발음을 가져와 Spotify 가사와 줄 단위로 맞춥니다.
 
-[SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) 기반이고, 현재 공개 버전은 0.7.2 베타입니다.
+[SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) 기반이고, 현재 공개 버전은 0.7.3입니다.
 
-**[⬇ 다운로드 (v0.7.2)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.2)**
+**[⬇ 다운로드 (v0.7.3)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.3)**
 
-0.7.0 설치본은 바로가기로 실행하면 0.7.2로 자동 업데이트됩니다. 0.6.0, 0.6.1, 0.6.3에서도 중간 버전 없이 바로 업데이트할 수 있습니다. 직접 설치하려면 Spotify를 종료하고 0.7.2 Setup.exe를 기존 설치 폴더에 다시 설치하세요.
+0.7.0 이후 설치본은 바로가기로 실행하면 자동으로 업데이트됩니다. 0.6.0, 0.6.1, 0.6.3에서도 중간 버전 없이 바로 업데이트할 수 있습니다. 직접 설치하려면 Spotify를 종료하고 0.7.3 Setup.exe를 기존 설치 폴더에 다시 설치하세요.
 
 > [!NOTE]
-> 0.7.2부터 데스크톱 가사창(오버레이)은 설치 파일에 포함하지 않습니다. 재생 버튼을 추가한 수정본은 [ivLyrics-overlay 포크 릴리스](https://github.com/ForUltraplayer/ivLyrics-overlay/releases)에서 따로 받을 수 있습니다. 원본 오버레이 저장소에는 라이선스가 명시돼 있지 않습니다. 구성 요소별 안내는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 참고하세요.
+> 데스크톱 가사창(오버레이)은 따로 설치합니다. 재생 버튼을 추가한 수정본의 설치 파일(`lyrics-plus-overlay_…_x64-setup.exe`)을 [ivLyrics-overlay 포크 릴리스](https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest)에서 받아 실행하면, 이후 바로가기로 실행할 때 함께 시작합니다. 원본 오버레이 저장소에는 라이선스가 명시돼 있지 않습니다. 구성 요소별 안내는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 참고하세요.
 
 ## 설치
 
 Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다.
 
-1. `SpotifyHangul-0.7.2-Setup.exe`를 받아 실행합니다.
+1. `SpotifyHangul-0.7.3-Setup.exe`를 받아 실행합니다.
 2. 설치 폴더를 고릅니다. 기본값은 `%LOCALAPPDATA%\Programs\SpotifyHangul`입니다.
 3. 설치 중에 공식 Spotify 파일(약 150 MB)을 내려받습니다.
 
@@ -53,14 +53,15 @@ Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다.
 - 설치 실패와 중단 시 이전 파일 및 설치 등록 복원
 - 0.7.2: YouTube 음원 첫 재생 실패 수정 (새 음원 주소가 재생 가능해질 때까지 대기, 실패 시 한 번 자동 재시도)
 - 0.7.2: 자동 발음을 한음·나무위키 표기 관례(장음 생략, 촉음 받침 ㅅ)에 맞춤
+- 0.7.3: 바로가기를 두 번 누르거나 설치 직후 동시에 실행해도 도우미 오류 없이 시작
 
-설치 파일에는 Python과 Node를 포함합니다. 데스크톱 가사창은 `lyrics-plus-overlay.exe`를 `%LOCALAPPDATA%\lyrics-plus-overlay\` 폴더에 두면 바로가기로 실행할 때 함께 시작합니다. 별도 깨끗한 PC의 첫 실행은 아직 확인하지 않았습니다. 구현과 제약은 [YouTube 연결 안내](docs/YOUTUBE_LINKS.md), [배포 준비](docs/DISTRIBUTION_PLAN.md), [검증 기록](docs/VERIFICATION.md)을 참고하세요.
+설치 파일에는 Python과 Node를 포함합니다. 데스크톱 가사창은 [포크 릴리스](https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest)의 설치 파일을 실행해 설치하면 바로가기로 실행할 때 함께 시작합니다. 별도 깨끗한 PC의 첫 실행은 아직 확인하지 않았습니다. 구현과 제약은 [YouTube 연결 안내](docs/YOUTUBE_LINKS.md), [배포 준비](docs/DISTRIBUTION_PLAN.md), [검증 기록](docs/VERIFICATION.md)을 참고하세요.
 
 </details>
 
 ## 업데이트 / 제거
 
-- **직접 설치 / 업데이트**: Spotify와 오버레이를 종료하고 `SpotifyHangul-0.7.2-Setup.exe`를 같은 폴더에 다시 설치합니다.
+- **직접 설치 / 업데이트**: Spotify와 오버레이를 종료하고 `SpotifyHangul-0.7.3-Setup.exe`를 같은 폴더에 다시 설치합니다.
 - **자동 업데이트**: 바로가기로 실행하면 새 버전을 확인하고 내려받습니다 (마지막 확인에서 8 시간 이후 재조회, Spotify 종료 후 다음 실행 전에 적용). 0.7.0부터 업데이터는 GitHub의 시험판(prerelease) 표시가 없는 릴리스만 선택합니다. 0.7.0에 포함됐던 데스크톱 가사창은 업데이트 때 설치 폴더에서 제거되며, 따로 받아 둔 가사창은 그대로 둡니다.
 - **제거**: Windows 설정 > 앱 > 설치된 앱에서 **Spotify 한글 가사**를 제거합니다. 기존 Spotify와 발음 캐시는 남습니다.
 

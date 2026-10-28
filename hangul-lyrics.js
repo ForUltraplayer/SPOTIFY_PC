@@ -66,7 +66,20 @@
                         throw new Error('도우미 버전이 다릅니다. Spotify 한글 가사를 종료한 뒤 다시 실행해 주세요.');
                     await loadScript(); loader.loaded = true; return;
                 } catch (error) {
-                    if (attempt === 3) throw error;
+                    if (attempt === 3) {
+                        // A helper that starts late (first run, antivirus scan) gets one fresh cycle every
+                        // 30 s, at most 10 times, so YouTube features recover without restarting Spotify.
+                        const recoveries = window.SpotifyHangulLinkRecoveries || 0;
+                        if (recoveries < 10) {
+                            window.SpotifyHangulLinkRecoveries = recoveries + 1;
+                            setTimeout(() => {
+                                if (window.SpotifyHangulLinkLoader !== loader) return;
+                                window.SpotifyHangulLinkLoader = null;
+                                void ensureLinkPlayer().catch(failure => console.warn('[SpotifyHangul] ' + failure.message));
+                            }, 30000);
+                        }
+                        throw error;
+                    }
                     await new Promise(resolve => setTimeout(resolve, 2000));
                 }
             }
@@ -473,7 +486,7 @@
         id: ID,
         name: '기존 한글 발음 가사',
         author: 'ForUltraplayer',
-        version: '0.7.2',
+        version: '0.7.3',
         description: { ko: '웹에 작성된 한글 발음을 가져옵니다. AI·API 키·유료 호출 없이 원문과 대조합니다.',
             en: 'Existing web-authored Hangul readings; no AI or paid API.' },
         supports: { pronunciation: true, translate: false, metadata: false, tmi: false,

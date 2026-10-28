@@ -59,7 +59,12 @@ function Confirm-DesktopOverlayServer([int]$ProcessId,[int]$Port) {
     for ($attempt=0;$attempt -lt 20;$attempt++) {
         $listeners=@(Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)
         if ($listeners.Count) {
-            if (@($listeners | Where-Object { $_.OwningProcess -ne $ProcessId }).Count) {
+            $others=@($listeners | Where-Object { $_.OwningProcess -ne $ProcessId })
+            if ($others.Count) {
+                # Two launches at once (installer finish page and shortcut) both start the
+                # overlay; the one that won the port is the same app and serves fine.
+                $owner=Get-CimInstance Win32_Process -Filter ('ProcessId='+$others[0].OwningProcess) -ErrorAction SilentlyContinue
+                if ($owner.Name -eq 'lyrics-plus-overlay.exe') { return }
                 throw ('다른 프로그램이 가사 오버레이 포트를 먼저 사용했습니다. 포트: '+$Port+'. 기존 프로그램은 종료하지 않았습니다.')
             }
             return
