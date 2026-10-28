@@ -11,7 +11,7 @@ Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://
 0.7.0 and later installs update automatically when launched from the shortcut. Users on 0.6.0, 0.6.1, or 0.6.3 can also upgrade directly. To install manually, close Spotify, then run the 0.7.3 Setup.exe into the existing installation folder.
 
 > [!NOTE]
-> The desktop lyrics overlay is installed separately. Download the installer of the modified build with playback buttons (`lyrics-plus-overlay_…_x64-setup.exe`) from the [ivLyrics-overlay fork releases](https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest) and run it; the shortcut then starts it with the app. The original overlay repository does not declare a license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for component notices.
+> The desktop lyrics overlay is installed separately. Download the installer of the modified build with playback buttons (`lyrics-plus-overlay_…_x64-setup.exe`) from the [ivLyrics-overlay fork releases](https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest), install it, then turn on **General > Desktop overlay** in the ivLyrics settings, as with the original ivLyrics. The original overlay repository does not declare a license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for component notices.
 
 ## Install
 
@@ -54,8 +54,9 @@ Per-song source URLs and automatic pronunciation are under **한글 발음 자�
 - 0.7.2: fix first YouTube audio playback failures (wait until a fresh stream URL is served, then retry once if it still fails)
 - 0.7.2: align automatic pronunciation with authored Korean conventions (long vowels dropped, sokuon as ㅅ)
 - 0.7.3: start without a helper error when the shortcut is pressed twice or right after installation
+- 0.7.3: no PowerShell window on launch, and Spotify opens sooner
 
-Local installers include Python and Node. Install the desktop overlay with the installer from the [fork releases](https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest) to have the shortcut start it too. First launch on a separate clean PC remains untested. See [YouTube integration](docs/YOUTUBE_LINKS.md), [distribution preparation](docs/DISTRIBUTION_PLAN.md), and [verification](docs/VERIFICATION.md) for implementation details and limits (Korean).
+Local installers include Python and Node. Install the desktop overlay with the installer from the [fork releases](https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest) and turn it on in the ivLyrics settings. First launch on a separate clean PC remains untested. See [YouTube integration](docs/YOUTUBE_LINKS.md), [distribution preparation](docs/DISTRIBUTION_PLAN.md), and [verification](docs/VERIFICATION.md) for implementation details and limits (Korean).
 
 </details>
 

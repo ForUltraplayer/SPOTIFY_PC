@@ -773,6 +773,10 @@ class HelperServer(ThreadingHTTPServer):
     # On Windows SO_REUSEADDR lets a second helper bind the same port and answer
     # in place of the first, so a duplicate launch must fail to bind instead.
     allow_reuse_address = os.name != 'nt'
+    # Spotify, ivLyrics and the overlay poll the helper several times a second. With the
+    # default backlog of 5, a busy moment overflows it and Windows resets new connections,
+    # which the page reports as "Failed to fetch".
+    request_queue_size = 128
 
 
 def serve(port=PORT, lifetime=True):
@@ -855,6 +859,8 @@ def serve(port=PORT, lifetime=True):
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Hangul-Lyrics-Client, X-Hangul-Overlay-Token" if control else "Content-Type, X-Hangul-Lyrics-Client")
             self.send_header("Access-Control-Allow-Private-Network", "true")
+            # Let the browser reuse the answer instead of a preflight before every poll.
+            self.send_header("Access-Control-Max-Age", "600")
             self.end_headers()
 
         def do_GET(self):

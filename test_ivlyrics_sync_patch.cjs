@@ -7,6 +7,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const {spawnSync} = require('node:child_process');
 const root = process.env.IVLYRICS_SOURCE_DIR;
 const source = name => fs.readFileSync(path.join(root, name), 'utf8');
 const extract = (text, start, end) => {
@@ -51,4 +52,63 @@ test('actual quick controls preserve the global ten-second bound separately from
  assert.equal(context.track,53000);assert.equal(context.global,10000);
  assert.match(options,/react\.createElement\(HangulTrackSyncEditor, \{ trackUri \}\)/);
  assert.match(options,/\[-1000, -100, "current", 100, 1000\]/);
+});
+const FORK_OVERLAY_URL='https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest';
+test('actual overlay download button and wizard fallback open the fork release page', {skip:!root},()=>{
+ const getter=extract(source('LyricsService.js'),'getDownloadUrl() {','async sendToEndpoint(');
+ const context=vm.createContext({});
+ vm.runInContext('const overlay={'+getter+'};this.url=overlay.getDownloadUrl();',context);
+ assert.equal(context.url,FORK_OVERLAY_URL);
+ const handler=extract(source('Settings.js'),'const handleDownload = () => {','const getStatusText');
+ const opened=[];
+ const settingsContext=vm.createContext({window:{OverlaySender:{getDownloadUrl:()=>''},open:(...args)=>opened.push(args)}});
+ vm.runInContext(handler+'handleDownload();',settingsContext);
+ assert.deepEqual(opened,[[FORK_OVERLAY_URL,'_blank']]);
+ assert.ok(source('SetupWizard.js').includes('getDownloadUrl?.() || "'+FORK_OVERLAY_URL+'", "_blank", "noopener,noreferrer"'));
+ for(const name of ['LyricsService.js','Settings.js','SetupWizard.js'])
+  assert.ok(!source(name).includes('ivlis.kr/ivLyrics/extensions/#overlay'),name+' still points at the upstream overlay page');
+});
+test('overlay download transform leaves every other upstream link untouched', {skip:!root},()=>{
+ const settings=source('Settings.js');
+ assert.equal(settings.split('window.open("https://ivlis.kr/ivLyrics/extensions/#helper", "_blank")').length-1,4);
+ assert.ok(settings.includes('https://api.github.com/repos/ivLis-Studio/ivLyrics/releases/latest'));
+ assert.ok(settings.includes('window.open("https://github.com/ivLis-Studio/ivLyrics", "_blank")'));
+ assert.ok(source('SetupWizard.js').includes('window.open("https://ivlis.kr/ivLyrics/extensions/#helper", "_blank")'));
+ assert.ok(source('MarketplaceManager.js').includes('raw.githubusercontent.com/ivLis-Studio/ivLyrics/'));
+ assert.ok(source('VideoHelperService.js').includes('https://ivlis.kr/ivLyrics/extensions/#helper'));
+ assert.equal(source('LyricsService.js').split(FORK_OVERLAY_URL).length-1,1);
+});
+test('overlay download transform rewrites only its anchors and refuses a changed upstream', ()=>{
+ const python=process.env.PYTHON||'python';
+ const script=`
+import json, sys
+sys.path.insert(0, ${JSON.stringify(path.join(__dirname,'scripts'))})
+import patch_ivlyrics_sync as p
+helper = 'window.open("https://ivlis.kr/ivLyrics/extensions/#helper", "_blank");'
+sources = {
+ 'LyricsService.js': "getDownloadUrl() {\\n return '" + p.UPSTREAM_OVERLAY_URL + "';\\n}",
+ 'Settings.js': "const url = window.OverlaySender?.getDownloadUrl?.() || '" + p.UPSTREAM_OVERLAY_URL + "';\\n" + helper,
+ 'SetupWizard.js': 'window.open(window.OverlaySender?.getDownloadUrl?.() || "' + p.UPSTREAM_OVERLAY_URL + '", "_blank");\\n' + helper,
+}
+out = {'ok': p.overlay_download_sources(sources), 'errors': {}}
+for name in sources:
+    for label, text in (('missing', sources[name].replace(p.UPSTREAM_OVERLAY_URL, 'https://example.invalid/')), ('duplicate', sources[name] + sources[name])):
+        try:
+            p.overlay_download_sources(dict(sources, **{name: text}))
+            out['errors'][name + ':' + label] = None
+        except ValueError as error:
+            out['errors'][name + ':' + label] = str(error)
+print(json.dumps(out))
+`;
+ const run=spawnSync(python,['-I','-c',script],{encoding:'utf8'});
+ assert.equal(run.status,0,run.stderr);
+ const {ok,errors}=JSON.parse(run.stdout);
+ assert.ok(ok['LyricsService.js'].includes("return '"+FORK_OVERLAY_URL+"';"));
+ assert.ok(ok['Settings.js'].includes("|| '"+FORK_OVERLAY_URL+"';"));
+ assert.ok(ok['SetupWizard.js'].includes('|| "'+FORK_OVERLAY_URL+'"'));
+ for(const name of ['Settings.js','SetupWizard.js'])
+  assert.ok(ok[name].includes('window.open("https://ivlis.kr/ivLyrics/extensions/#helper", "_blank");'),name+' helper link changed');
+ assert.equal(Object.keys(errors).length,6);
+ for(const [key,message] of Object.entries(errors))
+  assert.match(message||'',/^ivLyrics sync contract changed: .*overlay/,key);
 });

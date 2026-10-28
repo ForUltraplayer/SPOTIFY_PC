@@ -170,11 +170,29 @@ $passed++
 $startup=Join-Path $area 'timeout startup'
 [void](New-Item -ItemType Directory -Path $startup)
 Copy-Item -LiteralPath (Join-Path $project 'start.ps1') -Destination (Join-Path $startup 'start.ps1')
-'exit 11' | Set-Content -LiteralPath (Join-Path $startup 'auto-update.ps1') -Encoding UTF8
+$updaterCalled=Join-Path $area 'startup-updater-called.txt'
+("New-Item -ItemType File -Path '"+$updaterCalled+"' -Force | Out-Null; exit 11") | Set-Content -LiteralPath (Join-Path $startup 'auto-update.ps1') -Encoding UTF8
 '{"app":"SpotifyHangul"}' | Set-Content -LiteralPath (Join-Path $startup 'install-marker.json') -Encoding UTF8
-& $powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $startup 'start.ps1') -NoErrorDialog *> (Join-Path $area 'timeout-startup.log')
-if ($LASTEXITCODE -ne 0) { throw 'A timed-out installer must stop startup before trying to launch the missing helper/client.' }
-$passed++
+# start.ps1 runs the updater only when a download waits in the per-user cache; keep that cache in the test area.
+$savedLocalAppData=$env:LOCALAPPDATA
+$env:LOCALAPPDATA=Join-Path $area 'startup-local'
+try {
+    # Without a waiting update startup continues and fails later on this bare fixture; only the updater call matters here.
+    $ErrorActionPreference='Continue'
+    & $powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $startup 'start.ps1') -NoErrorDialog *> (Join-Path $area 'no-pending-startup.log')
+    $ErrorActionPreference='Stop'
+    if (Test-Path -LiteralPath $updaterCalled) { throw 'Startup ran the updater although no update was waiting.' }
+    $passed++
+    $sha=[Security.Cryptography.SHA256]::Create()
+    try { $startupIdentity=[BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes([IO.Path]::GetFullPath($startup).TrimEnd('\').ToLowerInvariant()))).Replace('-','').Substring(0,16) }
+    finally { $sha.Dispose() }
+    $startupCache=Join-Path $env:LOCALAPPDATA ('ivLyricsHangul\updates\'+$startupIdentity)
+    [void](New-Item -ItemType Directory -Path $startupCache -Force)
+    '{}' | Set-Content -LiteralPath (Join-Path $startupCache 'pending.json') -Encoding UTF8
+    & $powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $startup 'start.ps1') -NoErrorDialog *> (Join-Path $area 'timeout-startup.log')
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $updaterCalled)) { throw 'A timed-out installer must stop startup before trying to launch the missing helper/client.' }
+    $passed++
+} finally { $env:LOCALAPPDATA=$savedLocalAppData }
 Reset-PendingFixture
 if ((Invoke-Fixture NoRelease Check -Interactive) -ne 21 -or (Test-Path -LiteralPath $pendingFile.FullName)) { throw 'Withdrawn cached release remains executable after a successful public check.' }
 if (-not (Test-Path -LiteralPath $download) -or @(Get-ChildItem -LiteralPath $pendingFile.DirectoryName -Filter 'pending-withdrawn-*.json').Count -lt 1) { throw 'Withdrawn update evidence was not preserved.' }; $passed++

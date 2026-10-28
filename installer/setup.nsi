@@ -24,8 +24,10 @@ VIAddVersionKey "LegalCopyright" "2026 ForUltraplayer"
 !define MUI_ABORTWARNING
 !define MUI_CUSTOMFUNCTION_ABORT RollbackInstall
 !define MUI_WELCOMEPAGE_TEXT "Spotify, SpotX, Spicetify와 한글 발음 가사를 한 번에 구성합니다.$\r$\n$\r$\nPython과 Spotify를 미리 설치할 필요가 없습니다. 설치 중 인터넷 연결과 약 150 MB의 추가 다운로드가 필요합니다.$\r$\n$\r$\n기존 Spotify는 보존하고 선택한 폴더에 통합본을 설치합니다. SpotX 패치를 유지하기 위해 통합본의 Spotify 자동 업데이트를 차단합니다."
-!define MUI_FINISHPAGE_RUN "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"
-!define MUI_FINISHPAGE_RUN_PARAMETERS '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File $\"$INSTDIR\start.ps1$\"'
+; Windows 11 hands a new console to Windows Terminal, which shows a window even with
+; -WindowStyle Hidden; a headless console host keeps the launcher invisible.
+!define MUI_FINISHPAGE_RUN "$SYSDIR\conhost.exe"
+!define MUI_FINISHPAGE_RUN_PARAMETERS '--headless $\"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe$\" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File $\"$INSTDIR\start.ps1$\"'
 !define MUI_FINISHPAGE_RUN_TEXT "Spotify 한글 가사 실행"
 ; The desktop overlay is optional and distributed separately from this installer.
 !define MUI_FINISHPAGE_LINK "데스크톱 가사창(선택) 받기"
@@ -129,8 +131,8 @@ Section "Spotify 한글 가사" SEC_MAIN
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SpotifyHangul" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SpotifyHangul" "NoRepair" 1
   CreateDirectory "$SMPROGRAMS\Spotify 한글 가사"
-  CreateShortcut "$DESKTOP\Spotify 한글 가사.lnk" "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\start.ps1"' "$INSTDIR\Spotify\Spotify.exe"
-  CreateShortcut "$SMPROGRAMS\Spotify 한글 가사\Spotify 한글 가사.lnk" "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\start.ps1"' "$INSTDIR\Spotify\Spotify.exe"
+  CreateShortcut "$DESKTOP\Spotify 한글 가사.lnk" "$SYSDIR\conhost.exe" '--headless "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\start.ps1"' "$INSTDIR\Spotify\Spotify.exe"
+  CreateShortcut "$SMPROGRAMS\Spotify 한글 가사\Spotify 한글 가사.lnk" "$SYSDIR\conhost.exe" '--headless "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\start.ps1"' "$INSTDIR\Spotify\Spotify.exe"
   CreateShortcut "$SMPROGRAMS\Spotify 한글 가사\제거.lnk" "$INSTDIR\Uninstall.exe"
   ${If} ${Errors}
     Call RollbackInstall

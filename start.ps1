@@ -44,7 +44,16 @@ Set-Location -LiteralPath $launchDirectory
 [Environment]::CurrentDirectory=$launchDirectory
 $updater = Join-Path $PSScriptRoot 'auto-update.ps1'
 $nativePowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-if ((Test-Path -LiteralPath $updater) -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'install-marker.json'))) {
+# Windows 11 hands a new console to Windows Terminal, which shows a window even with
+# -WindowStyle Hidden; a headless conhost keeps background PowerShell invisible.
+$headlessHost = Join-Path $env:SystemRoot 'System32\conhost.exe'
+# Only start the updater when a downloaded update waits (same cache path as auto-update.ps1);
+# that second PowerShell otherwise costs about a second on every launch.
+$identityHash = [Security.Cryptography.SHA256]::Create()
+try { $updateIdentity = [BitConverter]::ToString($identityHash.ComputeHash([Text.Encoding]::UTF8.GetBytes([IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\').ToLowerInvariant()))).Replace('-','').Substring(0,16) }
+finally { $identityHash.Dispose() }
+$pendingUpdate = Join-Path $env:LOCALAPPDATA ('ivLyricsHangul\updates\' + $updateIdentity + '\pending.json')
+if ((Test-Path -LiteralPath $updater) -and (Test-Path -LiteralPath $pendingUpdate) -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'install-marker.json'))) {
     # Run a temporary copy: the installer may replace this application's files.
     $updateRunner = Join-Path ([IO.Path]::GetTempPath()) ('SpotifyHangul-Update-' + [Guid]::NewGuid().ToString('N') + '.ps1')
     Copy-Item -LiteralPath $updater -Destination $updateRunner
@@ -123,19 +132,12 @@ if (-not $bridgeHealthy) {
     }
     if (-not $bridgeHealthy) { throw '한글 발음 도우미를 시작하지 못했습니다.' }
 }
-$desktopOverlayHook=Join-Path $PSScriptRoot 'installer\desktop-overlay.ps1'
-if (Test-Path -LiteralPath $desktopOverlayHook) {
-    . $desktopOverlayHook
-    # The overlay is an optional separate app; its failure must not block Spotify.
-    try { $null=Start-UserDesktopOverlay }
-    catch {
-        $overlayMessage='데스크톱 가사창을 시작하지 못했습니다. Spotify는 계속 실행합니다. '+$_.Exception.Message
-        try { "$(Get-Date -Format o)`r`n$overlayMessage" | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'start-error.txt') -Encoding UTF8 } catch { }
-    }
-}
+# Spotify first: the optional overlay can take a few seconds to open its port.
 Start-Process -FilePath $spotifyExe -WorkingDirectory (Split-Path -Parent $spotifyExe)
 if (Test-Path -LiteralPath $updater) {
-    Start-Process -FilePath $nativePowerShell -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"'+$updater+'"'),'-Mode','Check','-InstallRoot',('"'+$PSScriptRoot+'"')) -WorkingDirectory $launchDirectory -WindowStyle Hidden
+    $checkArguments = @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"'+$updater+'"'),'-Mode','Check','-InstallRoot',('"'+$PSScriptRoot+'"'))
+    if (Test-Path -LiteralPath $headlessHost) { Start-Process -FilePath $headlessHost -ArgumentList (@('--headless',('"'+$nativePowerShell+'"')) + $checkArguments) -WorkingDirectory $launchDirectory }
+    else { Start-Process -FilePath $nativePowerShell -ArgumentList $checkArguments -WorkingDirectory $launchDirectory -WindowStyle Hidden }
 }
 } catch {
     $message = $_.Exception.Message

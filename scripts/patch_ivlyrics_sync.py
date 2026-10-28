@@ -5,12 +5,26 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MARKER = '/* SpotifyHangul accessible track sync v1 */'
+UPSTREAM_OVERLAY_URL = 'https://ivlis.kr/ivLyrics/extensions/#overlay'
+FORK_OVERLAY_URL = 'https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest'
 
 
 def replace_once(source, old, new, name):
     if source.count(old) != 1:
         raise ValueError('ivLyrics sync contract changed: ' + name)
     return source.replace(old, new, 1)
+
+
+def overlay_download_sources(sources):
+    """Point the overlay download button and its fallbacks at this project's overlay fork."""
+    result = dict(sources)
+    for name, old, new, anchor in (
+        ('LyricsService.js', "return '" + UPSTREAM_OVERLAY_URL + "';", "return '" + FORK_OVERLAY_URL + "';", 'overlay download url'),
+        ('Settings.js', "getDownloadUrl?.() || '" + UPSTREAM_OVERLAY_URL + "';", "getDownloadUrl?.() || '" + FORK_OVERLAY_URL + "';", 'settings overlay download fallback'),
+        ('SetupWizard.js', 'getDownloadUrl?.() || "' + UPSTREAM_OVERLAY_URL + '"', 'getDownloadUrl?.() || "' + FORK_OVERLAY_URL + '"', 'setup wizard overlay download fallback'),
+    ):
+        result[name] = replace_once(result[name], old, new, anchor)
+    return result
 
 
 def patched_sources(sources, core, ui):
@@ -50,6 +64,7 @@ def patched_sources(sources, core, ui):
          '    !showsVideo && lyricsAdjustable ? react.createElement(HangulTrackSyncEditor, { trackUri }) : null,\n    modeSwitch,\n    react.createElement(\n      "div",\n      { className: "lyrics-track-sync-controls" },', 'existing quick sync editor mount'),
     ):
         options = replace_once(options, old, new, name)
+    result = overlay_download_sources(result)
     prefix = MARKER + '\n' + core + '\n' + ui + '\n'
     result['OptionsMenu.js'] = prefix + options
     for name in ('index.js', 'Pages.js'):
@@ -59,7 +74,7 @@ def patched_sources(sources, core, ui):
 
 def patch_tree(directory):
     directory = Path(directory)
-    names = ('index.js', 'Pages.js', 'OptionsMenu.js')
+    names = ('index.js', 'Pages.js', 'OptionsMenu.js', 'LyricsService.js', 'Settings.js', 'SetupWizard.js')
     sources = {name: (directory / name).read_text(encoding='utf-8-sig') for name in names}
     result = patched_sources(sources, (ROOT / 'ivlyrics-sync.js').read_text(encoding='utf-8'),
                              (ROOT / 'ivlyrics-sync-ui.js').read_text(encoding='utf-8'))

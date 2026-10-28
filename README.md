@@ -11,7 +11,7 @@ Spotify 데스크톱 가사 화면에 일본어 노래의 한글 발음을 같�
 0.7.0 이후 설치본은 바로가기로 실행하면 자동으로 업데이트됩니다. 0.6.0, 0.6.1, 0.6.3에서도 중간 버전 없이 바로 업데이트할 수 있습니다. 직접 설치하려면 Spotify를 종료하고 0.7.3 Setup.exe를 기존 설치 폴더에 다시 설치하세요.
 
 > [!NOTE]
-> 데스크톱 가사창(오버레이)은 따로 설치합니다. 재생 버튼을 추가한 수정본의 설치 파일(`lyrics-plus-overlay_…_x64-setup.exe`)을 [ivLyrics-overlay 포크 릴리스](https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest)에서 받아 실행하면, 이후 바로가기로 실행할 때 함께 시작합니다. 원본 오버레이 저장소에는 라이선스가 명시돼 있지 않습니다. 구성 요소별 안내는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 참고하세요.
+> 데스크톱 가사창(오버레이)은 따로 설치합니다. 재생 버튼을 추가한 수정본의 설치 파일(`lyrics-plus-overlay_…_x64-setup.exe`)을 [ivLyrics-overlay 포크 릴리스](https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest)에서 받아 설치한 뒤, ivLyrics 설정의 **일반 > 데스크탑 오버레이 사용**을 켜면 원래 ivLyrics처럼 함께 동작합니다. 원본 오버레이 저장소에는 라이선스가 명시돼 있지 않습니다. 구성 요소별 안내는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 참고하세요.
 
 ## 설치
 
@@ -54,8 +54,9 @@ Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다.
 - 0.7.2: YouTube 음원 첫 재생 실패 수정 (새 음원 주소가 재생 가능해질 때까지 대기, 실패 시 한 번 자동 재시도)
 - 0.7.2: 자동 발음을 한음·나무위키 표기 관례(장음 생략, 촉음 받침 ㅅ)에 맞춤
 - 0.7.3: 바로가기를 두 번 누르거나 설치 직후 동시에 실행해도 도우미 오류 없이 시작
+- 0.7.3: 실행할 때 PowerShell 창이 뜨지 않고, Spotify가 더 빨리 열림
 
-설치 파일에는 Python과 Node를 포함합니다. 데스크톱 가사창은 [포크 릴리스](https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest)의 설치 파일을 실행해 설치하면 바로가기로 실행할 때 함께 시작합니다. 별도 깨끗한 PC의 첫 실행은 아직 확인하지 않았습니다. 구현과 제약은 [YouTube 연결 안내](docs/YOUTUBE_LINKS.md), [배포 준비](docs/DISTRIBUTION_PLAN.md), [검증 기록](docs/VERIFICATION.md)을 참고하세요.
+설치 파일에는 Python과 Node를 포함합니다. 데스크톱 가사창은 [포크 릴리스](https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest)의 설치 파일로 설치하고, ivLyrics 설정의 **데스크탑 오버레이 사용**으로 켭니다. 별도 깨끗한 PC의 첫 실행은 아직 확인하지 않았습니다. 구현과 제약은 [YouTube 연결 안내](docs/YOUTUBE_LINKS.md), [배포 준비](docs/DISTRIBUTION_PLAN.md), [검증 기록](docs/VERIFICATION.md)을 참고하세요.
 
 </details>
 

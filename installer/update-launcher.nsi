@@ -15,8 +15,9 @@ VIAddVersionKey "FileDescription" "Spotify Hangul Lyrics Update Launcher"
 VIAddVersionKey "FileVersion" "${APP_VERSION}"
 VIAddVersionKey "LegalCopyright" "2026 ForUltraplayer"
 !define MUI_WELCOMEPAGE_TEXT "기존 설치 위치를 찾아 GitHub의 최신 통합 설치본을 내려받고 업데이트합니다.$\r$\n$\r$\nSpotify를 완전히 종료한 뒤 계속해 주세요. 인터넷 연결과 통합 설치본을 받을 공간이 필요합니다. 기존 통합 Spotify는 버전과 백업 상태를 확인한 뒤 재사용합니다."
-!define MUI_FINISHPAGE_RUN "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"
-!define MUI_FINISHPAGE_RUN_PARAMETERS '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File $\"$INSTDIR\start.ps1$\"'
+; A headless console host keeps Windows Terminal from showing a PowerShell window.
+!define MUI_FINISHPAGE_RUN "$SYSDIR\conhost.exe"
+!define MUI_FINISHPAGE_RUN_PARAMETERS '--headless $\"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe$\" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File $\"$INSTDIR\start.ps1$\"'
 !define MUI_FINISHPAGE_RUN_TEXT "Spotify 한글 가사 실행"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${PAYLOAD_DIR}\LICENSE"

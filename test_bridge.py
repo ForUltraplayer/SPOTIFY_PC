@@ -64,6 +64,8 @@ class HelperServerTests(unittest.TestCase):
     def test_windows_duplicate_helper_cannot_share_the_port(self):
         import bridge
         self.assertEqual(bridge.HelperServer.allow_reuse_address, bridge.os.name != 'nt')
+        # A burst of polls must not overflow the listen backlog and get reset ("Failed to fetch").
+        self.assertGreaterEqual(bridge.HelperServer.request_queue_size, 128)
         if bridge.os.name != 'nt':
             self.skipTest('Windows socket sharing only')
         first = bridge.HelperServer(('127.0.0.1', 0), bridge.BaseHTTPRequestHandler)
