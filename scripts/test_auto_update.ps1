@@ -7,7 +7,7 @@ $updater=Join-Path $project 'auto-update.ps1'
 $errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile($updater,[ref]$null,[ref]$errors)
 if ($errors.Count) { throw 'Updater parsing failed.' }
-foreach ($name in @('Select-UpdateAsset','Get-Sha256','Get-InstalledVersion')) {
+foreach ($name in @('Test-ReleaseDownloadUrl','Select-UpdateAsset','Get-Sha256','Get-InstalledVersion')) {
     $node=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name},$true)
     Invoke-Expression $node.Extent.Text
 }
@@ -32,6 +32,13 @@ if (Select-UpdateAsset @($release) ([version]'0.6.0')) { throw 'Downgrade or sam
 $wrong=$release | ConvertTo-Json -Depth 6 | ConvertFrom-Json
 $wrong.assets[0].browser_download_url='https://github.com/another/repo/releases/download/v0.6.0/SpotifyHangul-0.6.0-Setup.exe'
 if (Select-UpdateAsset @($wrong) ([version]'0.5.1')) { throw 'Foreign repository accepted.' }; $passed++
+$wrong.assets[0].browser_download_url='https://github.com/another/SPOTIFY_PC/releases/download/v0.6.0/SpotifyHangul-0.6.0-Setup.exe'
+if (Select-UpdateAsset @($wrong) ([version]'0.5.1')) { throw 'Foreign owner with the same repository name accepted.' }; $passed++
+$wrong.assets[0].browser_download_url='https://github.com/ForUltraplayer/HANGULIFY_PC/releases/download/v0.6.0/SpotifyHangul-0.6.0-Setup.exe'
+$renamed=Select-UpdateAsset @($wrong) ([version]'0.5.1')
+if ($renamed.version -ne '0.6.0' -or $renamed.url -cne $wrong.assets[0].browser_download_url) { throw 'Renamed repository release was rejected or downloaded from another address.' }; $passed++
+$wrong.assets[0].browser_download_url='https://github.com/ForUltraplayer/SPOTIFY_PC/releases/download/v0.6.0/SpotifyHangul-0.6.0-Setup.exe.sig'
+if (Select-UpdateAsset @($wrong) ([version]'0.5.1')) { throw 'Download address with a different file accepted.' }; $passed++
 $wrong.assets[0].browser_download_url=$release.assets[0].browser_download_url
 $wrong.assets[0].digest=''
 if (Select-UpdateAsset @($wrong) ([version]'0.5.1')) { throw 'Missing digest accepted.' }; $passed++

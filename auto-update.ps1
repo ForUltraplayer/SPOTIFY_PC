@@ -54,16 +54,20 @@ function Get-InstalledVersion {
     return [version](Get-Content -LiteralPath (Join-Path $root 'release.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version
 }
 
+# A repository rename keeps the owner, so any repository name under it is accepted.
+function Test-ReleaseDownloadUrl([string]$Url,[string]$Version,[string]$Name) {
+    return $Url -cmatch ('^https://github\.com/ForUltraplayer/[A-Za-z0-9._-]+/releases/download/v'+[regex]::Escape($Version)+'/'+[regex]::Escape($Name)+'$')
+}
+
 function Select-UpdateAsset($Releases,[version]$CurrentVersion) {
     $candidates=@(foreach ($release in $Releases) {
         if ($release.draft -or $release.prerelease -or [string]$release.tag_name -notmatch '^v(\d+\.\d+\.\d+)$') { continue }
         $version=$Matches[1]
         if ([version]$version -le $CurrentVersion) { continue }
         $name='SpotifyHangul-'+$version+'-Setup.exe'
-        $url='https://github.com/ForUltraplayer/SPOTIFY_PC/releases/download/v'+$version+'/'+$name
-        $asset=$release.assets | Where-Object { $_.name -ceq $name -and $_.browser_download_url -ceq $url } | Select-Object -First 1
+        $asset=$release.assets | Where-Object { $_.name -ceq $name -and (Test-ReleaseDownloadUrl $_.browser_download_url $version $name) } | Select-Object -First 1
         if (-not $asset -or $asset.digest -notmatch '^sha256:([a-fA-F0-9]{64})$' -or $asset.size -lt 1MB -or $asset.size -gt 250MB) { continue }
-        [PSCustomObject]@{app='SpotifyHangul';version=$version;name=$name;url=$url;sha256=$Matches[1].ToLowerInvariant();size=[long]$asset.size}
+        [PSCustomObject]@{app='SpotifyHangul';version=$version;name=$name;url=[string]$asset.browser_download_url;sha256=$Matches[1].ToLowerInvariant();size=[long]$asset.size}
     })
     return $candidates | Sort-Object { [version]$_.version } -Descending | Select-Object -First 1
 }
@@ -71,8 +75,7 @@ function Select-UpdateAsset($Releases,[version]$CurrentVersion) {
 function Test-QueuedInstaller($Pending,[version]$CurrentVersion) {
     if ($Pending.app -ne 'SpotifyHangul' -or $Pending.root -cne $root -or $Pending.version -notmatch '^\d+\.\d+\.\d+$' -or [version]$Pending.version -le $CurrentVersion) { return $false }
     $name='SpotifyHangul-'+$Pending.version+'-Setup.exe'
-    $url='https://github.com/ForUltraplayer/SPOTIFY_PC/releases/download/v'+$Pending.version+'/'+$name
-    if ($Pending.name -cne $name -or $Pending.url -cne $url -or $Pending.sha256 -notmatch '^[a-f0-9]{64}$' -or $Pending.size -lt 1MB -or $Pending.size -gt 250MB) { return $false }
+    if ($Pending.name -cne $name -or -not (Test-ReleaseDownloadUrl $Pending.url $Pending.version $name) -or $Pending.sha256 -notmatch '^[a-f0-9]{64}$' -or $Pending.size -lt 1MB -or $Pending.size -gt 250MB) { return $false }
     $file=Join-Path $cache $name
     if (-not (Test-Path -LiteralPath $file) -or (Get-Item -LiteralPath $file).Length -ne $Pending.size) { return $false }
     if ((Get-Sha256 $file) -cne $Pending.sha256) { return $false }
@@ -186,7 +189,8 @@ try {
     }
     if (-not ($IgnoreInterval -or $Manual) -and $state.checked_at -and (Get-Date) -lt ([DateTimeOffset]::Parse($state.checked_at).LocalDateTime.AddHours(4))) { exit 0 }
     [Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    $releases=Invoke-RestMethod -Uri 'https://api.github.com/repos/ForUltraplayer/SPOTIFY_PC/releases?per_page=10' -Headers @{'User-Agent'='SpotifyHangul-Updater';'Accept'='application/vnd.github+json'} -TimeoutSec 15
+    # Look up the releases by repository ID, which a rename keeps.
+    $releases=Invoke-RestMethod -Uri 'https://api.github.com/repositories/1433444843/releases?per_page=10' -Headers @{'User-Agent'='SpotifyHangul-Updater';'Accept'='application/vnd.github+json'} -TimeoutSec 15
     $asset=Select-UpdateAsset $releases $current
     if (-not $asset) {
         if ($pending -and [version]$pending.version -gt $current) {
