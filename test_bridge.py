@@ -75,6 +75,44 @@ class HelperServerTests(unittest.TestCase):
         finally:
             first.server_close()
 
+    def test_connections_stay_open_across_requests(self):
+        # Network filters reset loopback responses the server closes first, so the helper keeps
+        # connections alive; a rejected request's body must not leak into the next request.
+        import bridge, http.client, socket
+        servers = []
+        class Recorded(bridge.HelperServer):
+            def __init__(self, *args):
+                super().__init__(*args)
+                servers.append(self)
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1', 0))
+            port = probe.getsockname()[1]
+        with patch.object(bridge, 'HelperServer', Recorded):
+            threading.Thread(target=bridge.serve, kwargs={'port': port, 'lifetime': False}, daemon=True).start()
+            for _ in range(100):
+                if servers:
+                    break
+                threading.Event().wait(0.05)
+        connection = http.client.HTTPConnection('127.0.0.1', port, timeout=5)
+        try:
+            body = json.dumps({'video_id': 'x' * 30})
+            requests = [('GET', '/health', None, {}),
+                        ('POST', '/youtube/metadata', body, {'Content-Type': 'application/json'}),
+                        ('POST', '/missing', body, {'X-Hangul-Lyrics-Client': 'ivlyrics'}),
+                        ('OPTIONS', '/youtube/metadata', None, {'Origin': bridge.ORIGIN}),
+                        ('GET', '/health', None, {})]
+            statuses = []
+            for method, path, payload, headers in requests:
+                connection.request(method, path, body=payload, headers=headers)
+                response = connection.getresponse()
+                response.read()
+                statuses.append(response.status)
+                self.assertFalse(response.will_close, path)
+            self.assertEqual(statuses, [200, 403, 404, 204, 200])
+        finally:
+            connection.close()
+            servers[0].shutdown()
+
 
 class ReaderTests(unittest.TestCase):
     def test_foreground_retry_bypasses_a_miss_and_recovers_existing_readings(self):

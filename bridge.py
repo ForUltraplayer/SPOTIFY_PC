@@ -783,10 +783,39 @@ def serve(port=PORT, lifetime=True):
     reader = Reader()
     playback = PlaybackControlSession()
     class Handler(BaseHTTPRequestHandler):
+        # Keep connections open so the client closes them. Network filters such as AdGuard reset
+        # or truncate loopback responses when the server closes first (HTTP/1.0), which the page
+        # reports as "Failed to fetch" or ERR_CONNECTION_RESET. Every response sends its length.
+        protocol_version = 'HTTP/1.1'
+        timeout = 60  # Idle keep-alive connections give their thread back.
+
         def log_message(self, *_):
             pass  # No lyric text or requests in logs.
 
+        def parse_request(self):
+            self.body_read = False
+            return super().parse_request()
+
+        def read_body(self, length):
+            self.body_read = True
+            return self.rfile.read(length)
+
+        def discard_body(self):
+            # A rejected request's unread body would otherwise be parsed as the next request.
+            if self.body_read or self.command != 'POST':
+                return
+            self.body_read = True
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+            except ValueError:
+                length = -1
+            if 0 <= length <= 3_000_000:
+                self.rfile.read(length)
+            else:
+                self.close_connection = True
+
         def send_json(self, code, value):
+            self.discard_body()
             data = json.dumps(value, ensure_ascii=False).encode("utf-8")
             self.send_response(code)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -829,7 +858,7 @@ def serve(port=PORT, lifetime=True):
                 length = int(self.headers.get('Content-Length', '0'))
                 if not 0 < length <= 4096:
                     raise ValueError('재생 제어 요청 크기가 올바르지 않습니다.')
-                params = json.loads(self.rfile.read(length))
+                params = json.loads(self.read_body(length))
                 if not isinstance(params, dict):
                     raise ValueError('재생 제어 형식이 올바르지 않습니다.')
                 if self.path == '/playback-session':
@@ -911,7 +940,7 @@ def serve(port=PORT, lifetime=True):
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= (3_000_000 if self.path == '/youtube/export' else 100000):
                     raise ValueError("요청 크기가 올바르지 않습니다.")
-                params = json.loads(self.rfile.read(length))
+                params = json.loads(self.read_body(length))
                 if not isinstance(params, dict):
                     raise ValueError("요청 형식이 올바르지 않습니다.")
                 if self.path == '/youtube/metadata':

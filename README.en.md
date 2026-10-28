@@ -55,6 +55,7 @@ Per-song source URLs and automatic pronunciation are under **한글 발음 자�
 - 0.7.2: align automatic pronunciation with authored Korean conventions (long vowels dropped, sokuon as ㅅ)
 - 0.7.3: start without a helper error when the shortcut is pressed twice or right after installation
 - 0.7.3: no PowerShell window on launch, and Spotify opens sooner
+- 0.7.3: fix "Failed to fetch" and YouTube module load failures on PCs running network filters such as AdGuard
 
 Local installers include Python and Node. Install the desktop overlay with the installer from the [fork releases](https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest) and turn it on in the ivLyrics settings. First launch on a separate clean PC remains untested. See [YouTube integration](docs/YOUTUBE_LINKS.md), [distribution preparation](docs/DISTRIBUTION_PLAN.md), and [verification](docs/VERIFICATION.md) for implementation details and limits (Korean).
 
