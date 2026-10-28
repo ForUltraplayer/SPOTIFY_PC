@@ -112,3 +112,14 @@ print(json.dumps(out))
  for(const [key,message] of Object.entries(errors))
   assert.match(message||'',/^ivLyrics sync contract changed: .*overlay/,key);
 });
+test('actual video ad blocker keeps thumbnails of videos whose ID contains "ad"', {skip:!root}, ()=>{
+ const block=extract(source('VideoBackgroundDepend.js'),'const blockedPatterns','const blockedUrlPattern');
+ const patterns=new Function(block+';return blockedPatterns;')();
+ const blocked=url=>patterns.some(pattern=>pattern.test(url));
+ for(const url of ['https://i.ytimg.com/vi/MZNKiadMo3U/default.jpg','https://i.ytimg.com/vi/MZNKiadMo3U/hqdefault.jpg',
+                   'https://i.ytimg.com/vi_webp/MZNKiadMo3U/default.webp','https://i.ytimg.com/vi/rKQptWhAvO0/default.jpg'])
+  assert.equal(blocked(url),false,url);
+ for(const url of ['https://i.ytimg.com/an_webp/ad/mqdefault.webp','https://googleads.g.doubleclick.net/pagead/id',
+                   'https://www.youtube.com/api/stats/ads?ver=2','https://yt3.ggpht.com/ytc/ad123'])
+  assert.equal(blocked(url),true,url);
+});

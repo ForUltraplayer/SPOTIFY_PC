@@ -56,6 +56,7 @@ Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다.
 - 0.7.3: 바로가기를 두 번 누르거나 설치 직후 동시에 실행해도 도우미 오류 없이 시작
 - 0.7.3: 실행할 때 PowerShell 창이 뜨지 않고, Spotify가 더 빨리 열림
 - 0.7.3: AdGuard 등 네트워크 필터가 켜진 PC에서 "Failed to fetch"와 YouTube 모듈 로드 실패 수정
+- 0.7.3: 영상 ID에 "ad"가 들어간 YouTube 곡의 썸네일이 비던 문제 수정
 
 설치 파일에는 Python과 Node를 포함합니다. 데스크톱 가사창은 [포크 릴리스](https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest)의 설치 파일로 설치하고, ivLyrics 설정의 **데스크탑 오버레이 사용**으로 켭니다. 별도 깨끗한 PC의 첫 실행은 아직 확인하지 않았습니다. 구현과 제약은 [YouTube 연결 안내](docs/YOUTUBE_LINKS.md), [배포 준비](docs/DISTRIBUTION_PLAN.md), [검증 기록](docs/VERIFICATION.md)을 참고하세요.
 

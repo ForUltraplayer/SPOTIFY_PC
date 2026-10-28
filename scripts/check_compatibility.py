@@ -37,7 +37,7 @@ def main():
         with tempfile.TemporaryDirectory(prefix='contracts-', dir=ROOT / 'work') as area:
             with zipfile.ZipFile(ROOT / 'work/downloads' / iv['source_artifact']) as archive:
                 # Read only the exact files exercised by the contract check; never execute archive installers.
-                for name in ('index.js', 'Pages.js', 'OptionsMenu.js', 'Utils.js', 'LyricsService.js', 'Settings.js', 'SetupWizard.js', 'MarketplaceManager.js', 'VideoHelperService.js', 'AIAddonManager.js', 'LyricsAddonManager.js', 'Addon_Lyrics_LyricsPlus.js'):
+                for name in ('index.js', 'Pages.js', 'OptionsMenu.js', 'Utils.js', 'LyricsService.js', 'Settings.js', 'SetupWizard.js', 'VideoBackgroundDepend.js', 'MarketplaceManager.js', 'VideoHelperService.js', 'AIAddonManager.js', 'LyricsAddonManager.js', 'Addon_Lyrics_LyricsPlus.js'):
                     matches = [entry for entry in archive.namelist() if entry.count('/') == 1 and entry.endswith('/'+name)]
                     if len(matches) != 1: raise ValueError('Upstream layout changed: '+name)
                     Path(area, name).write_bytes(archive.read(matches[0]))
