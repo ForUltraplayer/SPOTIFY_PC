@@ -47,6 +47,35 @@ test('a transient first-load failure retries once silently, then shows the error
     context.active=false;context.autoRetried=null;assert.equal(context.autoRetryOnce(),false);
 });
 
+test('a dropped helper connection is retried twice, an abort or third failure is reported', async () => {
+    let calls = 0;
+    const context = vm.createContext({ BASE: 'http://127.0.0.1:19643', setTimeout: fn => fn(),
+        fetch: async () => { calls++; if (calls < 3) throw new TypeError('Failed to fetch'); return { ok: true }; } });
+    vm.runInContext('async ' + functionSource('postHelper'), context);
+    assert.equal((await context.postHelper('/youtube/metadata', { video_id: 'abcdefghijk' })).ok, true);
+    assert.equal(calls, 3);
+    calls = -10; await assert.rejects(context.postHelper('/youtube/metadata', {}), /Failed to fetch/);
+    context.fetch = async () => { const error = new Error('stop'); error.name = 'AbortError'; calls++; throw error; };
+    calls = 0; await assert.rejects(context.postHelper('/x', {}), /stop/); assert.equal(calls, 1, 'an abort is not retried');
+});
+
+test('a player page that never reports ready is reopened at most twice per track', () => {
+    let now = 1000; const item = { kind: 'youtube', videoId: 'MZNKiadMo3U' };
+    const frame = { src: 'http://127.0.0.1:19643/youtube/player#session=s' };
+    const context = vm.createContext({ BASE: 'http://127.0.0.1:19643', session: 's', frame, queue: [item], queueIndex: 0,
+        active: true, mediaMode: 'youtube', state: { ready: false }, frameWaitStart: 0, frameReloads: 0, frameItem: null,
+        Date: { now: () => now }, encodeURIComponent });
+    vm.runInContext(functionSource('frameWatchdog'), context);
+    const reloads = () => (frame.src.match(/\?r=/) ? frame.src : null);
+    context.frameWatchdog(); now = 10000; context.frameWatchdog(); assert.equal(reloads(), null, 'waits 10 s first');
+    now = 11001; context.frameWatchdog(); assert.match(frame.src, /\/youtube\/player\?r=11001#session=s$/);
+    now = 21002; context.frameWatchdog(); now = 31003; context.frameWatchdog();
+    assert.equal(context.frameReloads, 2); assert.match(frame.src, /\?r=21002#/, 'no third reload');
+    context.state = { ready: true }; context.frameWatchdog(); assert.equal(context.frameWaitStart, 0);
+    context.queue = [{ kind: 'youtube', videoId: 'abcdefghijk' }]; context.state = { ready: false }; context.frameWatchdog();
+    assert.equal(context.frameReloads, 0, 'a new track gets its own reloads');
+});
+
 function functionSource(name) {
     const start = source.indexOf('function ' + name + '(');
     if (start < 0) return null;
