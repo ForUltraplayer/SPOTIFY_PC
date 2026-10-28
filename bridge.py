@@ -769,6 +769,12 @@ def monitor_lifetime(server, check=spotify_running, interval=5, idle_timeout=30,
                 return
 
 
+class HelperServer(ThreadingHTTPServer):
+    # On Windows SO_REUSEADDR lets a second helper bind the same port and answer
+    # in place of the first, so a duplicate launch must fail to bind instead.
+    allow_reuse_address = os.name != 'nt'
+
+
 def serve(port=PORT, lifetime=True):
     reader = Reader()
     playback = PlaybackControlSession()
@@ -921,7 +927,7 @@ def serve(port=PORT, lifetime=True):
                 self.send_json(429, {"error": str(error)})
             except Exception:
                 self.send_json(500, {"error": "발음 자료를 읽는 중 오류가 발생했습니다."})
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = HelperServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
     if lifetime:
         threading.Thread(target=monitor_lifetime, args=(server,), daemon=True).start()

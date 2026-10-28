@@ -60,6 +60,20 @@ HANEUM_HTML = ''.join(f'<div class="border-b pb-5"><p>{reading}</p><p>{original}
                       for original, reading in PAIRS)
 
 
+class HelperServerTests(unittest.TestCase):
+    def test_windows_duplicate_helper_cannot_share_the_port(self):
+        import bridge
+        self.assertEqual(bridge.HelperServer.allow_reuse_address, bridge.os.name != 'nt')
+        if bridge.os.name != 'nt':
+            self.skipTest('Windows socket sharing only')
+        first = bridge.HelperServer(('127.0.0.1', 0), bridge.BaseHTTPRequestHandler)
+        try:
+            with self.assertRaises(OSError):
+                bridge.HelperServer(first.server_address, bridge.BaseHTTPRequestHandler)
+        finally:
+            first.server_close()
+
+
 class ReaderTests(unittest.TestCase):
     def test_foreground_retry_bypasses_a_miss_and_recovers_existing_readings(self):
         calls = []

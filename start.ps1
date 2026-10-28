@@ -111,8 +111,14 @@ if (-not $bridgeHealthy) {
         Start-Sleep -Milliseconds 250
         try {
             $health = Invoke-RestMethod -Uri 'http://127.0.0.1:19643/health' -TimeoutSec 1
-            $bridgeHealthy = Assert-HelperHealth $health $bridgeScript $expectedHelperVersion $pythonWindowless $startedHelper.Id
-            if ($bridgeHealthy) { break }
+            # A concurrent launch (installer finish page and shortcut) or a helper
+            # too busy for the first probe can own the port; accept this
+            # installation's helper and drop the duplicate started here.
+            $bridgeHealthy = Assert-HelperHealth $health $bridgeScript $expectedHelperVersion $pythonWindowless
+            if ($bridgeHealthy) {
+                if ([int]$health.pid -ne $startedHelper.Id -and -not $startedHelper.HasExited) { try { $startedHelper.Kill() } catch { } }
+                break
+            }
         } catch [System.Net.WebException] { }
     }
     if (-not $bridgeHealthy) { throw '한글 발음 도우미를 시작하지 못했습니다.' }
