@@ -787,7 +787,9 @@ def serve(port=PORT, lifetime=True):
         # or truncate loopback responses when the server closes first (HTTP/1.0), which the page
         # reports as "Failed to fetch" or ERR_CONNECTION_RESET. Every response sends its length.
         protocol_version = 'HTTP/1.1'
-        timeout = 60  # Idle keep-alive connections give their thread back.
+        # Idle connections give their thread back, but only after Chromium's own 5-minute idle
+        # pool expires, so Spotify and the overlay still close first.
+        timeout = 330
 
         def log_message(self, *_):
             pass  # No lyric text or requests in logs.
