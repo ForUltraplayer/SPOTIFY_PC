@@ -147,7 +147,7 @@ try {
         }
         if (-not $Interactive) { exit 0 }
     }
-    if (-not $IgnoreInterval -and $state.checked_at -and (Get-Date) -lt ([DateTimeOffset]::Parse($state.checked_at).LocalDateTime.AddHours(8))) { exit 0 }
+    if (-not $IgnoreInterval -and $state.checked_at -and (Get-Date) -lt ([DateTimeOffset]::Parse($state.checked_at).LocalDateTime.AddHours(4))) { exit 0 }
     [Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     $releases=Invoke-RestMethod -Uri 'https://api.github.com/repos/ForUltraplayer/SPOTIFY_PC/releases?per_page=10' -Headers @{'User-Agent'='SpotifyHangul-Updater';'Accept'='application/vnd.github+json'} -TimeoutSec 15
     $asset=Select-UpdateAsset $releases $current

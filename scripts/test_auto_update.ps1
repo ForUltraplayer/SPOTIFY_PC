@@ -53,7 +53,7 @@ $driver=Join-Path $area 'driver.ps1'
 # @file driver.ps1
 # @author: ForUltraplayer
 # @brief Isolate the update script from live network and installer execution.
-param($Updater,$Root,$Area,$Fixture,$Scenario,$Action,[switch]$Interactive,[string]$RequestedVersion='0.0.0')
+param($Updater,$Root,$Area,$Fixture,$Scenario,$Action,[switch]$Interactive,[switch]$RespectInterval,[string]$RequestedVersion='0.0.0')
 $env:LOCALAPPDATA=Join-Path $Area 'local'
 function Invoke-RestMethod {
     param($Uri,$Headers,$TimeoutSec)
@@ -88,14 +88,15 @@ function Start-Process {
 }
 Set-Location -LiteralPath $Root
 [Environment]::CurrentDirectory=$Root
-& $Updater -Mode $Action -InstallRoot $Root -IgnoreInterval -Interactive:$Interactive -ErrorFile (Join-Path $Area 'error.txt') -RequestedVersion $RequestedVersion
+& $Updater -Mode $Action -InstallRoot $Root -IgnoreInterval:(-not $RespectInterval) -Interactive:$Interactive -ErrorFile (Join-Path $Area 'error.txt') -RequestedVersion $RequestedVersion
 exit $LASTEXITCODE
 '@ | Set-Content -LiteralPath $driver -Encoding UTF8
 $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-function Invoke-Fixture($Scenario,$Action,[switch]$Interactive,[string]$RequestedVersion='0.0.0') {
+function Invoke-Fixture($Scenario,$Action,[switch]$Interactive,[switch]$RespectInterval,[string]$RequestedVersion='0.0.0') {
     Remove-Item -LiteralPath (Join-Path $area 'error.txt') -ErrorAction SilentlyContinue
     $fixtureArguments=@('-NoProfile','-ExecutionPolicy','Bypass','-File',$driver,'-Updater',$updater,'-Root',$root,'-Area',$area,'-Fixture',$fixture,'-Scenario',$Scenario,'-Action',$Action,'-RequestedVersion',$RequestedVersion)
     if ($Interactive) { $fixtureArguments += '-Interactive' }
+    if ($RespectInterval) { $fixtureArguments += '-RespectInterval' }
     & $powershell @fixtureArguments *>> (Join-Path $area 'driver.log')
     return $LASTEXITCODE
 }
@@ -118,6 +119,14 @@ $pending | ConvertTo-Json | Set-Content -LiteralPath $pendingFile.FullName -Enco
 if ((Invoke-Fixture Block ApplyPending) -ne 0 -or (Get-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Raw | ConvertFrom-Json).status -ne 'install-failed') { throw 'The same failed update was retried automatically.' }; $passed++
 if ((Invoke-Fixture Offline Check) -ne 0) { throw 'Offline check blocks normal playback.' }; $passed++
 if ((Invoke-Fixture Offline Check -Interactive) -ne 1) { throw 'Manual updater hides download failures.' }; $passed++
+# Startup checks GitHub again once four hours have passed since the last check, not before.
+$intervalState=Join-Path $pendingFile.DirectoryName 'state.json'
+$savedState=Get-Content -LiteralPath $intervalState -Raw
+@{status='checked';checked_at=(Get-Date).AddHours(-3).ToString('o')} | ConvertTo-Json | Set-Content -LiteralPath $intervalState -Encoding UTF8
+if ((Invoke-Fixture Offline Check -Interactive -RespectInterval) -ne 0) { throw 'Startup checked again within four hours.' }; $passed++
+@{status='checked';checked_at=(Get-Date).AddHours(-5).ToString('o')} | ConvertTo-Json | Set-Content -LiteralPath $intervalState -Encoding UTF8
+if ((Invoke-Fixture Offline Check -Interactive -RespectInterval) -ne 1) { throw 'Startup skipped the check after four hours.' }; $passed++
+Set-Content -LiteralPath $intervalState -Value $savedState -NoNewline -Encoding UTF8
 function Reset-PendingFixture {
     '{"Version":"0.5.1"}' | Set-Content -LiteralPath (Join-Path $root 'install-state.json') -Encoding UTF8
     $pending | ConvertTo-Json | Set-Content -LiteralPath $pendingFile.FullName -Encoding UTF8
