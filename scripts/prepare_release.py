@@ -11,7 +11,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent.parent
 FILES = (
     'README.md', 'README.en.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'release.json', 'requirements.txt', 'components.json',
-    'bridge.py', 'youtube_stream.py', 'playlist_files.py', 'playback_control.py', 'phonetics.py', 'hangul-lyrics.js', 'youtube-links.js', 'youtube-ivlyrics.js', 'youtube-library.js', 'youtube-overlay-controls.js', 'youtube-desktop-bridge.js', 'youtube-player.html', 'start.ps1', 'stop.ps1', 'auto-update.ps1',
+    'bridge.py', 'youtube_stream.py', 'playlist_files.py', 'playback_control.py', 'phonetics.py', 'hangul-lyrics.js', 'youtube-links.js', 'youtube-ivlyrics.js', 'youtube-library.js', 'youtube-overlay-controls.js', 'youtube-desktop-bridge.js', 'youtube-player.html', 'start.ps1', 'stop.ps1', 'auto-update.ps1', 'update-ui.ps1',
     'test_bridge.py', 'test_extension.cjs', 'test_playlist_files.py', 'test_youtube_stream.py', 'test_playback_control.py', 'test_playback_http.py', 'test_youtube_library.cjs', 'test_youtube_overlay.cjs', 'test_youtube_ivlyrics.cjs', 'test_youtube_navigation.cjs', 'test_youtube_desktop.cjs', 'scripts/prepare_release.py',
     'docs/RELEASE.md', 'docs/OPERATIONS.md', 'docs/VERIFICATION.md', 'docs/LICENSE_REVIEW.md',
     'docs/SPOTX_INTEGRATION.md', 'docs/YOUTUBE_LINKS.md', 'scripts/start_youtube_dev.ps1',

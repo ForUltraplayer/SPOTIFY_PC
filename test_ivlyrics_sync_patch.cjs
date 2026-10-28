@@ -123,3 +123,65 @@ test('actual video ad blocker keeps thumbnails of videos whose ID contains "ad"'
                    'https://www.youtube.com/api/stats/ads?ver=2','https://yt3.ggpht.com/ytc/ad123'])
   assert.equal(blocked(url),true,url);
 });
+test('actual overlay opener asks the helper only when enabled and disconnected, at most every 30 seconds', {skip:!root}, async()=>{
+ const service=source('LyricsService.js');
+ assert.ok(!service.includes('ivLyrics://overlay'),'dead URL scheme is gone');
+ const section=extract(service,'_overlayLaunchRequestedAt: 0,','getDownloadUrl() {');
+ const requests=[],timers=[];let clock=1000000,connected=false,checks=0,reply={ok:true};
+ const context=vm.createContext({Date:{now:()=>clock},setTimeout:fn=>timers.push(fn),AbortSignal:{timeout:ms=>'timeout:'+ms},
+  fetch:async(url,options)=>{requests.push([url,options]);if(reply instanceof Error)throw reply;return reply;}});
+ vm.runInContext('this.overlay={enabled:false,isConnected:false,async checkConnection(){this.checks=(this.checks||0)+1;return this.connectedNow;},'+section+'};',context);
+ const overlay=context.overlay;
+ assert.equal(await overlay.openOverlayApp(),false,'setting off');
+ overlay.enabled=true;overlay.isConnected=true;
+ assert.equal(await overlay.openOverlayApp(),false,'already connected');
+ assert.equal(requests.length,0);assert.equal(overlay.checks,undefined,'no probe while off or connected');
+ overlay.isConnected=false;overlay.connectedNow=true;
+ assert.equal(await overlay.openOverlayApp(),false,'probe finds a running overlay');
+ assert.equal(requests.length,0);assert.equal(overlay.checks,1);
+ clock+=30000;overlay.connectedNow=false;
+ assert.equal(await overlay.openOverlayApp(),true);
+ assert.deepEqual(JSON.parse(JSON.stringify(requests)),[['http://127.0.0.1:19643/overlay/launch',
+  {method:'POST',headers:{'X-Hangul-Lyrics-Client':'ivlyrics'},credentials:'omit',signal:'timeout:3000'}]]);
+ assert.equal(timers.length,1);timers[0]();assert.equal(overlay.checks,3,'connection is rechecked after the launch');
+ clock+=29999;
+ assert.equal(await overlay.openOverlayApp(),false,'throttled');assert.equal(requests.length,1);
+ clock+=1;reply=new TypeError('Failed to fetch');
+ assert.equal(await overlay.openOverlayApp(),false,'helper unreachable is silent');assert.equal(requests.length,2);
+ clock+=30000;reply={ok:false,status:404};
+ assert.equal(await overlay.openOverlayApp(),false,'overlay not installed is silent');assert.equal(timers.length,1);
+});
+test('actual lyrics page asks for the overlay when it mounts', {skip:!root}, ()=>{
+ const mount=extract(source('index.js'),'componentDidMount() {','Prefetcher.setLyricsContainer(this);');
+ assert.ok(mount.includes("document.body.classList.add('ivlyrics-page-active');\n    window.OverlaySender?.openOverlayApp?.();\n"));
+ assert.equal(source('index.js').split('openOverlayApp').length-1,1);
+});
+test('overlay launch transform refuses a changed or duplicated upstream anchor', ()=>{
+ const python=process.env.PYTHON||'python';
+ const script=`
+import json, sys
+sys.path.insert(0, ${JSON.stringify(path.join(__dirname,'scripts'))})
+import patch_ivlyrics_sync as p
+sources = {'LyricsService.js': 'const OverlaySender = {\\n' + p.UPSTREAM_OPEN_OVERLAY + '\\n};',
+           'index.js': "  componentDidMount() {\\n    document.body.classList.add('ivlyrics-page-active');\\n  }"}
+ok = p.overlay_auto_launch(sources)
+errors = {}
+for name in sources:
+    for label, text in (('missing', ''), ('duplicate', sources[name] + sources[name])):
+        try:
+            p.overlay_auto_launch(dict(sources, **{name: text}))
+            errors[name + ':' + label] = None
+        except ValueError as error:
+            errors[name + ':' + label] = str(error)
+print(json.dumps({'ok': ok, 'errors': errors}))
+`;
+ const run=spawnSync(python,['-I','-c',script],{encoding:'utf8'});
+ assert.equal(run.status,0,run.stderr);
+ const {ok,errors}=JSON.parse(run.stdout);
+ assert.ok(ok['LyricsService.js'].includes("fetch('http://127.0.0.1:19643/overlay/launch'"));
+ assert.ok(!ok['LyricsService.js'].includes('ivLyrics://'));
+ assert.ok(ok['index.js'].includes('window.OverlaySender?.openOverlayApp?.();'));
+ assert.equal(Object.keys(errors).length,4);
+ for(const [key,message] of Object.entries(errors))
+  assert.match(message||'',/^ivLyrics sync contract changed: .*overlay/,key);
+});

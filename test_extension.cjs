@@ -755,3 +755,26 @@ test('joint-credit recovery preserves full width punctuation in the search title
     });
     assert.equal((await provider.getLyrics(info)).synced.length,1);
 });
+
+test('the profile menu shows the installed version and asks the helper to check for updates', async () => {
+    const h = loadExtension(null, authored).harness, items = [], requests = [];
+    h.values.set('ivLyrics:hangul-web:configured', 'true');
+    h.values.set('ivLyrics:hangul-web:display-config-version', '1');
+    h.context.Spicetify.Menu = { Item: class { constructor(name, active, onClick) { Object.assign(this, { name, onClick }); } register() { items.push(this); } } };
+    let reply = { ok: true, status: 202, json: async () => ({ status: 'started' }) };
+    h.context.fetch = async (url, options) => {
+        if (url.endsWith('/health')) throw new TypeError('offline');
+        requests.push({ url, method: options.method, client: options.headers['X-Hangul-Lyrics-Client'] });
+        return reply;
+    };
+    const addon = h.context.window.HangulLyricsProvider.addon;
+    await addon.init();
+    const item = items.find(entry => entry.name.includes('업데이트 확인'));
+    assert.equal(item.name, 'Spotify 한글 가사 ' + addon.version + ' · 업데이트 확인');
+    await item.onClick();
+    assert.deepEqual(requests, [{ url: 'http://127.0.0.1:19643/update/check', method: 'POST', client: 'ivlyrics' }]);
+    assert.match(h.notices.at(-1), /업데이트를 확인하고 있습니다/);
+    reply = { ok: false, status: 404, json: async () => ({ error: '경로가 없습니다.' }) };
+    await item.onClick();
+    assert.match(h.notices.at(-1), /업데이트 확인을 시작하지 못했습니다/);
+});

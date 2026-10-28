@@ -64,7 +64,7 @@ def main():
         shutil.rmtree(PAYLOAD)
     PAYLOAD.mkdir(parents=True)
     (PAYLOAD / '.builder-owned').write_text('SpotifyHangul build payload\n')
-    for name in ('bridge.py', 'youtube_stream.py', 'playlist_files.py', 'playback_control.py', 'phonetics.py', 'hangul-lyrics.js', 'youtube-links.js', 'youtube-ivlyrics.js', 'youtube-library.js', 'youtube-overlay-controls.js', 'youtube-desktop-bridge.js', 'youtube-now-playing.js', 'youtube-now-playing.css', 'youtube-player.html', 'start.ps1', 'stop.ps1', 'auto-update.ps1',
+    for name in ('bridge.py', 'youtube_stream.py', 'playlist_files.py', 'playback_control.py', 'phonetics.py', 'hangul-lyrics.js', 'youtube-links.js', 'youtube-ivlyrics.js', 'youtube-library.js', 'youtube-overlay-controls.js', 'youtube-desktop-bridge.js', 'youtube-now-playing.js', 'youtube-now-playing.css', 'youtube-player.html', 'start.ps1', 'stop.ps1', 'auto-update.ps1', 'update-ui.ps1',
                  'LICENSE', 'THIRD_PARTY_NOTICES.md', 'release.json', 'components.json'):
         shutil.copy2(ROOT / name, PAYLOAD / name)
     shutil.copytree(ROOT / 'installer', PAYLOAD / 'installer')

@@ -123,13 +123,13 @@ function clickHarness(overrides = {}) {
         viewBypass: false, mixedGrid: { isConnected: true }, queueSource: 'local:my-list',
         playing: true, repeat: 'off', shuffle: false, state: {},
         open: () => calls.push('open'), toggle: () => calls.push('toggle'), startView: index => calls.push(['start', index]),
-        ivLyrics: { open: () => calls.push('lyrics') }, Spicetify: { Player: { togglePlay: () => calls.push('native-toggle') }, Platform: { History: history } },
+        ivLyrics: { open: () => calls.push('lyrics') }, window: {}, Spicetify: { Player: { togglePlay: () => calls.push('native-toggle') }, Platform: { History: history } },
         refreshView: () => { calls.push('refresh'); return Promise.resolve(); },
         notify: message => calls.push(['notify', message]), updateBar() {}, send: command => calls.push(['send', command]),
         advance: direction => calls.push(['advance', direction]), ...overrides,
     });
     // New shared header handlers are executed from the implementation when present.
-    for (const name of ['togglePlaylistPlayback', 'toggleViewPlayback', 'showQueue', 'isIvLyricsMicrophone']) {
+    for (const name of ['togglePlaylistPlayback', 'toggleViewPlayback', 'showQueue', 'isIvLyricsMicrophone', 'openLyrics']) {
         const definition = functionSource(name); if (definition) vm.runInContext(definition, context);
     }
     vm.runInContext(functionSource('click'), context);
@@ -453,4 +453,19 @@ test('iframe explicit mute wins over autoplay and subsequent play while legacy c
     assert.deepEqual(child.calls.at(-1), ['cue', 36, 100, false]);
     child.receive({ command: 'load', videoId: 'rKQptWhAvO0', seconds: 37, autoplay: true, volume: -5, muted: false });
     assert.deepEqual(child.calls.at(-1), ['load', 37, 0, false]);
+});
+
+test('YouTube lyric buttons open ivLyrics and ask its overlay sender to start the desktop overlay', () => {
+    const calls = [];
+    const context = vm.createContext({ ivLyrics: { open: () => calls.push('open') },
+        window: { OverlaySender: { openOverlayApp: async () => { calls.push('overlay'); return true; } } } });
+    vm.runInContext(functionSource('openLyrics'), context);
+    context.openLyrics(); assert.deepEqual(calls, ['open', 'overlay']);
+    context.ivLyrics.open = () => { throw new Error('YouTube 곡을 먼저 재생해 주세요.'); };
+    assert.throws(() => context.openLyrics(), /먼저 재생/); assert.deepEqual(calls, ['open', 'overlay'], 'no launch without a track');
+    context.ivLyrics.open = () => calls.push('open'); context.window = {};
+    context.openLyrics(); assert.deepEqual(calls, ['open', 'overlay', 'open'], 'ivLyrics without the sender is left alone');
+    for (const wiring of ['onLyrics:openLyrics,', 'stopImmediatePropagation();openLyrics();return;', "id==='lyrics-button'&&active)action=openLyrics;", 'openLyrics,editLyricInfo'])
+        assert.ok(source.includes(wiring), wiring);
+    assert.ok(!source.includes('ivLyrics.open()}') && source.split('ivLyrics.open()').length === 2, 'every lyric entry point goes through openLyrics');
 });

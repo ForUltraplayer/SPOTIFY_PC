@@ -114,6 +114,128 @@ class HelperServerTests(unittest.TestCase):
             servers[0].shutdown()
 
 
+    def test_process_check_finds_this_interpreter_by_image_name(self):
+        import bridge, sys
+        if bridge.os.name != 'nt':
+            self.skipTest('Windows process snapshot only')
+        self.assertTrue(bridge.process_running(Path(sys.executable).name.casefold()))
+        self.assertFalse(bridge.process_running('no-such-hangul-process.exe'))
+
+
+class LaunchEndpointTests(unittest.TestCase):
+    # Every test replaces the process launcher; nothing here starts the real overlay or updater.
+    def setUp(self):
+        import bridge
+        self.bridge = bridge
+        self.area = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__('shutil').rmtree, self.area, True)
+        self.popen = patch.object(bridge.subprocess, 'Popen').start()
+        self.running = patch.object(bridge, 'process_running', return_value=False).start()
+        patch.dict(bridge.os.environ, {'LOCALAPPDATA': str(self.area), 'SystemRoot': r'C:\Windows'}).start()
+        self.addCleanup(patch.stopall)
+
+    def install_overlay(self):
+        executable = self.area / 'lyrics-plus-overlay' / 'lyrics-plus-overlay.exe'
+        executable.parent.mkdir()
+        executable.write_bytes(b'')
+        return executable
+
+    def detached_flags(self):
+        return getattr(self.bridge.subprocess, 'DETACHED_PROCESS', 0) | getattr(self.bridge.subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)
+
+    def test_overlay_starts_detached_from_the_fixed_install_path_once(self):
+        self.assertEqual(self.bridge.launch_overlay(), 'missing')
+        self.popen.assert_not_called()
+        executable = self.install_overlay()
+        self.assertEqual(self.bridge.launch_overlay(), 'started')
+        self.popen.assert_called_once()
+        args, kwargs = self.popen.call_args
+        self.assertEqual(args[0], [str(executable)])
+        self.assertEqual(Path(kwargs['cwd']), executable.parent)
+        self.assertEqual(kwargs['creationflags'], self.detached_flags())
+        self.assertTrue(kwargs['close_fds'])
+        self.running.assert_called_with('lyrics-plus-overlay.exe')
+        self.running.return_value = True
+        self.assertEqual(self.bridge.launch_overlay(), 'running')
+        self.popen.assert_called_once()
+
+    def test_overlay_without_local_app_data_is_missing(self):
+        with patch.dict(self.bridge.os.environ, {'LOCALAPPDATA': ''}):
+            self.assertEqual(self.bridge.launch_overlay(), 'missing')
+        self.popen.assert_not_called()
+
+    def test_update_check_runs_the_installed_updater_hidden_outside_the_install_folder(self):
+        root = self.area / 'SpotifyHangul'
+        root.mkdir()
+        with patch.object(self.bridge, '__file__', str(root / 'bridge.py')):
+            self.assertFalse(self.bridge.launch_update_check())
+            self.popen.assert_not_called()
+            (root / 'auto-update.ps1').write_text('', encoding='utf-8')
+            self.assertTrue(self.bridge.launch_update_check())
+        args, kwargs = self.popen.call_args
+        system = Path(r'C:\Windows') / 'System32'
+        self.assertEqual(args[0], [str(system / 'WindowsPowerShell' / 'v1.0' / 'powershell.exe'),
+                                   '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
+                                   '-File', str(root / 'auto-update.ps1'), '-Mode', 'Check', '-IgnoreInterval', '-Manual',
+                                   '-InstallRoot', str(root)])
+        # A windowless console, not DETACHED_PROCESS, and no conhost --headless whose empty stdin ends it at once.
+        self.assertEqual(kwargs['creationflags'], 0x08000000 | 0x00000200)
+        self.assertNotEqual(Path(kwargs['cwd']).resolve(), root.resolve())
+
+    def test_endpoints_share_a_keep_alive_connection_and_reject_foreign_callers(self):
+        import http.client, socket
+        bridge = self.bridge
+        servers = []
+        class Recorded(bridge.HelperServer):
+            def __init__(self, *args):
+                super().__init__(*args)
+                servers.append(self)
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1', 0))
+            port = probe.getsockname()[1]
+        with patch.object(bridge, 'HelperServer', Recorded):
+            threading.Thread(target=bridge.serve, kwargs={'port': port, 'lifetime': False}, daemon=True).start()
+            for _ in range(100):
+                if servers:
+                    break
+                threading.Event().wait(0.05)
+        self.addCleanup(lambda: servers[0].shutdown())
+        client = {'Origin': bridge.ORIGIN, 'X-Hangul-Lyrics-Client': 'ivlyrics'}
+        connection = http.client.HTTPConnection('127.0.0.1', port, timeout=5)
+        self.addCleanup(connection.close)
+        def post(path, body=None, headers=client):
+            connection.request('POST', path, body=body, headers=headers)
+            response = connection.getresponse()
+            payload = json.loads(response.read())
+            self.assertFalse(response.will_close, path)
+            return response.status, payload
+        self.assertEqual(post('/overlay/launch'), (404, {'status': 'missing'}))
+        self.install_overlay()
+        self.assertEqual(post('/overlay/launch', '{"path": "C:/Windows/System32/calc.exe"}',
+                              {**client, 'Content-Type': 'application/json'}), (200, {'status': 'started'}))
+        self.running.return_value = True
+        self.assertEqual(post('/overlay/launch'), (200, {'status': 'running'}))
+        self.assertEqual(self.popen.call_count, 1)
+        self.assertEqual(Path(self.popen.call_args[0][0][0]).name, 'lyrics-plus-overlay.exe')
+        for headers in ({**client, 'Origin': 'https://evil.example'}, {'Origin': bridge.ORIGIN}):
+            self.assertEqual(post('/overlay/launch', '{}', headers)[0], 403)
+            self.assertEqual(post('/update/check', '{}', headers)[0], 403)
+        self.assertEqual(post('/overlay/launch', 'x' * 5000)[0], 400)
+        with patch.object(bridge, 'launch_update_check', return_value=True) as update:
+            self.assertEqual(post('/update/check', '{}', {**client, 'Content-Type': 'application/json'}), (202, {'status': 'started'}))
+            self.assertEqual(post('/update/check')[1], {'status': 'started'})
+        self.assertEqual(update.call_count, 2)
+        with patch.object(bridge, 'launch_update_check', return_value=False):
+            self.assertEqual(post('/update/check'), (404, {'status': 'missing', 'error': '업데이트 프로그램이 설치되지 않았습니다.'}))
+        self.popen.side_effect = OSError('denied')
+        self.running.return_value = False
+        self.assertEqual(post('/overlay/launch')[0], 500)
+        connection.request('GET', '/health')
+        health = json.loads(connection.getresponse().read())
+        self.assertIn('overlay-launch-v1', health['capabilities'])
+        self.assertIn('update-check-v1', health['capabilities'])
+
+
 class ReaderTests(unittest.TestCase):
     def test_foreground_retry_bypasses_a_miss_and_recovers_existing_readings(self):
         calls = []

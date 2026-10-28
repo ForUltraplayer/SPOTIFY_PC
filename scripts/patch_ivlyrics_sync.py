@@ -35,6 +35,41 @@ def thumbnail_ad_filter(sources):
     return result
 
 
+UPSTREAM_OPEN_OVERLAY = """        openOverlayApp() {
+            try {
+                window.open('ivLyrics://overlay', '_blank');
+                setTimeout(() => this.checkConnection(), 2000);
+            } catch (e) {
+                console.error('[OverlaySender] 앱 열기 실패:', e);
+            }
+        },"""
+HELPER_OPEN_OVERLAY = """        // SpotifyHangul: Spotify's page cannot open the overlay's URL scheme, so the local helper starts
+        // the installed overlay. One request per 30 seconds; the helper never starts a second instance.
+        _overlayLaunchRequestedAt: 0,
+        async openOverlayApp() {
+            if (!this.enabled || this.isConnected || Date.now() - this._overlayLaunchRequestedAt < 30000) return false;
+            this._overlayLaunchRequestedAt = Date.now();
+            if (await this.checkConnection()) return false;
+            const response = await fetch('http://127.0.0.1:19643/overlay/launch', {
+                method: 'POST',
+                headers: { 'X-Hangul-Lyrics-Client': 'ivlyrics' },
+                credentials: 'omit',
+                signal: AbortSignal.timeout(3000)
+            }).catch(() => null);
+            if (response?.ok) setTimeout(() => this.checkConnection(), 2000);
+            return !!response?.ok;
+        },"""
+
+
+def overlay_auto_launch(sources):
+    """Start the desktop overlay through the helper when the lyrics page opens and it is enabled but not connected."""
+    result = dict(sources)
+    result['LyricsService.js'] = replace_once(result['LyricsService.js'], UPSTREAM_OPEN_OVERLAY, HELPER_OPEN_OVERLAY, 'overlay app opener')
+    result['index.js'] = replace_once(result['index.js'], "    document.body.classList.add('ivlyrics-page-active');\n",
+        "    document.body.classList.add('ivlyrics-page-active');\n    window.OverlaySender?.openOverlayApp?.();\n", 'lyrics page overlay launch')
+    return result
+
+
 def patched_sources(sources, core, ui):
     """Validate every upstream anchor before producing any filesystem writes."""
     if any(MARKER in text for text in sources.values()):
@@ -72,7 +107,7 @@ def patched_sources(sources, core, ui):
          '    !showsVideo && lyricsAdjustable ? react.createElement(HangulTrackSyncEditor, { trackUri }) : null,\n    modeSwitch,\n    react.createElement(\n      "div",\n      { className: "lyrics-track-sync-controls" },', 'existing quick sync editor mount'),
     ):
         options = replace_once(options, old, new, name)
-    result = thumbnail_ad_filter(overlay_download_sources(result))
+    result = overlay_auto_launch(thumbnail_ad_filter(overlay_download_sources(result)))
     prefix = MARKER + '\n' + core + '\n' + ui + '\n'
     result['OptionsMenu.js'] = prefix + options
     for name in ('index.js', 'Pages.js'):

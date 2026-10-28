@@ -392,6 +392,15 @@
             Spicetify.showNotification?.('곡 제목을 복사하지 못했습니다.', true);
         }
     }
+    // The helper starts the updater, which reports the result in its own window.
+    async function checkForUpdate() {
+        try {
+            await request('/update/check', {}, { timeoutMs: 5000 });
+            Spicetify.showNotification?.('업데이트를 확인하고 있습니다.', false, 1500);
+        } catch {
+            Spicetify.showNotification?.('업데이트 확인을 시작하지 못했습니다. “Spotify 한글 가사” 바로가기로 다시 실행해 주세요.', true);
+        }
+    }
     let footerCopyInstalled = false;
     function installFooterTitleCopy() {
         if (footerCopyInstalled || !window.document?.addEventListener) return;
@@ -486,7 +495,7 @@
         id: ID,
         name: '기존 한글 발음 가사',
         author: 'ForUltraplayer',
-        version: '0.7.3',
+        version: '0.7.4',
         description: { ko: '웹에 작성된 한글 발음을 가져옵니다. AI·API 키·유료 호출 없이 원문과 대조합니다.',
             en: 'Existing web-authored Hangul readings; no AI or paid API.' },
         supports: { pronunciation: true, translate: false, metadata: false, tmi: false,
@@ -534,6 +543,7 @@
                 Spicetify.PopupModal.display({ title: '한글 발음 자료', content: Spicetify.React.createElement(Settings), isLarge: true });
             }).register();
             if (Spicetify.Menu?.Item) new Spicetify.Menu.Item('현재 곡 제목 복사', false, copyCurrentTitle).register();
+            if (Spicetify.Menu?.Item) new Spicetify.Menu.Item('Spotify 한글 가사 ' + addon.version + ' · 업데이트 확인', false, checkForUpdate).register();
             if (Spicetify.ContextMenu?.Item) new Spicetify.ContextMenu.Item('곡 제목 복사',
                 ([uri]) => { if (uri === currentKey()) return copyCurrentTitle(); },
                 uris => uris.length === 1 && !!currentKey() && uris[0] === currentKey()
