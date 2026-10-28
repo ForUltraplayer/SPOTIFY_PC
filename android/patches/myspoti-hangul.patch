@@ -49,7 +49,7 @@ index 318e340..5970a19 100644
  -keep class com.music.spotui.data.entity.** { *; }
 diff --git a/base/app/src/main/java/com/music/spotui/data/api/HangulReadingEngine.java b/base/app/src/main/java/com/music/spotui/data/api/HangulReadingEngine.java
 new file mode 100644
-index 0000000..1742365
+index 0000000..801dc8a
 --- /dev/null
 +++ b/base/app/src/main/java/com/music/spotui/data/api/HangulReadingEngine.java
 @@ -0,0 +1,544 @@
@@ -599,7 +599,7 @@ index 0000000..1742365
 +}
 diff --git a/base/app/src/main/java/com/music/spotui/data/api/HangulReadings.kt b/base/app/src/main/java/com/music/spotui/data/api/HangulReadings.kt
 new file mode 100644
-index 0000000..e38a6b6
+index 0000000..16e8440
 --- /dev/null
 +++ b/base/app/src/main/java/com/music/spotui/data/api/HangulReadings.kt
 @@ -0,0 +1,111 @@
@@ -996,7 +996,7 @@ index 9be3855..b94f929 100644
          if (cur.showTranslation) {
 diff --git a/base/app/src/test/java/com/music/spotui/data/api/HangulReadingEngineTest.java b/base/app/src/test/java/com/music/spotui/data/api/HangulReadingEngineTest.java
 new file mode 100644
-index 0000000..44b9d9b
+index 0000000..c1563ff
 --- /dev/null
 +++ b/base/app/src/test/java/com/music/spotui/data/api/HangulReadingEngineTest.java
 @@ -0,0 +1,195 @@

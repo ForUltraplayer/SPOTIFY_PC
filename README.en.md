@@ -6,6 +6,8 @@ Shows the Korean (Hangul) pronunciation of Japanese songs in the Spotify desktop
 
 Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Public version: 0.7.5.
 
+> An unofficial hobby project. Maintenance and updates are not guaranteed, so please read the [Disclaimer](#disclaimer) first.
+
 **[⬇ Download (v0.7.5)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.5)**
 
 0.7.0 and later installs update automatically when launched from the shortcut. Users on 0.6.0, 0.6.1, or 0.6.3 can also upgrade directly. To install manually, close Spotify, then run the 0.7.5 Setup.exe into the existing installation folder.
@@ -140,6 +142,7 @@ Version 0.6.2 centralizes component versions and digests in `components.json`. S
 
 ## Disclaimer
 
+- This is an unofficial hobby project, provided as is without any warranty. Maintenance, updates and replies to issues happen when time allows and may stop without notice. Spotify changes can break features at any time.
 - This project is not affiliated with, endorsed by or sponsored by Spotify AB. Spotify is a trademark of Spotify AB.
 - The installer applies SpotX patches to the official Spotify client and blocks its automatic updates. Modifying the client and blocking ads may go against the [Spotify Terms of Use](https://www.spotify.com/us/legal/end-user-agreement/), and Spotify may restrict accounts that do so. Use it at your own risk.
 - Lyrics and Hangul readings belong to their respective rights holders. This project does not distribute lyrics; they are only looked up and cached on your own PC.

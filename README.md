@@ -6,6 +6,8 @@ Spotify 데스크톱 가사 화면에 일본어 노래의 한글 발음을 같�
 
 [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) 기반이고, 현재 공개 버전은 0.7.5입니다.
 
+> 개인이 취미로 만든 비공식 프로젝트입니다. 유지보수와 업데이트를 보장하지 않으니 [면책](#면책) 내용을 먼저 읽어 주세요.
+
 **[⬇ 다운로드 (v0.7.5)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.5)**
 
 0.7.0 이후 설치본은 바로가기로 실행하면 자동으로 업데이트됩니다. 0.6.0, 0.6.1, 0.6.3에서도 중간 버전 없이 바로 업데이트할 수 있습니다. 직접 설치하려면 Spotify를 종료하고 0.7.5 Setup.exe를 기존 설치 폴더에 다시 설치하세요.
@@ -140,6 +142,7 @@ python scripts/build_installer.py --output-dir work/release-candidates/candidate
 
 ## 면책
 
+- 개인이 취미로 만든 비공식 프로젝트이며, 있는 그대로 제공하고 어떤 보증도 하지 않습니다. 유지보수, 업데이트, 문의 답변은 시간이 날 때 하며 예고 없이 멈출 수 있습니다. Spotify가 바뀌면 일부 기능이 언제든 동작하지 않을 수 있습니다.
 - 이 프로젝트는 Spotify AB와 관련이 없으며 Spotify의 승인이나 보증을 받지 않았습니다. Spotify는 Spotify AB의 상표입니다.
 - 설치본은 공식 Spotify 클라이언트에 SpotX 패치를 적용하고 자동 업데이트를 막습니다. 클라이언트 수정과 광고 차단은 [Spotify 이용 약관](https://www.spotify.com/kr-ko/legal/end-user-agreement/)에 어긋날 수 있으며 Spotify가 계정을 제한할 수 있습니다. 사용에 따른 책임은 사용자에게 있습니다.
 - 가사와 한글 발음 자료의 권리는 각 권리자에게 있습니다. 이 프로젝트는 가사를 배포하지 않고 사용자의 PC에서만 조회하고 저장합니다.
