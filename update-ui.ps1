@@ -1,12 +1,13 @@
 ﻿# @file update-ui.ps1
 # @brief Show the update prompt, download progress and installation status windows used by auto-update.ps1.
+# Get-Text and the language choice come from auto-update.ps1, which dot-sources this file.
 Add-Type -AssemblyName System.Windows.Forms,System.Drawing
 [Windows.Forms.Application]::EnableVisualStyles()
 $updateUiFont=New-Object Drawing.Font('Malgun Gothic',9.75)
 
 function Show-UpdateDialog([string]$Text,[Drawing.Icon]$Icon,[string[]]$Buttons) {
     # A custom TopMost form instead of MessageBox: Spotify opens at the same time and would cover a plain box.
-    $form=New-Object Windows.Forms.Form -Property @{Text='Spotify 한글 가사 업데이트';Font=$updateUiFont;FormBorderStyle='FixedDialog';MaximizeBox=$false;MinimizeBox=$false;StartPosition='CenterScreen';TopMost=$true;AutoSize=$true;AutoSizeMode='GrowAndShrink'}
+    $form=New-Object Windows.Forms.Form -Property @{Text=(Get-Text 'Spotify 한글 가사 업데이트' 'Spotify Hangul Lyrics update');Font=$updateUiFont;FormBorderStyle='FixedDialog';MaximizeBox=$false;MinimizeBox=$false;StartPosition='CenterScreen';TopMost=$true;AutoSize=$true;AutoSizeMode='GrowAndShrink'}
     $layout=New-Object Windows.Forms.TableLayoutPanel -Property @{ColumnCount=2;RowCount=2;AutoSize=$true;AutoSizeMode='GrowAndShrink';Padding=(New-Object Windows.Forms.Padding 14)}
     $layout.Controls.Add((New-Object Windows.Forms.PictureBox -Property @{Image=$Icon.ToBitmap();SizeMode='AutoSize';Margin=(New-Object Windows.Forms.Padding 0,0,12,0)}),0,0)
     $layout.Controls.Add((New-Object Windows.Forms.Label -Property @{Text=$Text;AutoSize=$true;MaximumSize=(New-Object Drawing.Size 440,0);Margin=(New-Object Windows.Forms.Padding 0,4,0,16)}),1,0)
@@ -32,21 +33,22 @@ function Show-UpdateDialog([string]$Text,[Drawing.Icon]$Icon,[string[]]$Buttons)
 function Show-UpdatePrompt([string]$Version,[string]$CurrentVersion) {
     # Korean subject particle follows the spoken last digit (2 이, 4 사, 5 오, 9 구 end in a vowel).
     $particle=if ('2459'.Contains([string]$Version[-1])) { '가' } else { '이' }
-    $text='새 버전 '+$Version+$particle+" 있습니다. 지금 업데이트할까요?`r`n`r`n현재 버전: "+$CurrentVersion+"`r`n내려받는 동안 음악은 계속 들을 수 있습니다.`r`n설치할 때 Spotify가 잠시 종료되고, 끝나면 다시 실행됩니다."
-    return (Show-UpdateDialog $text ([Drawing.SystemIcons]::Question) @('예','아니요')) -eq 0
+    $text=Get-Text ('새 버전 '+$Version+$particle+" 있습니다. 지금 업데이트할까요?`r`n`r`n현재 버전: "+$CurrentVersion+"`r`n내려받는 동안 음악은 계속 들을 수 있습니다.`r`n설치할 때 Spotify가 잠시 종료되고, 끝나면 다시 실행됩니다.") `
+        ('Version '+$Version+" is available. Update now?`r`n`r`nCurrent version: "+$CurrentVersion+"`r`nYou can keep listening to music while it downloads.`r`nSpotify closes briefly during the installation and starts again afterwards.")
+    return (Show-UpdateDialog $text ([Drawing.SystemIcons]::Question) @((Get-Text '예' 'Yes'),(Get-Text '아니요' 'No'))) -eq 0
 }
 
 function Show-UpdateMessage([string]$Text,[switch]$IsError) {
-    [void](Show-UpdateDialog $Text $(if ($IsError) { [Drawing.SystemIcons]::Error } else { [Drawing.SystemIcons]::Information }) @('확인'))
+    [void](Show-UpdateDialog $Text $(if ($IsError) { [Drawing.SystemIcons]::Error } else { [Drawing.SystemIcons]::Information }) @((Get-Text '확인' 'OK')))
 }
 
 function Open-UpdateWindow {
     # No title bar close button: cancelling is only offered while it is still safe (download and the notice).
-    $form=New-Object Windows.Forms.Form -Property @{Text='Spotify 한글 가사 업데이트';Font=$updateUiFont;FormBorderStyle='FixedDialog';ControlBox=$false;StartPosition='CenterScreen';TopMost=$true;ClientSize=(New-Object Drawing.Size 460,150)}
+    $form=New-Object Windows.Forms.Form -Property @{Text=(Get-Text 'Spotify 한글 가사 업데이트' 'Spotify Hangul Lyrics update');Font=$updateUiFont;FormBorderStyle='FixedDialog';ControlBox=$false;StartPosition='CenterScreen';TopMost=$true;ClientSize=(New-Object Drawing.Size 460,150)}
     $status=New-Object Windows.Forms.Label -Property @{Location=(New-Object Drawing.Point 16,14);Size=(New-Object Drawing.Size 428,44)}
     $bar=New-Object Windows.Forms.ProgressBar -Property @{Location=(New-Object Drawing.Point 16,62);Size=(New-Object Drawing.Size 428,22);Maximum=1000;MarqueeAnimationSpeed=30}
     $detail=New-Object Windows.Forms.Label -Property @{Location=(New-Object Drawing.Point 16,96);Size=(New-Object Drawing.Size 320,22)}
-    $cancel=New-Object Windows.Forms.Button -Property @{Text='취소';Location=(New-Object Drawing.Point 356,106);Size=(New-Object Drawing.Size 88,30)}
+    $cancel=New-Object Windows.Forms.Button -Property @{Text=(Get-Text '취소' 'Cancel');Location=(New-Object Drawing.Point 356,106);Size=(New-Object Drawing.Size 88,30)}
     $cancel.Add_Click({ $this.Tag='canceled'; $this.Enabled=$false })
     $form.Controls.AddRange(@($status,$bar,$detail,$cancel))
     $form.Show()
@@ -91,7 +93,7 @@ function Save-UpdateDownload($Window,[string]$Uri,[string]$OutFile,[long]$Size) 
         while (($read=$source.Read($buffer,0,$buffer.Length)) -gt 0) {
             $received+=$read
             # The release API fixed the size; stop a response that keeps going instead of filling the disk.
-            if ($received -gt $Size) { throw '내려받은 업데이트가 공개된 크기보다 큽니다.' }
+            if ($received -gt $Size) { throw (Get-Text '내려받은 업데이트가 공개된 크기보다 큽니다.' 'The downloaded update is larger than its published size.') }
             $target.Write($buffer,0,$read)
             [Windows.Forms.Application]::DoEvents()
             if ($Window.Cancel.Tag -eq 'canceled') { return $false }

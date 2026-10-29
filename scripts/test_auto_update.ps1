@@ -2,6 +2,8 @@
 # @brief Verify release identity, integrity checks, offline behavior and deferred automatic application.
 param([string]$VerifiedInstaller)
 $ErrorActionPreference='Stop'
+# The assertions below match the Korean messages, whatever language this PC uses.
+$env:SPOTIFYHANGUL_LANGUAGE='ko'
 $project=Split-Path -Parent $PSScriptRoot
 $updater=Join-Path $project 'auto-update.ps1'
 $errors=$null
@@ -322,6 +324,10 @@ if ((Invoke-Fixture Install ApplyPending -TargetRoot $uiRoot) -ne 0 -or (Test-Ui
     -not (Test-Path -LiteralPath (Join-Path $area 'executed.json')) -or (Get-UiRecords) -contains 'relaunch') { throw 'A queued update was not applied silently by ApplyPending.' }; $passed++
 if ((Invoke-Fixture Install Check -TargetRoot $uiRoot -Manual) -ne 0 -or (Get-UiRecords) -notcontains 'message 최신 버전입니다 (0.6.0)' -or ((Get-UiRecords) -match '^prompt')) { throw 'The manual check did not report the current version.' }; $passed++
 if ((Invoke-Fixture Offline Check -TargetRoot $uiRoot -Manual) -ne 1 -or -not ((Get-UiRecords) -match '^error controlled offline fixture')) { throw 'The manual check hid a network failure.' }; $passed++
+# Outside Korean Windows the same check answers in English.
+$env:SPOTIFYHANGUL_LANGUAGE='en'
+try { if ((Invoke-Fixture Install Check -TargetRoot $uiRoot -Manual) -ne 0 -or (Get-UiRecords) -notcontains 'message You have the latest version (0.6.0)') { throw 'The English manual check did not report the current version in English.' }; $passed++ }
+finally { $env:SPOTIFYHANGUL_LANGUAGE='ko' }
 Reset-UiInstallation
 $held=[IO.File]::Open((Join-Path $uiCache 'update.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
 try {

@@ -21,6 +21,10 @@ $notify=$false
 $prompted=$Mode -eq 'Check' -and -not $Interactive
 $previousProcessDirectory=[Environment]::CurrentDirectory
 $previousLocation=Get-Location
+# Korean on Korean Windows, English elsewhere; SPOTIFYHANGUL_LANGUAGE (ko or en) overrides it for tests.
+$useKorean=if ($env:SPOTIFYHANGUL_LANGUAGE) { $env:SPOTIFYHANGUL_LANGUAGE -eq 'ko' } else { (Get-UICulture).TwoLetterISOLanguageName -eq 'ko' }
+
+function Get-Text([string]$Korean,[string]$English) { if ($useKorean) { return $Korean }; return $English }
 
 function Get-Sha256([string]$Path) {
     $stream=[IO.File]::OpenRead($Path)
@@ -32,11 +36,11 @@ function Get-Sha256([string]$Path) {
 function Assert-Installation {
     $marker=Join-Path $root 'install-marker.json'
     if (-not (Test-Path -LiteralPath $marker) -or (Get-Content -LiteralPath $marker -Raw -Encoding UTF8 | ConvertFrom-Json).app -ne 'SpotifyHangul') {
-        throw 'Spotify 한글 가사 설치 폴더를 확인하지 못했습니다.'
+        throw (Get-Text 'Spotify 한글 가사 설치 폴더를 확인하지 못했습니다.' 'Could not confirm the Spotify Hangul Lyrics installation folder.')
     }
     $forbidden=@([IO.Path]::GetPathRoot($root).TrimEnd('\'),$env:USERPROFILE,$env:LOCALAPPDATA,$env:APPDATA,$env:SystemRoot,$env:ProgramFiles)
     if ($forbidden -contains $root -or (Get-Item -LiteralPath $root).Attributes -band [IO.FileAttributes]::ReparsePoint) {
-        throw '업데이트 대상 경로가 올바르지 않습니다.'
+        throw (Get-Text '업데이트 대상 경로가 올바르지 않습니다.' 'The update target folder is not valid.')
     }
 }
 
@@ -99,10 +103,10 @@ function Report-UpdateError([string]$Message) {
 function Complete-UpdateDownload($Asset,[string]$Temporary,[string]$File,[version]$CurrentVersion) {
     if ((Get-Item -LiteralPath $Temporary).Length -ne $Asset.size -or (Get-Sha256 $Temporary) -cne $Asset.sha256) {
         Remove-Item -LiteralPath $Temporary
-        throw '다운로드한 업데이트의 크기 또는 SHA-256이 다릅니다.'
+        throw (Get-Text '다운로드한 업데이트의 크기 또는 SHA-256이 다릅니다.' 'The downloaded update does not match the published size or SHA-256.')
     }
     Move-Item -LiteralPath $Temporary -Destination $File -Force
-    if (-not (Test-QueuedInstaller $Asset $CurrentVersion)) { throw '다운로드한 설치 파일의 제품 버전이 다릅니다.' }
+    if (-not (Test-QueuedInstaller $Asset $CurrentVersion)) { throw (Get-Text '다운로드한 설치 파일의 제품 버전이 다릅니다.' 'The downloaded installer reports a different product version.') }
 }
 
 function Start-QueuedInstaller($Pending) {
@@ -115,7 +119,7 @@ function Start-QueuedInstaller($Pending) {
 # Returns the failure message, or $null after a verified installation.
 function Complete-QueuedInstaller($Pending,$Process) {
     if ($Process.ExitCode -ne 0 -or (Get-InstalledVersion) -ne [version]$Pending.version) {
-        $message='업데이트 설치가 실패했습니다. 설치 종료 코드: '+$Process.ExitCode+'. 설치 로그: '+(Join-Path $root 'install.log')
+        $message=(Get-Text '업데이트 설치가 실패했습니다. 설치 종료 코드: ' 'The update failed to install. Installer exit code: ')+$Process.ExitCode+(Get-Text '. 설치 로그: ' '. Installation log: ')+(Join-Path $root 'install.log')
         Write-UpdateState @{status='install-failed';version=$Pending.version;error=$message;installer_exit_code=$Process.ExitCode}
         return $message
     }
@@ -140,16 +144,16 @@ try {
     finally { $algorithm.Dispose() }
     $cache=Join-Path $env:LOCALAPPDATA ('ivLyricsHangul\updates\'+$identity)
     [void](New-Item -ItemType Directory -Path $cache -Force)
-    if ((Get-Item -LiteralPath $cache).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw '업데이트 저장 폴더가 연결 경로입니다.' }
+    if ((Get-Item -LiteralPath $cache).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw (Get-Text '업데이트 저장 폴더가 연결 경로입니다.' 'The update cache folder is a link.') }
     if ($Mode -eq 'ApplyPending') {
         try { $applyLock=[IO.File]::Open((Join-Path $cache 'apply.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None) }
-        catch [IO.IOException] { Report-UpdateError '다른 업데이트 적용 작업이 실행 중입니다. 해당 작업이 끝난 뒤 다시 실행해 주세요.'; exit 10 }
+        catch [IO.IOException] { Report-UpdateError (Get-Text '다른 업데이트 적용 작업이 실행 중입니다. 해당 작업이 끝난 뒤 다시 실행해 주세요.' 'Another update is being applied. Run this again after it finishes.'); exit 10 }
     }
     try { $lock=[IO.File]::Open((Join-Path $cache 'update.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None) }
     catch [IO.IOException] {
-        if ($Interactive) { Report-UpdateError '다른 업데이트 확인 또는 다운로드가 진행 중입니다. 잠시 뒤 다시 실행해 주세요.'; exit 10 }
+        if ($Interactive) { Report-UpdateError (Get-Text '다른 업데이트 확인 또는 다운로드가 진행 중입니다. 잠시 뒤 다시 실행해 주세요.' 'Another update check or download is in progress. Try again in a moment.'); exit 10 }
         # The lock is held while a prompt or progress window is open, so a second check never opens another one.
-        if ($notify) { Show-UpdateMessage '이미 업데이트를 확인하고 있습니다. 열려 있는 업데이트 창을 확인해 주세요.'; exit 10 }
+        if ($notify) { Show-UpdateMessage (Get-Text '이미 업데이트를 확인하고 있습니다. 열려 있는 업데이트 창을 확인해 주세요.' 'An update check is already running. Look for the open update window.'); exit 10 }
         exit 0
     }
     $pendingPath=Join-Path $cache 'pending.json'
@@ -162,27 +166,27 @@ try {
         if ($state.status -eq 'install-failed' -and $state.version -eq $pending.version -and -not $Interactive) { exit 0 }
         if ($state.status -eq 'installing') {
             $running=if ($state.pid) { Get-CimInstance Win32_Process -Filter ('ProcessId='+[int]$state.pid) } else { $null }
-            if ($running -and $running.ExecutablePath -eq (Join-Path $cache $pending.name)) { Report-UpdateError '이전 설치 프로그램이 아직 실행 중입니다. 완료될 때까지 기다려 주세요.'; exit 10 }
+            if ($running -and $running.ExecutablePath -eq (Join-Path $cache $pending.name)) { Report-UpdateError (Get-Text '이전 설치 프로그램이 아직 실행 중입니다. 완료될 때까지 기다려 주세요.' 'The previous installer is still running. Wait for it to finish.'); exit 10 }
             if (-not $Interactive) {
-                Write-UpdateState @{status='install-failed';version=$pending.version;error='이전 설치가 중단되어 자동 재시도를 멈췄습니다.'}
+                Write-UpdateState @{status='install-failed';version=$pending.version;error=(Get-Text '이전 설치가 중단되어 자동 재시도를 멈췄습니다.' 'The previous installation was interrupted, so automatic retries stopped.')}
                 exit 0
             }
             # A reboot can leave an installing record without a process. The
             # interactive retry may recover it after validating the installer.
         }
-        if (-not (Test-QueuedInstaller $pending $current)) { throw '예약된 업데이트의 버전 또는 해시가 올바르지 않습니다.' }
-        if (Get-Process -Name Spotify -ErrorAction SilentlyContinue) { Report-UpdateError 'Spotify 프로세스가 실행 중입니다. 작업 관리자에서 Spotify를 완전히 종료한 뒤 다시 실행해 주세요.'; exit 20 }
+        if (-not (Test-QueuedInstaller $pending $current)) { throw (Get-Text '예약된 업데이트의 버전 또는 해시가 올바르지 않습니다.' 'The queued update has an invalid version or hash.') }
+        if (Get-Process -Name Spotify -ErrorAction SilentlyContinue) { Report-UpdateError (Get-Text 'Spotify 프로세스가 실행 중입니다. 작업 관리자에서 Spotify를 완전히 종료한 뒤 다시 실행해 주세요.' 'Spotify is still running. Close it completely in Task Manager, then run this again.'); exit 20 }
         $process=Start-QueuedInstaller $pending
-        if (-not $process.WaitForExit(600000)) { Report-UpdateError '설치 프로그램이 제한 시간 안에 끝나지 않았습니다. 설치 창과 install.log를 확인해 주세요.'; exit 11 }
+        if (-not $process.WaitForExit(600000)) { Report-UpdateError (Get-Text '설치 프로그램이 제한 시간 안에 끝나지 않았습니다. 설치 창과 install.log를 확인해 주세요.' 'The installer did not finish in time. Check the installer window and install.log.'); exit 11 }
         $failure=Complete-QueuedInstaller $pending $process
         if ($failure) { Report-UpdateError $failure; if ($Interactive) { exit 1 }; exit 0 }
-        Write-Output ('Spotify 한글 가사를 '+$pending.version+' 버전으로 업데이트했습니다.')
+        Write-Output (Get-Text ('Spotify 한글 가사를 '+$pending.version+' 버전으로 업데이트했습니다.') ('Updated Spotify Hangul Lyrics to '+$pending.version+'.'))
         exit 0
     }
     if ($state.status -eq 'installing') {
         $running=if ($state.pid) { Get-CimInstance Win32_Process -Filter ('ProcessId='+[int]$state.pid) } else { $null }
         if ($pending -and $running -and $running.ExecutablePath -eq (Join-Path $cache $pending.name)) {
-            if ($Interactive -or $notify) { Report-UpdateError '이전 설치 프로그램이 아직 실행 중입니다. 완료될 때까지 기다려 주세요.'; exit 10 }
+            if ($Interactive -or $notify) { Report-UpdateError (Get-Text '이전 설치 프로그램이 아직 실행 중입니다. 완료될 때까지 기다려 주세요.' 'The previous installer is still running. Wait for it to finish.'); exit 10 }
             exit 0
         }
         if (-not ($Interactive -or $notify)) { exit 0 }
@@ -194,7 +198,7 @@ try {
     $asset=Select-UpdateAsset $releases $current
     if (-not $asset) {
         if ($pending -and [version]$pending.version -gt $current) {
-            $message='대기 중인 '+$pending.version+' 업데이트가 공개 배포 목록에 없습니다. 철회된 파일의 실행을 중단했습니다. 비공개 검증본은 해당 Setup.exe를 직접 실행해 주세요.'
+            $message=(Get-Text ('대기 중인 '+$pending.version+' 업데이트가 공개 배포 목록에 없습니다. 철회된 파일의 실행을 중단했습니다. 비공개 검증본은 해당 Setup.exe를 직접 실행해 주세요.') ('The pending '+$pending.version+' update is no longer in the public releases, so the withdrawn file was not run. For a private test build, run its Setup.exe directly.'))
             $held=Join-Path $cache ('pending-withdrawn-'+[Guid]::NewGuid().ToString('N')+'.json')
             Move-Item -LiteralPath $pendingPath -Destination $held
             Write-UpdateState @{status='withdrawn';version=$pending.version;error=$message;checked_at=(Get-Date -Format o)}
@@ -202,17 +206,17 @@ try {
             if ($Interactive) { exit 21 }; exit 0
         }
         if ($current -lt $RequestedVersion) {
-            $message='요청한 '+$RequestedVersion+' 버전이 아직 공개되지 않았습니다. 비공개 검증본은 Setup.exe를 직접 실행해 주세요.'
+            $message=(Get-Text ('요청한 '+$RequestedVersion+' 버전이 아직 공개되지 않았습니다. 비공개 검증본은 Setup.exe를 직접 실행해 주세요.') ('Version '+$RequestedVersion+' is not public yet. For a private test build, run its Setup.exe directly.'))
             Write-UpdateState @{status='unavailable';version=$RequestedVersion.ToString();error=$message;checked_at=(Get-Date -Format o)}
             Report-UpdateError $message
             if ($Interactive) { exit 22 }; exit 0
         }
         Write-UpdateState @{status='up-to-date';checked_at=(Get-Date -Format o)}
-        if ($notify) { Show-UpdateMessage ('최신 버전입니다 ('+$current+')') }
+        if ($notify) { Show-UpdateMessage (Get-Text ('최신 버전입니다 ('+$current+')') ('You have the latest version ('+$current+')')) }
         exit 0
     }
     if ([version]$asset.version -lt $RequestedVersion) {
-        Report-UpdateError ('요청한 '+$RequestedVersion+' 버전은 아직 공개되지 않았습니다. 더 이전 버전으로 대신 업데이트하지 않습니다. 비공개 검증본의 Setup.exe를 직접 실행해 주세요.')
+        Report-UpdateError (Get-Text ('요청한 '+$RequestedVersion+' 버전은 아직 공개되지 않았습니다. 더 이전 버전으로 대신 업데이트하지 않습니다. 비공개 검증본의 Setup.exe를 직접 실행해 주세요.') ('Version '+$RequestedVersion+' is not public yet, and an older version is not installed instead. For a private test build, run its Setup.exe directly.'))
         if ($Interactive) { exit 22 }; exit 0
     }
     # A failed installation is not retried by itself; Update.exe and the manual check may retry it.
@@ -234,7 +238,7 @@ try {
         Complete-UpdateDownload $asset $temporary $file $current
         $asset | ConvertTo-Json | Set-Content -LiteralPath $pendingPath -Encoding UTF8
         Write-UpdateState @{status='queued';version=$asset.version;checked_at=(Get-Date -Format o)}
-        Write-Output ('다음 실행 전에 적용할 '+$asset.version+' 업데이트를 내려받았습니다.')
+        Write-Output (Get-Text ('다음 실행 전에 적용할 '+$asset.version+' 업데이트를 내려받았습니다.') ('Downloaded the '+$asset.version+' update; it is applied before the next launch.'))
         exit 0
     }
     if (-not (Get-Command Show-UpdatePrompt -CommandType Function -ErrorAction SilentlyContinue)) { . (Join-Path $PSScriptRoot 'update-ui.ps1') }
@@ -245,21 +249,21 @@ try {
     }
     $notify=$true
     $window=Open-UpdateWindow
-    Set-UpdateWindow $window '업데이트를 준비하고 있습니다.'
+    Set-UpdateWindow $window (Get-Text '업데이트를 준비하고 있습니다.' 'Preparing the update.')
     # Reuse an installer kept from an earlier attempt only if it still matches the published digest and version.
     if (-not ((Test-Path -LiteralPath $file) -and (Test-QueuedInstaller $asset $current))) {
-        Set-UpdateWindow $window ('업데이트 파일(버전 '+$asset.version+")을 내려받고 있습니다.`r`n음악은 계속 들을 수 있습니다.") 0 ('0.0 / {0:N1} MB (0%)' -f ($asset.size/1MB)) -AllowCancel
+        Set-UpdateWindow $window (Get-Text ('업데이트 파일(버전 '+$asset.version+")을 내려받고 있습니다.`r`n음악은 계속 들을 수 있습니다.") ('Downloading the update (version '+$asset.version+").`r`nYou can keep listening to music.")) 0 ('0.0 / {0:N1} MB (0%)' -f ($asset.size/1MB)) -AllowCancel
         $downloaded=$false
         # A cancelled or broken transfer leaves no partial file; only Complete-UpdateDownload promotes it.
         try { $downloaded=Save-UpdateDownload $window $asset.url $temporary $asset.size }
         finally { if (-not $downloaded) { Remove-Item -LiteralPath $temporary -ErrorAction SilentlyContinue } }
         if (-not $downloaded) { Write-UpdateState @{status='canceled';version=$asset.version;checked_at=(Get-Date -Format o)}; exit 0 }
-        Set-UpdateWindow $window '내려받은 파일을 확인하고 있습니다.'
+        Set-UpdateWindow $window (Get-Text '내려받은 파일을 확인하고 있습니다.' 'Checking the downloaded file.')
         Complete-UpdateDownload $asset $temporary $file $current
     }
-    Set-UpdateWindow $window "설치하려면 Spotify를 종료해야 합니다.`r`n잠시 뒤 Spotify가 닫히고 설치가 시작됩니다." -AllowCancel
+    Set-UpdateWindow $window (Get-Text "설치하려면 Spotify를 종료해야 합니다.`r`n잠시 뒤 Spotify가 닫히고 설치가 시작됩니다." "Spotify has to close for the installation.`r`nIt closes in a moment and the installation starts.") -AllowCancel
     if (Wait-UpdateWindow $window 4000) { Write-UpdateState @{status='canceled';version=$asset.version;checked_at=(Get-Date -Format o)}; exit 0 }
-    Set-UpdateWindow $window 'Spotify를 종료하고 있습니다.'
+    Set-UpdateWindow $window (Get-Text 'Spotify를 종료하고 있습니다.' 'Closing Spotify.')
     # Ask like the window's close button first so Spotify can save its state; force only what remains.
     # The installer itself stops this installation's helper and overlay, so nothing else is closed here.
     foreach ($spotify in @(Get-Process -Name Spotify -ErrorAction SilentlyContinue)) { [void]$spotify.CloseMainWindow() }
@@ -269,17 +273,17 @@ try {
         # Spotify may be set to hide in the tray instead of closing.
         Stop-Process -Id $remaining.Id -Force -ErrorAction SilentlyContinue
         for ($attempt=0; $attempt -lt 20 -and @(Get-Process -Name Spotify -ErrorAction SilentlyContinue).Count; $attempt++) { [void](Wait-UpdateWindow $window 250) }
-        if (@(Get-Process -Name Spotify -ErrorAction SilentlyContinue).Count) { throw 'Spotify를 종료하지 못했습니다. 작업 관리자에서 Spotify를 완전히 종료한 뒤 다시 시도해 주세요.' }
+        if (@(Get-Process -Name Spotify -ErrorAction SilentlyContinue).Count) { throw (Get-Text 'Spotify를 종료하지 못했습니다. 작업 관리자에서 Spotify를 완전히 종료한 뒤 다시 시도해 주세요.' 'Could not close Spotify. Close it completely in Task Manager, then try again.') }
     }
     # Queue the verified installer first so an interrupted install leaves the pending/installing records ApplyPending already handles.
     $asset | ConvertTo-Json | Set-Content -LiteralPath $pendingPath -Encoding UTF8
-    Set-UpdateWindow $window "업데이트를 설치하고 있습니다.`r`n창이 닫힐 때까지 기다려 주세요."
+    Set-UpdateWindow $window (Get-Text "업데이트를 설치하고 있습니다.`r`n창이 닫힐 때까지 기다려 주세요." "Installing the update.`r`nPlease wait until this window closes.")
     $process=Start-QueuedInstaller $asset
     $deadline=(Get-Date).AddMinutes(10)
     while (-not $process.WaitForExit(100)) {
         if ((Get-Date) -gt $deadline) {
             Close-UpdateWindow $window; $window=$null
-            Report-UpdateError '설치 프로그램이 제한 시간 안에 끝나지 않았습니다. 설치가 끝난 뒤 Spotify 한글 가사를 다시 실행하고, 계속 실패하면 install.log를 확인해 주세요.'
+            Report-UpdateError (Get-Text '설치 프로그램이 제한 시간 안에 끝나지 않았습니다. 설치가 끝난 뒤 Spotify 한글 가사를 다시 실행하고, 계속 실패하면 install.log를 확인해 주세요.' 'The installer did not finish in time. Start Spotify Hangul Lyrics again after it finishes, and check install.log if it keeps failing.')
             exit 11
         }
         [void](Wait-UpdateWindow $window 0)
@@ -288,9 +292,9 @@ try {
     if ($failure) {
         Close-UpdateWindow $window; $window=$null
         # The installer's own rollback restores the previous files, so the old version is started again.
-        Report-UpdateError ($failure+"`r`n`r`n설치 프로그램이 이전 버전 복구를 시도했습니다. 확인을 누르면 Spotify 한글 가사를 다시 실행합니다.")
+        Report-UpdateError ($failure+(Get-Text "`r`n`r`n설치 프로그램이 이전 버전 복구를 시도했습니다. 확인을 누르면 Spotify 한글 가사를 다시 실행합니다." "`r`n`r`nThe installer tried to restore the previous version. Press OK to start Spotify Hangul Lyrics again."))
     } else {
-        Set-UpdateWindow $window ('버전 '+$asset.version+' 설치를 마쳤습니다. Spotify 한글 가사를 다시 실행합니다.') 100
+        Set-UpdateWindow $window (Get-Text ('버전 '+$asset.version+' 설치를 마쳤습니다. Spotify 한글 가사를 다시 실행합니다.') ('Version '+$asset.version+' is installed. Starting Spotify Hangul Lyrics again.')) 100
         [void](Wait-UpdateWindow $window 1500)
     }
     # Same command as the desktop shortcut: the helper and Spotify start from the new files.
