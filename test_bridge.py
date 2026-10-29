@@ -164,7 +164,8 @@ class LaunchEndpointTests(unittest.TestCase):
         self.popen.assert_not_called()
 
     def test_update_check_runs_the_installed_updater_hidden_outside_the_install_folder(self):
-        root = self.area / 'SpotifyHangul'
+        # The bridge resolves its own path, and a runner's TEMP can be an 8.3 short path that resolves to a different spelling.
+        root = self.area.resolve() / 'SpotifyHangul'
         root.mkdir()
         with patch.object(self.bridge, '__file__', str(root / 'bridge.py')):
             self.assertFalse(self.bridge.launch_update_check())

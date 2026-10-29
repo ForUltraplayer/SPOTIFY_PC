@@ -165,10 +165,10 @@
     }
   },
   "test_fixtures": {
-    "SpotifyHangul-0.6.0-Setup.exe": {
-      "url": "https://github.com/ForUltraplayer/SPOTIFY_PC/releases/download/v0.6.0/SpotifyHangul-0.6.0-Setup.exe",
-      "sha256": "9531aefd21edbdc12ad6fc7718a115ffd37cfe6214eb0e2623ff938106b322e9",
-      "bytes": 67323904
+    "SpotifyHangul-0.7.3-Setup.exe": {
+      "url": "https://github.com/ForUltraplayer/SPOTIFY_PC/releases/download/v0.7.3/SpotifyHangul-0.7.3-Setup.exe",
+      "sha256": "de5c1a5a83a977fa735bf54ed341e12d49a28a5f43b58416cb375d72eb8540e4",
+      "bytes": 166775414
     }
   }
 }

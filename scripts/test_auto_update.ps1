@@ -18,28 +18,28 @@ $root=Join-Path $area '기존 설치'
 [void](New-Item -ItemType Directory -Path $root)
 '{"app":"SpotifyHangul"}' | Set-Content -LiteralPath (Join-Path $root 'install-marker.json') -Encoding UTF8
 '{"version":"0.5.1"}' | Set-Content -LiteralPath (Join-Path $root 'release.json') -Encoding UTF8
-$fixture=if($VerifiedInstaller){$VerifiedInstaller}else{Join-Path $project 'dist\SpotifyHangul-0.6.0-Setup.exe'}
+$fixture=if($VerifiedInstaller){$VerifiedInstaller}else{Join-Path $project 'dist\SpotifyHangul-0.7.3-Setup.exe'}
 if (-not (Test-Path -LiteralPath $fixture)) { throw 'The verified previous installer fixture is required.' }
 $fixture=(Get-Item -LiteralPath $fixture).FullName
-$release=[PSCustomObject]@{tag_name='v0.6.0';draft=$false;assets=@([PSCustomObject]@{
-    name='SpotifyHangul-0.6.0-Setup.exe';browser_download_url='https://github.com/ForUltraplayer/SPOTIFY_PC/releases/download/v0.6.0/SpotifyHangul-0.6.0-Setup.exe';
+$release=[PSCustomObject]@{tag_name='v0.7.3';draft=$false;assets=@([PSCustomObject]@{
+    name='SpotifyHangul-0.7.3-Setup.exe';browser_download_url='https://github.com/ForUltraplayer/SPOTIFY_PC/releases/download/v0.7.3/SpotifyHangul-0.7.3-Setup.exe';
     digest=('sha256:'+(Get-Sha256 $fixture));size=(Get-Item -LiteralPath $fixture).Length})}
 $passed=0
-'{"version":"0.6.0"}' | Set-Content -LiteralPath (Join-Path $root 'release.json') -Encoding UTF8
+'{"version":"0.7.3"}' | Set-Content -LiteralPath (Join-Path $root 'release.json') -Encoding UTF8
 '{"Version":"0.5.1"}' | Set-Content -LiteralPath (Join-Path $root 'install-state.json') -Encoding UTF8
 if ((Get-InstalledVersion) -ne [version]'0.5.1') { throw 'Unfinished payload copy masks the installed version.' }; $passed++
 '{"version":"0.5.1"}' | Set-Content -LiteralPath (Join-Path $root 'release.json') -Encoding UTF8
-if ((Select-UpdateAsset @($release) ([version]'0.5.1')).version -ne '0.6.0') { throw 'Valid release was rejected.' }; $passed++
-if (Select-UpdateAsset @($release) ([version]'0.6.0')) { throw 'Downgrade or same-version update accepted.' }; $passed++
+if ((Select-UpdateAsset @($release) ([version]'0.5.1')).version -ne '0.7.3') { throw 'Valid release was rejected.' }; $passed++
+if (Select-UpdateAsset @($release) ([version]'0.7.3')) { throw 'Downgrade or same-version update accepted.' }; $passed++
 $wrong=$release | ConvertTo-Json -Depth 6 | ConvertFrom-Json
-$wrong.assets[0].browser_download_url='https://github.com/another/repo/releases/download/v0.6.0/SpotifyHangul-0.6.0-Setup.exe'
+$wrong.assets[0].browser_download_url='https://github.com/another/repo/releases/download/v0.7.3/SpotifyHangul-0.7.3-Setup.exe'
 if (Select-UpdateAsset @($wrong) ([version]'0.5.1')) { throw 'Foreign repository accepted.' }; $passed++
-$wrong.assets[0].browser_download_url='https://github.com/another/SPOTIFY_PC/releases/download/v0.6.0/SpotifyHangul-0.6.0-Setup.exe'
+$wrong.assets[0].browser_download_url='https://github.com/another/SPOTIFY_PC/releases/download/v0.7.3/SpotifyHangul-0.7.3-Setup.exe'
 if (Select-UpdateAsset @($wrong) ([version]'0.5.1')) { throw 'Foreign owner with the same repository name accepted.' }; $passed++
-$wrong.assets[0].browser_download_url='https://github.com/ForUltraplayer/HANGULIFY_PC/releases/download/v0.6.0/SpotifyHangul-0.6.0-Setup.exe'
+$wrong.assets[0].browser_download_url='https://github.com/ForUltraplayer/HANGULIFY_PC/releases/download/v0.7.3/SpotifyHangul-0.7.3-Setup.exe'
 $renamed=Select-UpdateAsset @($wrong) ([version]'0.5.1')
-if ($renamed.version -ne '0.6.0' -or $renamed.url -cne $wrong.assets[0].browser_download_url) { throw 'Renamed repository release was rejected or downloaded from another address.' }; $passed++
-$wrong.assets[0].browser_download_url='https://github.com/ForUltraplayer/SPOTIFY_PC/releases/download/v0.6.0/SpotifyHangul-0.6.0-Setup.exe.sig'
+if ($renamed.version -ne '0.7.3' -or $renamed.url -cne $wrong.assets[0].browser_download_url) { throw 'Renamed repository release was rejected or downloaded from another address.' }; $passed++
+$wrong.assets[0].browser_download_url='https://github.com/ForUltraplayer/SPOTIFY_PC/releases/download/v0.7.3/SpotifyHangul-0.7.3-Setup.exe.sig'
 if (Select-UpdateAsset @($wrong) ([version]'0.5.1')) { throw 'Download address with a different file accepted.' }; $passed++
 $wrong.assets[0].browser_download_url=$release.assets[0].browser_download_url
 $wrong.assets[0].digest=''
@@ -51,10 +51,10 @@ $wrong.draft=$false
 $wrong | Add-Member -NotePropertyName prerelease -NotePropertyValue $true -Force
 if (Select-UpdateAsset @($wrong) ([version]'0.5.1')) { throw 'Public prerelease accepted by stable updater.' }; $passed++
 $wrong.prerelease=$false
-$wrong.tag_name='v0.6.0-rc.1'
+$wrong.tag_name='v0.7.3-rc.1'
 if (Select-UpdateAsset @($wrong) ([version]'0.5.1')) { throw 'RC tag accepted by stable updater.' }; $passed++
-$wrong.tag_name='v0.6.0'
-if ((Select-UpdateAsset @($wrong) ([version]'0.5.1')).version -ne '0.6.0') { throw 'Stable release rejected after prerelease filtering.' }; $passed++
+$wrong.tag_name='v0.7.3'
+if ((Select-UpdateAsset @($wrong) ([version]'0.5.1')).version -ne '0.7.3') { throw 'Stable release rejected after prerelease filtering.' }; $passed++
 $release | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $area 'release.json') -Encoding UTF8
 $driver=Join-Path $area 'driver.ps1'
 @'
@@ -119,8 +119,8 @@ function Start-Process {
     Add-UiRecord 'install'
     [PSCustomObject]@{exe=$FilePath;arguments=$ArgumentList;workingDirectory=$cwd;providerDirectory=(Get-Location).Path} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Area 'executed.json') -Encoding UTF8
     if ($Scenario -in @('Install','Stale')) {
-        '{"version":"0.6.0"}' | Set-Content -LiteralPath (Join-Path $Root 'release.json')
-        '{"Version":"0.6.0"}' | Set-Content -LiteralPath (Join-Path $Root 'install-state.json')
+        '{"version":"0.7.3"}' | Set-Content -LiteralPath (Join-Path $Root 'release.json')
+        '{"Version":"0.7.3"}' | Set-Content -LiteralPath (Join-Path $Root 'install-state.json')
     }
     $process=[PSCustomObject]@{Id=999999;ExitCode=if($Scenario -eq 'InstallFail'){1}else{0};TimedOut=($Scenario -eq 'Timeout')}
     $process | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value { param($Timeout) return (-not $this.TimedOut) }
@@ -161,7 +161,7 @@ $execution=Get-Content -LiteralPath (Join-Path $area 'executed.json') -Raw | Con
 if ($execution.arguments -ne ('/S /D='+$root) -or (Test-Path -LiteralPath $pendingFile.FullName)) { throw 'Update did not preserve its target or clear the queue.' }; $passed++
 '{"Version":"0.5.1"}' | Set-Content -LiteralPath (Join-Path $root 'install-state.json') -Encoding UTF8
 $pending | ConvertTo-Json | Set-Content -LiteralPath $pendingFile.FullName -Encoding UTF8
-'{"status":"install-failed","version":"0.6.0"}' | Set-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Encoding UTF8
+'{"status":"install-failed","version":"0.7.3"}' | Set-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Encoding UTF8
 if ((Invoke-Fixture Block ApplyPending) -ne 0 -or (Get-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Raw | ConvertFrom-Json).status -ne 'install-failed') { throw 'The same failed update was retried automatically.' }; $passed++
 if ((Invoke-Fixture Offline Check) -ne 0 -or (Test-UiShown)) { throw 'Offline background check blocks normal playback or shows a window.' }; $passed++
 if ((Invoke-Fixture Offline Check -Interactive) -ne 1) { throw 'Manual updater hides download failures.' }; $passed++
@@ -176,7 +176,7 @@ Set-Content -LiteralPath $intervalState -Value $savedState -NoNewline -Encoding 
 function Reset-PendingFixture {
     '{"Version":"0.5.1"}' | Set-Content -LiteralPath (Join-Path $root 'install-state.json') -Encoding UTF8
     $pending | ConvertTo-Json | Set-Content -LiteralPath $pendingFile.FullName -Encoding UTF8
-    '{"status":"queued","version":"0.6.0"}' | Set-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Encoding UTF8
+    '{"status":"queued","version":"0.7.3"}' | Set-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Encoding UTF8
     Remove-Item -LiteralPath (Join-Path $area 'executed.json') -ErrorAction SilentlyContinue
 }
 Reset-PendingFixture
@@ -186,13 +186,13 @@ if ($message -notmatch '설치 종료 코드: 1' -or $message -match 'Spotify �
 $failure=Get-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Raw | ConvertFrom-Json
 if ($failure.status -ne 'install-failed' -or $failure.installer_exit_code -ne 1) { throw 'Installer failure details were lost.' }; $passed++
 Reset-PendingFixture
-'{"status":"installing","version":"0.6.0","pid":999999}' | Set-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Encoding UTF8
+'{"status":"installing","version":"0.7.3","pid":999999}' | Set-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Encoding UTF8
 if ((Invoke-Fixture Stale ApplyPending -Interactive) -ne 0 -or (Test-Path -LiteralPath $pendingFile.FullName)) { throw 'Reboot recovery must succeed on the first interactive retry.' }; $passed++
 Reset-PendingFixture
-'{"status":"installing","version":"0.6.0","pid":999999}' | Set-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Encoding UTF8
+'{"status":"installing","version":"0.7.3","pid":999999}' | Set-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Encoding UTF8
 if ((Invoke-Fixture Block ApplyPending) -ne 0 -or (Test-Path -LiteralPath (Join-Path $area 'executed.json'))) { throw 'Stale automatic install was repeated.' }; $passed++
 Reset-PendingFixture
-'{"status":"installing","version":"0.6.0","pid":999999}' | Set-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Encoding UTF8
+'{"status":"installing","version":"0.7.3","pid":999999}' | Set-Content -LiteralPath (Join-Path $pendingFile.DirectoryName 'state.json') -Encoding UTF8
 if ((Invoke-Fixture ActiveInstaller ApplyPending -Interactive) -ne 10 -or (Test-Path -LiteralPath (Join-Path $area 'executed.json'))) { throw 'Active installer was not protected.' }; $passed++
 Reset-PendingFixture
 if ((Invoke-Fixture Timeout ApplyPending -Interactive) -ne 11 -or [IO.File]::ReadAllText((Join-Path $area 'error.txt')) -notmatch '제한 시간') { throw 'Installer timeout was mislabeled.' }; $passed++
@@ -251,13 +251,13 @@ try {
 Reset-PendingFixture
 if ((Invoke-Fixture NoRelease Check -Interactive) -ne 21 -or (Test-Path -LiteralPath $pendingFile.FullName)) { throw 'Withdrawn cached release remains executable after a successful public check.' }
 if (-not (Test-Path -LiteralPath $download) -or @(Get-ChildItem -LiteralPath $pendingFile.DirectoryName -Filter 'pending-withdrawn-*.json').Count -lt 1) { throw 'Withdrawn update evidence was not preserved.' }; $passed++
-if ((Invoke-Fixture NoRelease Check -Interactive -RequestedVersion '0.6.3') -ne 22) { throw 'A private updater must not report an old public installation as successfully updated.' }; $passed++
-if ((Invoke-Fixture Download Check -Interactive -RequestedVersion '0.6.3') -ne 22 -or (Test-Path -LiteralPath $pendingFile.FullName)) { throw 'A private updater selected an older public release instead.' }; $passed++
-'{"Version":"0.6.3"}' | Set-Content -LiteralPath (Join-Path $root 'install-state.json') -Encoding UTF8
-if ((Invoke-Fixture NoRelease Check -Interactive -RequestedVersion '0.6.3') -ne 0) { throw 'An already installed private version should remain up to date.' }; $passed++
+if ((Invoke-Fixture NoRelease Check -Interactive -RequestedVersion '0.7.4') -ne 22) { throw 'A private updater must not report an old public installation as successfully updated.' }; $passed++
+if ((Invoke-Fixture Download Check -Interactive -RequestedVersion '0.7.4') -ne 22 -or (Test-Path -LiteralPath $pendingFile.FullName)) { throw 'A private updater selected an older public release instead.' }; $passed++
+'{"Version":"0.7.4"}' | Set-Content -LiteralPath (Join-Path $root 'install-state.json') -Encoding UTF8
+if ((Invoke-Fixture NoRelease Check -Interactive -RequestedVersion '0.7.4') -ne 0) { throw 'An already installed private version should remain up to date.' }; $passed++
 '{"Version":"0.5.1"}' | Set-Content -LiteralPath (Join-Path $root 'install-state.json') -Encoding UTF8
 $release | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $area 'release.json') -Encoding UTF8
-if ((Invoke-Fixture Download Check -Interactive -RequestedVersion '0.6.0') -ne 0 -or -not (Test-Path -LiteralPath $pendingFile.FullName)) { throw 'A real published update could not be queued after withdrawal recovery.' }; $passed++
+if ((Invoke-Fixture Download Check -Interactive -RequestedVersion '0.7.3') -ne 0 -or -not (Test-Path -LiteralPath $pendingFile.FullName)) { throw 'A real published update could not be queued after withdrawal recovery.' }; $passed++
 # Prompted flow (startup background check and the manual check) in a separate installation with its own cache.
 $uiRoot=Join-Path $area 'UI 설치'
 [void](New-Item -ItemType Directory -Path $uiRoot)
@@ -277,13 +277,13 @@ function Get-UiInstallers { if (-not (Test-Path -LiteralPath $uiCache)) { return
 Reset-UiInstallation
 if ((Invoke-Fixture Install Check -TargetRoot $uiRoot -Answer No) -ne 0) { throw 'Declining the update prompt failed.' }
 $records=Get-UiRecords
-if ($records -notcontains 'prompt 0.6.0 0.5.1') { throw 'A newer release did not show the update prompt with both versions.' }; $passed++
+if ($records -notcontains 'prompt 0.7.3 0.5.1') { throw 'A newer release did not show the update prompt with both versions.' }; $passed++
 $uiState=Get-UiState
-if ($uiState.status -ne 'declined' -or $uiState.version -ne '0.6.0' -or -not $uiState.checked_at -or ($records -match '^(download|window)') -or
+if ($uiState.status -ne 'declined' -or $uiState.version -ne '0.7.3' -or -not $uiState.checked_at -or ($records -match '^(download|window)') -or
     (Test-Path -LiteralPath $uiPending) -or (Test-Path -LiteralPath (Join-Path $area 'executed.json')) -or (Get-UiInstallers).Count) { throw 'Declining must record declined and download nothing.' }; $passed++
 if ((Invoke-Fixture Install Check -TargetRoot $uiRoot -Answer No -RespectInterval) -ne 0 -or (Test-UiShown)) { throw 'A declined update was asked again before the check interval passed.' }
-@{status='declined';version='0.6.0';checked_at=(Get-Date).AddHours(-5).ToString('o')} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $uiCache 'state.json') -Encoding UTF8
-if ((Invoke-Fixture Install Check -TargetRoot $uiRoot -Answer No -RespectInterval) -ne 0 -or (Get-UiRecords) -notcontains 'prompt 0.6.0 0.5.1') { throw 'A declined update was not offered again at the next check.' }; $passed++
+@{status='declined';version='0.7.3';checked_at=(Get-Date).AddHours(-5).ToString('o')} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $uiCache 'state.json') -Encoding UTF8
+if ((Invoke-Fixture Install Check -TargetRoot $uiRoot -Answer No -RespectInterval) -ne 0 -or (Get-UiRecords) -notcontains 'prompt 0.7.3 0.5.1') { throw 'A declined update was not offered again at the next check.' }; $passed++
 $code=Invoke-Fixture Install Check -TargetRoot $uiRoot -Answer Yes -Transfer Corrupt -SpotifyRunning
 $records=Get-UiRecords
 if ($code -ne 1 -or (Test-Path -LiteralPath (Join-Path $area 'executed.json')) -or $records -contains 'spotify-close' -or -not ($records -match '^error .*SHA-256') -or
@@ -319,14 +319,14 @@ if ($code -ne 1 -or -not ($records -match '^error .*설치 종료 코드: 1') -o
 if ((Invoke-Fixture Block Check -TargetRoot $uiRoot -Answer Yes) -ne 0 -or (Test-UiShown)) { throw 'A failed installation was offered again by the background check.' }; $passed++
 # A pending.json queued earlier (for example by a 0.7.3 updater) is still applied silently at startup.
 Reset-UiInstallation
-'{"status":"queued","version":"0.6.0"}' | Set-Content -LiteralPath (Join-Path $uiCache 'state.json') -Encoding UTF8
+'{"status":"queued","version":"0.7.3"}' | Set-Content -LiteralPath (Join-Path $uiCache 'state.json') -Encoding UTF8
 if ((Invoke-Fixture Install ApplyPending -TargetRoot $uiRoot) -ne 0 -or (Test-UiShown) -or (Test-Path -LiteralPath $uiPending) -or
     -not (Test-Path -LiteralPath (Join-Path $area 'executed.json')) -or (Get-UiRecords) -contains 'relaunch') { throw 'A queued update was not applied silently by ApplyPending.' }; $passed++
-if ((Invoke-Fixture Install Check -TargetRoot $uiRoot -Manual) -ne 0 -or (Get-UiRecords) -notcontains 'message 최신 버전입니다 (0.6.0)' -or ((Get-UiRecords) -match '^prompt')) { throw 'The manual check did not report the current version.' }; $passed++
+if ((Invoke-Fixture Install Check -TargetRoot $uiRoot -Manual) -ne 0 -or (Get-UiRecords) -notcontains 'message 최신 버전입니다 (0.7.3)' -or ((Get-UiRecords) -match '^prompt')) { throw 'The manual check did not report the current version.' }; $passed++
 if ((Invoke-Fixture Offline Check -TargetRoot $uiRoot -Manual) -ne 1 -or -not ((Get-UiRecords) -match '^error controlled offline fixture')) { throw 'The manual check hid a network failure.' }; $passed++
 # Outside Korean Windows the same check answers in English.
 $env:SPOTIFYHANGUL_LANGUAGE='en'
-try { if ((Invoke-Fixture Install Check -TargetRoot $uiRoot -Manual) -ne 0 -or (Get-UiRecords) -notcontains 'message You have the latest version (0.6.0)') { throw 'The English manual check did not report the current version in English.' }; $passed++ }
+try { if ((Invoke-Fixture Install Check -TargetRoot $uiRoot -Manual) -ne 0 -or (Get-UiRecords) -notcontains 'message You have the latest version (0.7.3)') { throw 'The English manual check did not report the current version in English.' }; $passed++ }
 finally { $env:SPOTIFYHANGUL_LANGUAGE='ko' }
 Reset-UiInstallation
 $held=[IO.File]::Open((Join-Path $uiCache 'update.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
