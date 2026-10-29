@@ -71,6 +71,19 @@ function Invoke-Cli([string[]]$Arguments) {
     if ($code -ne 0) { throw ('Spicetify 적용에 실패했습니다. install.log를 확인해 주세요: '+($Arguments -join ' ')) }
 }
 
+function Invoke-SpotXPatch([string]$Script,[string]$StagingDirectory) {
+    $log=Join-Path $root 'spotx-install.log'
+    # Under Stop the first stderr line of the child becomes the exception and the rest of its error is lost.
+    $saved=$ErrorActionPreference
+    try {
+        $ErrorActionPreference='Continue'
+        & $powershell -NoProfile -ExecutionPolicy Bypass -File $Script -StagingDirectory $StagingDirectory 2>&1 | Out-File -LiteralPath $log -Encoding UTF8
+        $code=$LASTEXITCODE
+    } finally { $ErrorActionPreference=$saved }
+    # Reporters send failure.txt first, so carry the end of the log into it.
+    if ($code -ne 0) { throw ('SpotX 적용에 실패했습니다. spotx-install.log를 확인해 주세요.'+"`r`n--- spotx-install.log ---`r`n"+(@(Get-Content -LiteralPath $log -Tail 40) -join "`r`n")) }
+}
+
 function Test-SpotifyInstaller([string]$Path) {
     if ((Get-Item -LiteralPath $Path).Length -ne $components.spotify.bytes) { throw 'Spotify 설치 파일 크기가 다릅니다. 실행을 중단합니다.' }
     if ((Get-Sha256 $Path) -ne $components.spotify.sha256) {
@@ -184,8 +197,7 @@ try {
         if (-not $process.WaitForExit(120000)) { $process.Kill(); throw 'Spotify 파일 추출 시간이 초과되었습니다.' }
         if ($process.ExitCode -ne 0) { throw ('Spotify 파일 추출 실패: '+$process.ExitCode) }
         'SpotifyHangul isolated client' | Set-Content -LiteralPath (Join-Path $extract '.spotify-hangul-stage') -Encoding UTF8
-        & $powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'installer\spotx-patch.ps1') -StagingDirectory $extract *> (Join-Path $root 'spotx-install.log')
-        if ($LASTEXITCODE -ne 0) { throw 'SpotX 적용에 실패했습니다. spotx-install.log를 확인해 주세요.' }
+        Invoke-SpotXPatch (Join-Path $root 'installer\spotx-patch.ps1') $extract
         if ($reuse) { $stockApps=Join-Path $extract 'Apps' }
         else {
             if (Test-Path -LiteralPath $client) { Remove-Item -LiteralPath $client }

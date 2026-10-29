@@ -8,7 +8,7 @@ $source=Join-Path $project 'installer\bootstrap.ps1'
 $errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile($source,[ref]$null,[ref]$errors)
 if ($errors.Count) { throw 'Bootstrap parsing failed.' }
-foreach ($name in @('Assert-AppDirectory','Assert-OwnedChild','Test-SpotifyInstaller','Get-Sha256','Get-ManagedApplyArguments')) {
+foreach ($name in @('Assert-AppDirectory','Assert-OwnedChild','Test-SpotifyInstaller','Get-Sha256','Get-ManagedApplyArguments','Invoke-SpotXPatch')) {
     $node=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name},$true)
     Invoke-Expression $node.Extent.Text
 }
@@ -79,6 +79,29 @@ if (((Get-ManagedApplyArguments $applyClient $applyIni '2.46.4' $true) -join ' '
 $count++
 'stock' | Set-Content -LiteralPath (Join-Path $applyClient 'Apps\xpui.spa')
 if (((Get-ManagedApplyArguments $applyClient $applyIni '2.46.4' $false) -join ' ') -ne '-n backup apply') { throw 'Fresh stock must be backed up first.' }
+$count++
+# A SpotX failure must reach failure.txt whole; Windows reports it in the system language and wraps it over several lines.
+$root=Join-Path $area 'spotx log'
+[void](New-Item -ItemType Directory -Path $root)
+$powershell=$nativePowerShell
+$failingPatch=Join-Path $area 'failing-spotx.ps1'
+@'
+param([string]$StagingDirectory)
+$ErrorActionPreference='Stop'
+Write-Output ('patching '+$StagingDirectory)
+throw ('En la línea del parche, el archivo de destino no está disponible '+('x'*120)+' fin del mensaje')
+'@ | Set-Content -LiteralPath $failingPatch -Encoding UTF8
+$failure=$null
+try { Invoke-SpotXPatch $failingPatch 'staged client' } catch { $failure=$_.Exception.Message }
+$log=Get-Content -LiteralPath (Join-Path $root 'spotx-install.log') -Raw
+if (-not $failure -or ($failure -replace '\s','') -notmatch 'findelmensaje' -or ($log -replace '\s','') -notmatch 'findelmensaje' -or $log -notmatch 'patching staged client') {
+    throw ('A SpotX failure lost its full message: '+$failure)
+}
+$count++
+$passingPatch=Join-Path $area 'passing-spotx.ps1'
+"param([string]`$StagingDirectory)`r`nWrite-Output 'SpotX archive and binary patches verified.'" | Set-Content -LiteralPath $passingPatch -Encoding UTF8
+Invoke-SpotXPatch $passingPatch 'staged client'
+if ((Get-Content -LiteralPath (Join-Path $root 'spotx-install.log') -Raw) -notmatch 'patches verified') { throw 'A successful SpotX run was not logged.' }
 $count++
 $root=$env:USERPROFILE
 $marker=Join-Path $root 'install-marker.json'
