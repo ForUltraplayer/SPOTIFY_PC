@@ -110,7 +110,8 @@ function Test-PayloadManifest([string]$Directory) {
 }
 
 function Copy-PayloadTree([string]$From,[string]$To) {
-    [void](Assert-PayloadTree $From)
+    # Child paths come back in canonical long form; a TEMP under a long user name arrives as an 8.3 short path and would shift every relative path.
+    $From=(Get-Item -LiteralPath (Assert-PayloadTree $From) -Force).FullName.TrimEnd('\')
     [void](Assert-PayloadTree $To)
     [void](New-Item -ItemType Directory -Path $To -Force)
     foreach ($entry in @(Get-ChildItem -LiteralPath $From -Recurse -Force -Directory)) { [void](New-Item -ItemType Directory -Path (Join-Path $To $entry.FullName.Substring($From.Length+1)) -Force) }

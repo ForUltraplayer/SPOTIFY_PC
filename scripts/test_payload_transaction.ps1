@@ -421,6 +421,17 @@ function Wait-Process { param($Id,$Timeout,$ErrorAction) }
 Stop-PayloadProcesses $root
 Assert (($script:stopped -join ',') -eq '101,102,105,107') 'Owned pythonw, Python, Spotify and overlay processes were not stopped precisely.'
 Remove-Item Function:\Get-CimInstance,Function:\Stop-Process,Function:\Wait-Process
+# The installer stages the package under TEMP, which Windows hands out as an 8.3 short path for long user names.
+$aliasPayload=Join-Path $area 'alias source'
+Put $aliasPayload 'installer\bootstrap.ps1' 'bootstrap fixture'
+$aliasForms=@((Join-Path $area ('unused\..\'+(Split-Path -Leaf $aliasPayload))))
+$shortForm=(New-Object -ComObject Scripting.FileSystemObject).GetFolder($aliasPayload).ShortPath
+if ($shortForm -ne $aliasPayload) { $aliasForms+=$shortForm }
+foreach ($form in $aliasForms) {
+    $aliasTarget=Join-Path $area ('alias target '+[Guid]::NewGuid().ToString('N'))
+    Copy-PayloadTree $form $aliasTarget
+    Assert (Test-Path -LiteralPath (Join-Path $aliasTarget 'installer\bootstrap.ps1') -PathType Leaf) ('A non-canonical package path misplaced files: '+$form)
+}
 $parseErrors=$null
 [void][Management.Automation.Language.Parser]::ParseFile((Join-Path $project 'installer\payload-transaction.ps1'),[ref]$null,[ref]$parseErrors)
 Assert (-not $parseErrors.Count) 'Windows PowerShell could not parse the transaction script.'

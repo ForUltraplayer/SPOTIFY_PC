@@ -38,7 +38,7 @@ _kana_converter = None
 _kana_lock = threading.Lock()
 _request_context = threading.local()
 
-VERSION = "0.7.7"
+VERSION = "0.7.8"
 PROTOCOL = 1
 CAPABILITIES = ('youtube-links-v1', 'mixed-playlists-v1', 'playback-control-v1', 'lyric-sync-v1', 'overlay-launch-v1',
                 'update-check-v1')

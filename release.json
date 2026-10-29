@@ -1,7 +1,7 @@
 {
   "name": "SpotifyHangul",
-  "version": "0.7.7",
-  "helper_version": "0.7.7",
+  "version": "0.7.8",
+  "helper_version": "0.7.8",
   "channel": "installer-beta",
   "tested_platform": "Windows 11 x64",
   "tested_python": "3.13.9",
