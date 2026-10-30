@@ -43,7 +43,8 @@ $exe_bak = Join-Path $spotifyDirectory 'Spotify.bak'
 $dll_bak = Join-Path $spotifyDirectory 'Spotify.dll.bak'
 $chrome_elf_bak = Join-Path $spotifyDirectory 'chrome_elf.dll.bak'
 $webjson = Get-Content -LiteralPath (Join-Path $SourceRoot 'patches.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-$lang = & (Join-Path $SourceRoot 'en.ps1')
+# en.ps1 is UTF-8 without a BOM, so running it by path reads it in the ANSI code page and its box characters break parsing on Western Windows.
+$lang = & ([scriptblock]::Create((Get-Content -LiteralPath (Join-Path $SourceRoot 'en.ps1') -Raw -Encoding UTF8)))
 $ru = $false
 $test_spa = $true
 $sendversion_off = $true

@@ -109,4 +109,18 @@ $rejected=$false
 try { Assert-AppDirectory } catch { $rejected=$true }
 if (-not $rejected) { throw 'Profile root accepted.' }
 $count++
+# Windows PowerShell reads a BOM-less script in the ANSI code page, which broke en.ps1 on Spanish Windows (issue #1).
+$patchAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $project 'installer\spotx-patch.ps1'),[ref]$null,[ref]$null)
+$langLoad=$patchAst.Find({param($n) $n -is [Management.Automation.Language.AssignmentStatementAst] -and $n.Left.Extent.Text -eq '$lang'},$true)
+$SourceRoot=Join-Path $project 'third_party\spotx'
+$lang=& ([scriptblock]::Create($langLoad.Right.Extent.Text))
+if ([string]$lang.Welcome -notmatch [char]0x2554) { throw 'en.ps1 was not read as UTF-8.' }
+$count++
+# Scripts run by path must survive any ANSI code page; en.ps1 is read as UTF-8 above and upstream-run.ps1 is reference only.
+$unsafe=@(@('installer','third_party\spotx','.') | ForEach-Object { Get-ChildItem -LiteralPath (Join-Path $project $_) -Filter '*.ps1' -File } | Where-Object {
+    $bytes=[IO.File]::ReadAllBytes($_.FullName)
+    $_.Name -notin @('en.ps1','upstream-run.ps1') -and -not ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) -and @($bytes | Where-Object { $_ -ge 0x80 }).Count
+})
+if ($unsafe.Count) { throw ('Non-ASCII scripts without a UTF-8 BOM: '+($unsafe.Name -join ', ')) }
+$count++
 [PSCustomObject]@{tests=$count; malformedInstallerRejected=$true; externalPathsRejected=$true; patchOnlyAdapter=$true} | ConvertTo-Json

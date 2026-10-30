@@ -383,6 +383,11 @@ function Invoke-PayloadTransaction($Transaction,[string]$Payload,[scriptblock]$I
             }
         }
         Copy-PayloadTree $Payload $Transaction.Root
+        # An update keeps the previous logs, so failure.txt takes only what this attempt wrote.
+        $installLog=Join-Path $Transaction.Root 'install.log'
+        $spotxLog=Join-Path $Transaction.Root 'spotx-install.log'
+        $logStart=if (Test-Path -LiteralPath $installLog -PathType Leaf) { (Get-Item -LiteralPath $installLog).Length } else { 0 }
+        $attemptStart=[DateTime]::UtcNow
         if ($Integration) { & $Integration $Transaction.Root }
         else {
             $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -394,7 +399,20 @@ function Invoke-PayloadTransaction($Transaction,[string]$Payload,[scriptblock]$I
         $Transaction.Status='pending-commit'; Save-PayloadJournal $Transaction
     } catch {
         $failure=$_
-        try { [IO.File]::WriteAllText((Join-Path $Transaction.Directory 'failure.txt'),$failure.ToString(),[Text.UTF8Encoding]::new($true)) }
+        try {
+            # Reporters send failure.txt alone and rollback moves the logs away, so this attempt's logs go in whole.
+            $details=$failure.ToString()+"`r`n"+$failure.ScriptStackTrace
+            if ($installLog -and (Test-Path -LiteralPath $installLog -PathType Leaf)) {
+                $bytes=[IO.File]::ReadAllBytes($installLog)
+                if ($bytes.Length -gt $logStart) {
+                    $details+="`r`n`r`n--- install.log ---`r`n"+[Text.Encoding]::UTF8.GetString($bytes,$logStart,$bytes.Length-$logStart).TrimStart([char]0xFEFF).Trim()
+                }
+            }
+            if ($spotxLog -and (Test-Path -LiteralPath $spotxLog -PathType Leaf) -and (Get-Item -LiteralPath $spotxLog).LastWriteTimeUtc -ge $attemptStart) {
+                $details+="`r`n`r`n--- spotx-install.log (full) ---`r`n"+(Get-Content -LiteralPath $spotxLog -Raw -Encoding UTF8).Trim()
+            }
+            [IO.File]::WriteAllText((Join-Path $Transaction.Directory 'failure.txt'),$details,[Text.UTF8Encoding]::new($true))
+        }
         catch { Write-Warning ('Failed to save installation diagnostics: '+$_.Exception.Message) }
         Undo-PayloadTransaction $Transaction
         throw $failure

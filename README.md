@@ -4,17 +4,17 @@
 
 Spotify 데스크톱 가사 화면에 일본어 노래의 한글 발음을 같이 띄워 줍니다. 한음, 나무위키에 올라와 있는 한글 발음을 가져와 Spotify 가사와 줄 단위로 맞춥니다. YouTube 링크도 Spotify 곡과 같은 목록에서 재생할 수 있습니다.
 
-[SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) 기반이고, 현재 공개 버전은 0.7.8입니다.
+[SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) 기반이고, 현재 공개 버전은 0.7.10입니다.
 
 > 개인이 취미로 만든 비공식 프로젝트입니다. 유지보수와 업데이트를 보장하지 않으니 [면책](#면책) 내용을 먼저 읽어 주세요.
 
-**[⬇ 다운로드 (v0.7.8)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.8)** · [버전별 변경 내역](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)
+**[⬇ 다운로드 (v0.7.10)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.10)** · [버전별 변경 내역](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)
 
 ## 설치
 
 Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다. 설치 파일에 Python과 Node가 들어 있습니다.
 
-1. `SpotifyHangul-0.7.8-Setup.exe`를 받아 실행합니다.
+1. `SpotifyHangul-0.7.10-Setup.exe`를 받아 실행합니다.
 2. 설치 폴더를 고릅니다. 기본값은 `%LOCALAPPDATA%\Programs\SpotifyHangul`입니다.
 3. 설치 중에 공식 Spotify 파일(약 150 MB)을 내려받습니다.
 
@@ -74,6 +74,7 @@ Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다. 설치 파일�
 - 0.7.6: 자동 업데이트 안정성 개선. 배포 저장소 주소가 바뀌어도 새 버전을 계속 찾음
 - 0.7.8: Windows 사용자 이름이 긴 PC 등에서 설치가 「설치에 실패했습니다」로 끝나던 문제 수정
 - 0.7.8: 한국어가 아닌 Windows에서 설치·업데이트 창을 영어로 표시하고, 쓸 수 없는 설치 폴더는 고를 때 바로 안내(0.7.7 시험판 내용 포함)
+- 0.7.10: 한국어가 아닌 Windows의 언어 환경에서 설치가 실패하던 문제 수정
 
 </details>
 
@@ -86,7 +87,7 @@ Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다. 설치 파일�
 ## 업데이트 / 제거
 
 - **자동 업데이트**: 바로가기로 실행하면 새 버전을 확인합니다 (마지막 확인에서 4 시간 이후 재조회). 새 버전이 있으면 업데이트할지 묻고, 「예」를 누르면 내려받은 뒤 Spotify를 닫고 설치해 다시 실행합니다. 프로필 메뉴의 「업데이트 확인」으로 바로 확인할 수도 있습니다.
-- **직접 설치 / 업데이트**: Spotify와 가사창을 종료하고 `SpotifyHangul-0.7.8-Setup.exe`를 같은 폴더에 다시 설치합니다.
+- **직접 설치 / 업데이트**: Spotify와 가사창을 종료하고 `SpotifyHangul-0.7.10-Setup.exe`를 같은 폴더에 다시 설치합니다.
 - **제거**: Windows 설정 > 앱 > 설치된 앱에서 **Spotify 한글 가사**를 제거합니다. 기존 Spotify와 발음 캐시는 남습니다.
 
 통합 Spotify 자체의 자동 업데이트는 패치 유지를 위해 막아 둡니다. Spotify 버전은 새 설치본으로 올라갑니다.

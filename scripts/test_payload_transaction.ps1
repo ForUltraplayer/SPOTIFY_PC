@@ -142,6 +142,38 @@ try { Invoke-PayloadTransaction $transaction $payload -Integration { throw 'diag
 catch { $failed=$_.Exception.Message -match 'diagnostic write failure fixture' }
 Assert $failed 'A diagnostic write failure replaced the original installation failure.'
 Assert (Equal-Tree $diagnosticBefore $root) 'A diagnostic write failure skipped full rollback.'
+# Reporters send failure.txt alone, so it carries the error this attempt wrote to install.log and not an older one.
+$reportRoot=Join-Path $area 'report app'
+Put $reportRoot 'install-marker.json' '{"app":"SpotifyHangul"}'
+Put $reportRoot 'release.json' '{"version":"0.7.8"}'
+'[bootstrap Install] stale failure from an earlier attempt' | Out-File -LiteralPath (Join-Path $reportRoot 'install.log') -Encoding UTF8
+'stale spotx output from an earlier attempt' | Out-File -LiteralPath (Join-Path $reportRoot 'spotx-install.log') -Encoding UTF8
+$reportTransaction=Start-PayloadTransaction $reportRoot $payload -NoMetadata
+try {
+    Invoke-PayloadTransaction $reportTransaction $payload -Integration {
+        param($app)
+        # Long output checks that nothing from the attempt is cut.
+        @('FIRST-LINE-OF-ATTEMPT')+@(1..500 | ForEach-Object { "spinner line $_" })+@('[bootstrap Install] SpotX 적용에 실패했습니다. En la línea 34 el archivo no existe') | Out-File -LiteralPath (Join-Path $app 'install.log') -Encoding UTF8 -Append
+        throw 'Spotify integration failed. See the update recovery directory and install.log.'
+    }
+} catch {}
+$report=[IO.File]::ReadAllText((Join-Path $reportTransaction.Directory 'failure.txt'))
+Assert ($report -match 'Spotify integration failed' -and $report -match 'FIRST-LINE-OF-ATTEMPT' -and $report -match 'spinner line 250' -and $report -match 'En la línea 34 el archivo no existe') ('failure.txt lost part of the attempt''s install.log: '+$report)
+Assert ($report -notmatch 'stale failure' -and $report -notmatch 'stale spotx output') ('failure.txt carried logs from an earlier attempt: '+$report)
+# A SpotX run in this attempt rewrites spotx-install.log, and failure.txt carries all of it.
+$spotxRoot=Join-Path $area 'report spotx app'
+Put $spotxRoot 'install-marker.json' '{"app":"SpotifyHangul"}'
+Put $spotxRoot 'release.json' '{"version":"0.7.8"}'
+$spotxTransaction=Start-PayloadTransaction $spotxRoot $payload -NoMetadata
+try {
+    Invoke-PayloadTransaction $spotxTransaction $payload -Integration {
+        param($app)
+        @('SPOTX-FIRST-LINE')+@(1..300 | ForEach-Object { "spotx line $_" })+@('No se encuentra la ruta de acceso') | Out-File -LiteralPath (Join-Path $app 'spotx-install.log') -Encoding UTF8
+        throw 'Spotify integration failed. See the update recovery directory and install.log.'
+    }
+} catch {}
+$report=[IO.File]::ReadAllText((Join-Path $spotxTransaction.Directory 'failure.txt'))
+Assert ($report -match '--- spotx-install.log \(full\) ---' -and $report -match 'SPOTX-FIRST-LINE' -and $report -match 'No se encuentra la ruta de acceso') ('failure.txt lost the attempt''s spotx-install.log: '+$report)
 # A native current-directory handle reproduces old updater parents that remain
 # alive in the installation folder while the new installer is recovering.
 $inPlaceRoot=Join-Path $area 'in-place cwd app'
