@@ -1,6 +1,6 @@
 ﻿# @file start.ps1
-# @brief Start the local existing-lyrics reader together with Spotify, without autostart registration.
-param([switch]$NoErrorDialog)
+# @brief Start the local existing-lyrics reader together with Spotify; Spotify's own login autostart is pointed here.
+param([switch]$NoErrorDialog,[ValidateSet('Normal','Minimized')][string]$Autostart)
 $ErrorActionPreference = 'Stop'
 $env:PSModulePath=(Join-Path $PSHOME 'Modules')+[IO.Path]::PathSeparator+$env:PSModulePath
 
@@ -132,11 +132,34 @@ if (-not $bridgeHealthy) {
     if (-not $bridgeHealthy) { throw '한글 발음 도우미를 시작하지 못했습니다.' }
 }
 # Spotify first: the optional overlay can take a few seconds to open its port.
-Start-Process -FilePath $spotifyExe -WorkingDirectory (Split-Path -Parent $spotifyExe)
+$spotifyArguments=@(if ($Autostart) { '--autostart' }; if ($Autostart -eq 'Minimized') { '--minimized' })
+if ($spotifyArguments) { Start-Process -FilePath $spotifyExe -ArgumentList $spotifyArguments -WorkingDirectory (Split-Path -Parent $spotifyExe) }
+else { Start-Process -FilePath $spotifyExe -WorkingDirectory (Split-Path -Parent $spotifyExe) }
 if (Test-Path -LiteralPath $updater) {
     $checkArguments = @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"'+$updater+'"'),'-Mode','Check','-InstallRoot',('"'+$PSScriptRoot+'"'))
     if (Test-Path -LiteralPath $headlessHost) { Start-Process -FilePath $headlessHost -ArgumentList (@('--headless',('"'+$nativePowerShell+'"')) + $checkArguments) -WorkingDirectory $launchDirectory }
     else { Start-Process -FilePath $nativePowerShell -ArgumentList $checkArguments -WorkingDirectory $launchDirectory -WindowStyle Hidden }
+}
+$autostartHelper=Join-Path $PSScriptRoot 'installer\autostart.ps1'
+if ($installedState.ManagedClient -and (Test-Path -LiteralPath $autostartHelper)) {
+    # Spotify is already running, so a failure here is recorded without a dialog.
+    try {
+        . $autostartHelper
+        $clients=@($spotifyExe,$installedState.PreviousSpotifyExe,(Join-Path $env:APPDATA 'Spotify\Spotify.exe'))
+        $spotifyPrefs=Join-Path $env:APPDATA 'Spotify\prefs'
+        $configured={ (Test-Path -LiteralPath $spotifyPrefs) -and (Select-String -LiteralPath $spotifyPrefs -Pattern '^app\.autostart-configured=' -Quiet) }
+        # On its first launch Spotify registers its own autostart a few seconds in, so wait for it once.
+        $firstLaunch=-not (& $configured)
+        $deadline=[DateTime]::UtcNow.AddSeconds(30)
+        do {
+            $seen=Read-SpotifyAutostart
+            Update-SpotifyAutostart $PSScriptRoot $clients
+            if (-not $firstLaunch -or $seen -or (& $configured)) { break }
+            Start-Sleep -Seconds 1
+        } while ([DateTime]::UtcNow -lt $deadline)
+    } catch {
+        try { "$(Get-Date -Format o)`r`n자동 시작 전환 실패: $($_.Exception.Message)" | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'start-error.txt') -Encoding UTF8 } catch { }
+    }
 }
 } catch {
     $message = $_.Exception.Message

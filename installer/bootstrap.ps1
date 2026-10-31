@@ -147,6 +147,8 @@ try {
         Stop-ExactSpotify (Join-Path $client 'Spotify.exe')
         $overlayHelper=Join-Path $root 'installer\desktop-overlay.ps1'
         if (Test-Path -LiteralPath $overlayHelper) { . $overlayHelper; Stop-BundledDesktopOverlay -InstallRoot $root }
+        $autostartHelper=Join-Path $root 'installer\autostart.ps1'
+        if (Test-Path -LiteralPath $autostartHelper) { . $autostartHelper; Restore-SpotifyAutostart $root $state.PreviousSpotifyExe }
         if (Test-Path -LiteralPath (Join-Path $root 'legacy-install-state.json')) {
             & $powershell -NoProfile -ExecutionPolicy Bypass -File $legacyHook -Mode Uninstall -InstallRoot $root -StateFile 'legacy-install-state.json'
             if ($LASTEXITCODE -ne 0) { throw '기존 버전의 연결 해제에 실패했습니다.' }

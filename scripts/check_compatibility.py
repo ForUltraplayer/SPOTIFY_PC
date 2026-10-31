@@ -63,7 +63,7 @@ def main():
         run([sys.executable, '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_release_sources.py'])
         run([sys.executable, '-m', 'unittest', 'test_playlist_files', 'test_youtube_stream', 'test_playback_control', 'test_playback_http'])
         for name in ('test_installer.ps1', 'test_bootstrap.ps1', 'test_auto_update.ps1', 'test_managed_ivlyrics.ps1', 'test_start.ps1',
-                     'test_desktop_overlay.ps1', 'test_payload_transaction.ps1'):
+                     'test_desktop_overlay.ps1', 'test_payload_transaction.ps1', 'test_autostart.ps1'):
             command = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/'+name]
             if name == 'test_auto_update.ps1':
                 command += ['-VerifiedInstaller', str(ROOT/'work/downloads'/next(iter(data['test_fixtures'])))]

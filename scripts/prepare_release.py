@@ -32,7 +32,7 @@ FILES = (
     'test_ivlyrics_sync_patch.cjs', 'scripts/patch_ivlyrics_sync.py',
     'scripts/test_release_sources.py', 'docs/DISTRIBUTION_PLAN.md',
     'tests/ui/package.json', 'tests/ui/package-lock.json',
-    'scripts/test_start.ps1',
+    'scripts/test_start.ps1', 'installer/autostart.ps1', 'scripts/test_autostart.ps1',
     'scripts/youtube_toolchain.py',
     'installer/desktop-overlay.ps1', 'scripts/test_desktop_overlay.ps1',
     'installer/payload-transaction.ps1', 'scripts/test_payload_transaction.ps1', 'scripts/test_upgrade_matrix.ps1',

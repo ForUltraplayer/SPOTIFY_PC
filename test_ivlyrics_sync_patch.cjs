@@ -184,3 +184,31 @@ print(json.dumps({'ok': ok, 'errors': errors}))
  for(const [key,message] of Object.entries(errors))
   assert.match(message||'',/^ivLyrics sync contract changed: .*overlay/,key);
 });
+test('actual update check never contacts upstream or offers its releases', {skip:!root}, async ()=>{
+ const method=extract(source('Utils.js'),'async checkForUpdates() {','  compareVersions(a, b) {');
+ const utils=vm.runInNewContext('({currentVersion:"7.0.16",'+method.trim().replace(/,\s*(\/\*\*[\s\S]*)?$/,'')+'})',{fetch:()=>{throw new Error('network used');},I18n:{t:k=>k},AbortController,setTimeout,clearTimeout});
+ assert.deepEqual(JSON.parse(JSON.stringify(await utils.checkForUpdates())),{hasUpdate:false,currentVersion:'7.0.16',latestVersion:'7.0.16'});
+});
+test('update check transform refuses a changed or duplicated upstream anchor', ()=>{
+ const python=process.env.PYTHON||'python';
+ const script=`
+import json, sys
+sys.path.insert(0, ${JSON.stringify(path.join(__dirname,'scripts'))})
+import patch_ivlyrics_sync as p
+sources = {'Utils.js': 'const Utils = {\\n' + p.UPSTREAM_UPDATE_CHECK + '\\n  } catch (e) {}\\n  },\\n};'}
+ok = p.managed_updates(sources)
+errors = {}
+for label, text in (('missing', ''), ('duplicate', sources['Utils.js'] * 2)):
+    try:
+        p.managed_updates({'Utils.js': text})
+        errors[label] = None
+    except ValueError as error:
+        errors[label] = str(error)
+print(json.dumps({'ok': ok, 'errors': errors}))
+`;
+ const run=spawnSync(python,['-I','-c',script],{encoding:'utf8'});
+ assert.equal(run.status,0,run.stderr);
+ const {ok,errors}=JSON.parse(run.stdout);
+ assert.ok(ok['Utils.js'].includes('return { hasUpdate: false, currentVersion: this.currentVersion, latestVersion: this.currentVersion };'));
+ for(const [key,message] of Object.entries(errors)) assert.match(message||'',/^ivLyrics sync contract changed: update check$/,key);
+});

@@ -69,6 +69,21 @@ def overlay_auto_launch(sources):
     return result
 
 
+UPSTREAM_UPDATE_CHECK = """  async checkForUpdates() {
+    try {"""
+MANAGED_UPDATE_CHECK = """  async checkForUpdates() {
+    // SpotifyHangul: this copy only changes with Spotify Hangul updates, so upstream releases are not announced.
+    return { hasUpdate: false, currentVersion: this.currentVersion, latestVersion: this.currentVersion };
+    try {"""
+
+
+def managed_updates(sources):
+    """Stop the upstream release check, whose update dialog reaches every user but cannot update this copy."""
+    result = dict(sources)
+    result['Utils.js'] = replace_once(result['Utils.js'], UPSTREAM_UPDATE_CHECK, MANAGED_UPDATE_CHECK, 'update check')
+    return result
+
+
 def patched_sources(sources, core, ui):
     """Validate every upstream anchor before producing any filesystem writes."""
     if any(MARKER in text for text in sources.values()):
@@ -106,7 +121,7 @@ def patched_sources(sources, core, ui):
          '    !showsVideo && lyricsAdjustable ? react.createElement(HangulTrackSyncEditor, { trackUri }) : null,\n    modeSwitch,\n    react.createElement(\n      "div",\n      { className: "lyrics-track-sync-controls" },', 'existing quick sync editor mount'),
     ):
         options = replace_once(options, old, new, name)
-    result = overlay_auto_launch(thumbnail_ad_filter(overlay_download_sources(result)))
+    result = managed_updates(overlay_auto_launch(thumbnail_ad_filter(overlay_download_sources(result))))
     prefix = MARKER + '\n' + core + '\n' + ui + '\n'
     result['OptionsMenu.js'] = prefix + options
     for name in ('index.js', 'Pages.js'):
@@ -116,7 +131,7 @@ def patched_sources(sources, core, ui):
 
 def patch_tree(directory):
     directory = Path(directory)
-    names = ('index.js', 'Pages.js', 'OptionsMenu.js', 'LyricsService.js', 'Settings.js', 'SetupWizard.js', 'VideoBackgroundDepend.js')
+    names = ('index.js', 'Pages.js', 'OptionsMenu.js', 'LyricsService.js', 'Settings.js', 'SetupWizard.js', 'VideoBackgroundDepend.js', 'Utils.js')
     sources = {name: (directory / name).read_text(encoding='utf-8-sig') for name in names}
     result = patched_sources(sources, (ROOT / 'ivlyrics-sync.js').read_text(encoding='utf-8'),
                              (ROOT / 'ivlyrics-sync-ui.js').read_text(encoding='utf-8'))

@@ -16,11 +16,11 @@
       "revision": "c3fd98f6fbf922ae944d1ecd64f97c380d04368e"
     },
     "ivlyrics": {
-      "version": "7.0.16",
-      "revision": "fe45082ef26a5dfdd87170b50e56ded2da95702d",
+      "version": "7.0.18",
+      "revision": "75cb5b92d04734e664f09397ae861bba016ce727",
       "repository": "ivLis-Studio/ivLyrics",
       "track": "release",
-      "source_artifact": "ivLyrics-7.0.16-source.zip"
+      "source_artifact": "ivLyrics-7.0.18-source.zip"
     },
     "spotx": {
       "revision": "3cfbdfd1fac3dc755155e434116e28b51acfec07",
@@ -72,11 +72,6 @@
       "url": "https://www.python.org/ftp/python/3.13.17/python-3.13.17-embed-amd64.zip",
       "sha256": "9e35319bffedab8b36ad44d8f377cb4f1733bcec257a0b6d04d94f01486ddb38",
       "bytes": 11441267
-    },
-    "ivLyrics-7.0.16-source.zip": {
-      "url": "https://codeload.github.com/ivLis-Studio/ivLyrics/zip/fe45082ef26a5dfdd87170b50e56ded2da95702d",
-      "sha256": "9578e9d9f876461eb77c656a987e64cb3b42e86fc6b748a511667bae4fe2ba91",
-      "bytes": 10368561
     },
     "nsis-3.13.zip": {
       "url": "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.13/nsis-3.13.zip",
@@ -162,6 +157,11 @@
       "url": "https://nodejs.org/dist/v24.22.1/node-v24.22.1.tar.xz",
       "sha256": "4f5379796280cdaeb0c2f358fd04b6a16cc4fb7dfa83b5a8c91a9d963b435231",
       "bytes": 57669336
+    },
+    "ivLyrics-7.0.18-source.zip": {
+      "url": "https://codeload.github.com/ivLis-Studio/ivLyrics/zip/75cb5b92d04734e664f09397ae861bba016ce727",
+      "sha256": "4ec75c2d802a7919e9cdbc0b11eb40408c90649b2742a9f9858740bb51dbb4b0",
+      "bytes": 10384419
     }
   },
   "test_fixtures": {

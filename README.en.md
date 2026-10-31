@@ -4,17 +4,17 @@
 
 Shows the Korean (Hangul) pronunciation of Japanese songs in the Spotify desktop lyrics view. Pronunciation is pulled from Haneum and Namuwiki and matched line by line against Spotify's lyrics. YouTube links can also play in the same playlists as Spotify tracks.
 
-Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Public version: 0.7.10.
+Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Public version: 0.7.11.
 
 > An unofficial hobby project. Maintenance and updates are not guaranteed, so please read the [Disclaimer](#disclaimer) first.
 
-**[⬇ Download (v0.7.10)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.10)** · [Release history](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)
+**[⬇ Download (v0.7.11)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.7.11)** · [Release history](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)
 
 ## Install
 
 No need to install Spotify, SpotX or Python first. The installer includes Python and Node.
 
-1. Download and run `SpotifyHangul-0.7.10-Setup.exe`.
+1. Download and run `SpotifyHangul-0.7.11-Setup.exe`.
 2. Pick an install folder (default: `%LOCALAPPDATA%\Programs\SpotifyHangul`).
 3. The installer downloads the official Spotify files (~150 MB).
 
@@ -29,7 +29,7 @@ No admin rights needed. The beta EXE is not code-signed.
 Per-song source URLs and automatic pronunciation are under **한글 발음 자료** in the profile menu.
 
 > [!IMPORTANT]
-> Opened from the regular Spotify shortcut, pronunciation and YouTube tracks don't work. Always use the **Spotify 한글 가사** shortcut. On PCs that used 0.5.x, if the original Spotify's "open automatically after you log on" setting is on, that Spotify opens first when Windows starts. Turn it off in Spotify's settings or in Windows Settings > Apps > Startup.
+> Opened from the regular Spotify shortcut, pronunciation and YouTube tracks don't work. Always use the **Spotify 한글 가사** shortcut. From 0.7.11, if Spotify's "open automatically after you log on" setting is on, Windows startup also opens Spotify with Hangul lyrics once the shortcut has been used.
 
 ## Features
 
@@ -75,6 +75,8 @@ See [YouTube integration](docs/YOUTUBE_LINKS.md) and [operations](docs/OPERATION
 - 0.7.8: fixes installs that ended with "Installation failed" on PCs with a long Windows user name, among others
 - 0.7.8: the installer and updater appear in English on Windows that is not set to Korean, and an unusable installation folder is refused as soon as it is chosen (from the 0.7.7 pre-release)
 - 0.7.10: fixes installs that failed on Windows set to a language other than Korean
+- 0.7.11: if Spotify is set to open after you log on, it now opens with Hangul lyrics at Windows startup too (once the shortcut has been used)
+- 0.7.11: ivLyrics 7.0.18; ivLyrics' own update prompt, which cannot update this installation, is no longer shown
 
 </details>
 
@@ -87,7 +89,7 @@ The original overlay repository does not declare a license. See [THIRD_PARTY_NOT
 ## Update / Uninstall
 
 - **Automatic updates**: the shortcut checks for new versions when launched, at least 4 hours after the previous check. If one is found it asks first; on Yes it downloads, closes Spotify, installs, and relaunches. The profile menu entry 「업데이트 확인」 checks right away.
-- **Manual install / update**: close Spotify and the overlay, then run `SpotifyHangul-0.7.10-Setup.exe` into the same folder.
+- **Manual install / update**: close Spotify and the overlay, then run `SpotifyHangul-0.7.11-Setup.exe` into the same folder.
 - **Uninstall**: Windows Settings > Apps > Installed apps > **Spotify 한글 가사**. Your existing Spotify and pronunciation cache are kept.
 
 Spotify's own auto-update is blocked to keep the patches. New Spotify versions come with new installer releases.
