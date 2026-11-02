@@ -73,8 +73,10 @@ function Stop-PayloadProcesses([string]$Root) {
     $spotify=Join-Path $Root 'Spotify\Spotify.exe'
     $overlay=Join-Path $Root 'desktop-overlay\lyrics-plus-overlay.exe'
     $bridge=Join-Path $Root 'bridge.py'
-    foreach ($process in @(Get-CimInstance Win32_Process -ErrorAction Stop)) {
-        $owned=$process.ExecutablePath -and ($process.ExecutablePath -eq $spotify -or $process.ExecutablePath -eq $overlay)
+    # The extension runner leaves with the helper, but its runtime files must not be in use while they are replaced.
+    $runner=Join-Path $Root 'ext-runtime\bin\java.exe'
+    $targets=@(foreach ($process in @(Get-CimInstance Win32_Process -ErrorAction Stop)) {
+        $owned=$process.ExecutablePath -and $process.ExecutablePath -in @($spotify,$overlay,$runner)
         $helper=$false
         if ($process.ExecutablePath -and $process.ExecutablePath -in @((Join-Path $Root 'runtime\python.exe'),(Join-Path $Root 'runtime\pythonw.exe')) -and $process.CommandLine) {
             $arguments=@([regex]::Matches($process.CommandLine,'"([^"]*)"|(\S+)') | ForEach-Object {
@@ -84,11 +86,17 @@ function Stop-PayloadProcesses([string]$Root) {
             while ($scriptIndex -lt $arguments.Count -and $arguments[$scriptIndex] -cin @('-u','-B','-I')) { $scriptIndex++ }
             $helper=$scriptIndex -eq $arguments.Count-1 -and [string]::Equals($arguments[$scriptIndex],$bridge,[StringComparison]::OrdinalIgnoreCase)
         }
-        if ($owned -or $helper) {
-            Stop-Process -Id $process.ProcessId -ErrorAction Stop
-            Wait-Process -Id $process.ProcessId -Timeout 15 -ErrorAction SilentlyContinue
-        }
+        if ($owned -or $helper) { $process.ProcessId }
+    })
+    foreach ($id in $targets) {
+        # Stopping Spotify's main process also ends its other Spotify.exe processes listed here. Those are gone, or still
+        # exiting, which Windows answers with access denied; only one that is still running stops the update.
+        Stop-Process -Id $id -ErrorAction SilentlyContinue
+        Wait-Process -Id $id -Timeout 15 -ErrorAction SilentlyContinue
     }
+    # An exited process can stay listed for a moment while another process holds it.
+    $left=@($targets | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue | Where-Object { try { -not $_.HasExited } catch { $false } } })
+    if ($left.Count) { throw ('Could not stop the running application processes: '+($left -join ', ')) }
 }
 
 function Test-PayloadManifest([string]$Directory) {

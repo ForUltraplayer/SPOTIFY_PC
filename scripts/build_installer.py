@@ -10,6 +10,7 @@ import subprocess
 import sys
 import zipfile
 from dependencies import load, verify, fingerprint, source_fingerprint
+from extension_toolchain import prepare_extension_runner
 from patch_ivlyrics_sync import patch_tree
 from prepare_release import validate_source_archive
 from youtube_toolchain import prepare_youtube_tools
@@ -63,7 +64,7 @@ def main():
         shutil.rmtree(PAYLOAD)
     PAYLOAD.mkdir(parents=True)
     (PAYLOAD / '.builder-owned').write_text('SpotifyHangul build payload\n')
-    for name in ('bridge.py', 'youtube_stream.py', 'playlist_files.py', 'playback_control.py', 'phonetics.py', 'hangul-lyrics.js', 'youtube-links.js', 'youtube-ivlyrics.js', 'youtube-library.js', 'youtube-overlay-controls.js', 'youtube-desktop-bridge.js', 'youtube-now-playing.js', 'youtube-now-playing.css', 'youtube-player.html', 'start.ps1', 'stop.ps1', 'auto-update.ps1', 'update-ui.ps1',
+    for name in ('bridge.py', 'youtube_stream.py', 'playlist_files.py', 'playback_control.py', 'phonetics.py', 'hangul-lyrics.js', 'youtube-links.js', 'youtube-ivlyrics.js', 'youtube-library.js', 'youtube-overlay-controls.js', 'youtube-desktop-bridge.js', 'youtube-now-playing.js', 'youtube-now-playing.css', 'extension-player.js', 'extension_host.py', 'youtube-player.html', 'start.ps1', 'stop.ps1', 'auto-update.ps1', 'update-ui.ps1',
                  'LICENSE', 'THIRD_PARTY_NOTICES.md', 'release.json', 'components.json'):
         shutil.copy2(ROOT / name, PAYLOAD / name)
     shutil.copytree(ROOT / 'installer', PAYLOAD / 'installer')
@@ -87,6 +88,8 @@ def main():
                     '--find-links', str(CACHE / 'wheels'), '--target', str(PAYLOAD / 'vendor'),
                     '-r', str(ROOT / 'requirements.txt')], env=build_environment, check=True)
     prepare_youtube_tools(PAYLOAD, CACHE, dependencies)
+    extract(CACHE / components['java']['artifact'], TOOLS / 'jdk', strip_root=True)
+    prepare_extension_runner(PAYLOAD, TOOLS / 'jdk', CACHE, dependencies)
     sources = PAYLOAD / 'third_party_sources'
     sources.mkdir()
     source_artifacts = {item['source_artifact'] for item in components.values() if 'source_artifact' in item}

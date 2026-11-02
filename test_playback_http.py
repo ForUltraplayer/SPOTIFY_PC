@@ -121,6 +121,25 @@ class PlaybackHTTPTests(unittest.TestCase):
         self.assertEqual(self.request('POST', '/playback-command', {'action': 'next', 'trackUri': 'youtube:video:rKQptWhAvO0'},
                                       origin='http://tauri.localhost', token=token)[0], 409)
 
+    def test_extension_player_module_is_served_beside_the_runner_routes(self):
+        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=3)
+        try:
+            connection.request('GET', '/ext/player.js', headers={'Origin': 'https://xpui.app.spotify.com'})
+            response = connection.getresponse()
+            data = response.read()
+            self.assertEqual(response.status, 200)
+            self.assertTrue(response.headers['Content-Type'].startswith('text/javascript'))
+            self.assertIn(b'SpotifyHangulExtensionPlayer', data)
+        finally:
+            connection.close()
+        code, _, state = self.request('GET', '/ext/state')
+        self.assertEqual(code, 200)
+        self.assertIn('audio', state)
+        self.assertEqual(self.request('GET', '/ext/media/unknown-address')[0], 404)
+        code, headers, _ = self.request('OPTIONS', '/ext/media/unknown-address')
+        self.assertEqual(code, 204)
+        self.assertIn('Range', headers['Access-Control-Allow-Headers'])
+
     def test_desktop_preflight_is_limited_to_control_paths(self):
         code, headers, _ = self.request('OPTIONS', '/playback-command', origin='http://tauri.localhost')
         self.assertEqual(code, 204)

@@ -44,7 +44,8 @@ def main():
             run(['node', 'scripts/check_ivlyrics.cjs', area])
             run(['node', '--test', 'test_extension.cjs', 'test_youtube_library.cjs', 'test_youtube_overlay.cjs',
                  'test_youtube_ivlyrics.cjs', 'test_youtube_navigation.cjs', 'test_youtube_desktop.cjs',
-                 'test_ivlyrics_sync.cjs', 'test_ivlyrics_sync_ui.cjs', 'test_ivlyrics_sync_patch.cjs', 'test_youtube_now_playing.cjs'],
+                 'test_ivlyrics_sync.cjs', 'test_ivlyrics_sync_ui.cjs', 'test_ivlyrics_sync_patch.cjs', 'test_youtube_now_playing.cjs',
+                 'test_extension_player.cjs'],
                 env=dict(os.environ, IVLYRICS_SOURCE_DIR=area, IVLYRICS_REQUIRE_UI_TESTS='1'))
             cli = data['components']['spicetify']
             with zipfile.ZipFile(ROOT / 'work/downloads' / cli['artifact']) as archive:
@@ -63,7 +64,7 @@ def main():
         run([sys.executable, '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_release_sources.py'])
         run([sys.executable, '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_auto_draft.py'])
         run([sys.executable, '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_report_upstream.py'])
-        run([sys.executable, '-m', 'unittest', 'test_playlist_files', 'test_youtube_stream', 'test_playback_control', 'test_playback_http'])
+        run([sys.executable, '-m', 'unittest', 'test_playlist_files', 'test_youtube_stream', 'test_playback_control', 'test_playback_http', 'test_extension_host'])
         for name in ('test_installer.ps1', 'test_bootstrap.ps1', 'test_auto_update.ps1', 'test_managed_ivlyrics.ps1', 'test_start.ps1',
                      'test_desktop_overlay.ps1', 'test_payload_transaction.ps1', 'test_autostart.ps1'):
             command = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/'+name]

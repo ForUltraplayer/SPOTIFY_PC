@@ -65,6 +65,37 @@
       "license": "MIT with bundled third-party notices",
       "binary_member": "node-v24.22.1-win-x64/node.exe",
       "license_member": "node-v24.22.1-win-x64/LICENSE"
+    },
+    "java": {
+      "version": "jdk-21.0.13+9",
+      "repository": "adoptium/temurin21-binaries",
+      "track": "release",
+      "artifact": "OpenJDK21U-jdk_x64_windows_hotspot_21.0.13_9.zip",
+      "license": "GPL-2.0 with Classpath Exception",
+      "source": "https://github.com/adoptium/jdk21u/tree/jdk-21.0.13+9",
+      "delivery": "jlink-runtime",
+      "modules": [
+        "java.base",
+        "java.desktop",
+        "java.instrument",
+        "java.logging",
+        "jdk.dynalink",
+        "jdk.httpserver",
+        "jdk.unsupported",
+        "jdk.crypto.ec"
+      ]
+    },
+    "extensions_pc": {
+      "version": "2.3.0-hangul.2",
+      "repository": "ForUltraplayer/SPOTIFY_ANDROID",
+      "track": "release",
+      "revision": "local-tree-4f2a222ce917b158854427661b7d920c802efd59",
+      "artifact": "extensions-pc-2.3.0-hangul.2.jar",
+      "source_artifact": "SPOTIFY_ANDROID-2.3.0-hangul.2-source.zip",
+      "license": "GPL-3.0",
+      "notices": {
+        "Extensions-Rhino-MPL-2.0.txt": "MPL-2.0.txt"
+      }
     }
   },
   "artifacts": {
@@ -162,6 +193,26 @@
       "url": "https://codeload.github.com/ivLis-Studio/ivLyrics/zip/75cb5b92d04734e664f09397ae861bba016ce727",
       "sha256": "4ec75c2d802a7919e9cdbc0b11eb40408c90649b2742a9f9858740bb51dbb4b0",
       "bytes": 10384419
+    },
+    "OpenJDK21U-jdk_x64_windows_hotspot_21.0.13_9.zip": {
+      "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_windows_hotspot_21.0.13_9.zip",
+      "sha256": "a4dbaa05fca4bd89d84584e58c459bd732efebb1722af80ab13c6516832004f9",
+      "bytes": 205421281
+    },
+    "extensions-pc-2.3.0-hangul.2.jar": {
+      "url": "https://github.com/ForUltraplayer/SPOTIFY_ANDROID/releases/download/v2.3.0-hangul.2/extensions-pc-2.3.0-hangul.2.jar",
+      "sha256": "20b1a340a12cfbd95f519910786fb169a92cdcd3584323d3f3b86ba7a91e75ed",
+      "bytes": 8158052
+    },
+    "SPOTIFY_ANDROID-2.3.0-hangul.2-source.zip": {
+      "url": "https://codeload.github.com/ForUltraplayer/SPOTIFY_ANDROID/zip/4f2a222ce917b158854427661b7d920c802efd59",
+      "sha256": "751444dd031d4b0696b2903e7a37da3bd6ed4c83b797d4dc51a9939b304ce78a",
+      "bytes": 4927704
+    },
+    "MPL-2.0.txt": {
+      "url": "https://www.mozilla.org/media/MPL/2.0/index.txt",
+      "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
+      "bytes": 16726
     }
   },
   "test_fixtures": {

@@ -59,6 +59,8 @@
         let current = null, clock = { seconds: 0, duration: 0, playing: false }, sampledAt = 0, disposed = false, generation = 0;
         let animationSample = { manager: null, uri: null, position: null, playing: false };
         let overlaySync = { service: null, identity: null };
+        // A native Spotify song whose sound comes from elsewhere (an extension's audio): same identity, another clock.
+        let external = null, externalAt = 0;
         const hooks = [], controllers = new Map(), cache = new Map(), inflight = new Map(), backgroundImages = new Map();
         const now = () => host.performance?.now?.() ?? Date.now();
         const scheduleTimeout = options.setTimeout || setTimeout, cancelTimeout = options.clearTimeout || clearTimeout;
@@ -80,6 +82,15 @@
             position: position(), duration: track.duration.milliseconds, isPlaying: clock.playing,
             isLocal: true, automix: false, djNarration: false, source: 'youtube-link',
             playbackId: track.uri, identityKey: track.uri, sampledAt: now() } : null; };
+        // The external clock applies only while Spotify still shows that song.
+        const externalClock = () => !current && external && host.Spicetify?.Player?.data?.item?.uri === external.uri ? external : null;
+        const externalPosition = () => Math.max(0, Math.min((external.duration || Infinity) * 1000,
+            external.seconds * 1000 + (external.playing ? Math.min(1500, Math.max(0, now() - externalAt)) : 0)));
+        const withExternalClock = value => {
+            const clockNow = externalClock();
+            if (!clockNow || !value || typeof value !== 'object' || value.uri !== clockNow.uri) return value;
+            return { ...value, position: externalPosition(), isPlaying: clockNow.playing, sampledAt: now() };
+        };
         function wrap(object, name, handler) {
             if (!object || typeof object[name] !== 'function' || hooks.some(h => h.object === object && h.name === name && object[name] === h.wrapped)) return;
             const original = object[name];
@@ -106,12 +117,13 @@
             // Spotify paused flag, even when its lyric clock is external.
             // Its existing wake boundary keeps callbacks alive without
             // changing Player.data, backend state or the animation scheduler.
-            const manager = host.AnimationManager, uri = item()?.uri || null;
-            const playbackPosition = Math.round(position());
-            if (current && (clock.playing || animationSample.manager !== manager || animationSample.uri !== uri
-                || animationSample.position !== playbackPosition || animationSample.playing !== clock.playing))
+            const manager = host.AnimationManager, clockNow = externalClock(), uri = item()?.uri || clockNow?.uri || null;
+            const playing = current ? clock.playing : !!clockNow?.playing;
+            const playbackPosition = Math.round(current ? position() : clockNow ? externalPosition() : 0);
+            if ((current || clockNow) && (playing || animationSample.manager !== manager || animationSample.uri !== uri
+                || animationSample.position !== playbackPosition || animationSample.playing !== playing))
                 manager?.wake?.();
-            animationSample = { manager, uri, position: playbackPosition, playing: clock.playing };
+            animationSample = { manager, uri, position: playbackPosition, playing };
         }
         function syncOverlay(force = false) {
             const overlayService = host.ivLyricsOverlayService;
@@ -154,8 +166,8 @@
         function install() {
             if (disposed) return;
             const utils = host.Utils, lyrics = service(), container = host.lyricContainer;
-            wrap(utils, 'getSafePlayerProgress', (original, args) => current ? position() : original.apply(utils, args));
-            wrap(utils, 'getPlayerPlaybackSnapshot', (original, args) => snapshot() || original.apply(utils, args));
+            wrap(utils, 'getSafePlayerProgress', (original, args) => current ? position() : externalClock() ? externalPosition() : original.apply(utils, args));
+            wrap(utils, 'getPlayerPlaybackSnapshot', (original, args) => snapshot() || withExternalClock(original.apply(utils, args)));
             wrap(utils, 'resolveStablePlaybackTrack', (original, args) => item() || original.apply(utils, args));
             wrap(utils, 'isSpotifyAutomixPlayback', (original, args) => current ? false : original.apply(utils, args));
             wrap(utils, 'isSpotifyDjNarrationPlayback', (original, args) => current ? false : original.apply(utils, args));
@@ -167,7 +179,12 @@
             wrap(lyrics, 'getLyricsFromProviders', (original, args) => videoId(args[0]?.uri) ? getLyrics(args[0]) : original.apply(lyrics, args));
             const overlaySender = host.OverlaySender;
             wrap(overlaySender, 'sendProgressPayload', function (original, args) {
-                const playback = snapshot(), [endpoint, payload, trackUri] = args;
+                const playback = snapshot(), [endpoint, payload, trackUri] = args, clockNow = externalClock();
+                if (!playback && clockNow && trackUri === clockNow.uri && payload && typeof payload === 'object') {
+                    const at = Math.round(externalPosition()), length = Math.round((clockNow.duration || 0) * 1000) || Number(payload.duration) || 0;
+                    return original.call(this, endpoint, { ...payload, position: at, ...(length ? { duration: length, remaining: Math.max(0, length - at) } : {}),
+                        isPlaying: clockNow.playing && !overlayHiddenByFullscreen() }, trackUri);
+                }
                 if (!playback || trackUri !== playback.uri || !payload || typeof payload !== 'object'
                     || (payload.trackUri && payload.trackUri !== playback.uri)
                     || (payload.currentTrack?.uri && payload.currentTrack.uri !== playback.uri)) return original.apply(this, args);
@@ -187,7 +204,7 @@
                     title: track.name, artist: track.metadata.artist_name,
                     album: track.album.name, albumArt: track.metadata.image_url, duration: track.duration.milliseconds } }, deliveryContext);
             });
-            wrap(container, 'getPlaybackPaused', (original, args) => current ? !clock.playing : original.apply(container, args));
+            wrap(container, 'getPlaybackPaused', (original, args) => current ? !clock.playing : externalClock() ? !external.playing : original.apply(container, args));
             wrap(container, 'getCurrentPlayerTrackInfo', (original, args) => {
                 const track = item(); return track && container.infoFromTrack ? container.infoFromTrack(track) : original.apply(container, args);
             });
@@ -290,6 +307,17 @@
                 sampledAt = now();
                 if (previous !== profileKey(current)) cancelRequests();
                 install();
+            },
+            /** The clock of the native song [clock.uri] while its sound plays elsewhere; null gives the clock back to Spotify. */
+            setExternalClock(value) {
+                if (disposed) return;
+                const had = !!external;
+                external = value && typeof value.uri === 'string' ? { uri: value.uri, seconds: finiteSeconds(value.seconds),
+                    duration: finiteSeconds(value.duration), playing: value.playing === true } : null;
+                externalAt = now();
+                if (had && !external) { host.Utils?.clearSafePlayerProgressCorrection?.(); host.AnimationManager?.wake?.(); }
+                host.lyricContainer?.updatePlaybackPausedState?.();
+                if (external) install();
             },
             deactivate() {
                 const hadTrack = !!current; current = null;

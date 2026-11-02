@@ -445,14 +445,36 @@ function Get-CimInstance {
         [PSCustomObject]@{ProcessId=105;ExecutablePath=(Join-Path $root 'desktop-overlay\lyrics-plus-overlay.exe');CommandLine='overlay'},
         [PSCustomObject]@{ProcessId=106;ExecutablePath='C:\external\lyrics-plus-overlay.exe';CommandLine='external overlay'},
         [PSCustomObject]@{ProcessId=107;ExecutablePath=(Join-Path $root 'Spotify\Spotify.exe');CommandLine='spotify'},
-        [PSCustomObject]@{ProcessId=108;ExecutablePath=(Join-Path $root 'runtime\python.exe');CommandLine=('python.exe -c "print('+(Join-Path $root 'bridge.py')+')"')}
+        [PSCustomObject]@{ProcessId=108;ExecutablePath=(Join-Path $root 'runtime\python.exe');CommandLine=('python.exe -c "print('+(Join-Path $root 'bridge.py')+')"')},
+        [PSCustomObject]@{ProcessId=109;ExecutablePath=(Join-Path $root 'ext-runtime\bin\java.exe');CommandLine='java -jar extensions-pc.jar'},
+        [PSCustomObject]@{ProcessId=110;ExecutablePath='C:\external\java.exe';CommandLine='another java'}
     )
 }
 function Stop-Process { param($Id,$ErrorAction) $script:stopped += $Id }
 function Wait-Process { param($Id,$Timeout,$ErrorAction) }
+function Get-Process { param($Id,$ErrorAction) }
 Stop-PayloadProcesses $root
-Assert (($script:stopped -join ',') -eq '101,102,105,107') 'Owned pythonw, Python, Spotify and overlay processes were not stopped precisely.'
-Remove-Item Function:\Get-CimInstance,Function:\Stop-Process,Function:\Wait-Process
+Assert (($script:stopped -join ',') -eq '101,102,105,107,109') 'Owned pythonw, Python, Spotify, overlay and extension runner processes were not stopped precisely.'
+# Stopping Spotify's main process ends its other Spotify.exe processes, which are still in the list taken before.
+$spotify=Join-Path $root 'Spotify\Spotify.exe'
+function Get-CimInstance { param($ClassName,$ErrorAction) @(201,202,203 | ForEach-Object { [PSCustomObject]@{ProcessId=$_;ExecutablePath=$spotify;CommandLine='spotify'} }) }
+$script:alive=@(201,202,203)
+function Stop-Process {
+    param($Id,$ErrorAction)
+    if ($script:alive -notcontains $Id) { if ($ErrorAction -eq 'Stop') { throw "Cannot find a process with the process identifier $Id." }; return }
+    $script:alive=if ($Id -eq 201) { @() } else { @($script:alive | Where-Object { $_ -ne $Id }) }
+}
+# Ended processes stay listed for a moment, already exited.
+function Get-Process { param($Id,$ErrorAction) [PSCustomObject]@{Id=$Id;HasExited=($script:alive -notcontains $Id)} }
+Stop-PayloadProcesses $root
+Assert (-not $script:alive.Count) 'Spotify processes ended with their main process failed the update.'
+# A process that does not stop still stops the update before any file is touched.
+$script:alive=@(201,202,203)
+function Stop-Process { param($Id,$ErrorAction) if ($Id -ne 203) { $script:alive=@($script:alive | Where-Object { $_ -ne $Id }) } }
+$stuck=$false
+try { Stop-PayloadProcesses $root } catch { $stuck=$_.Exception.Message -like '*203*' }
+Assert $stuck 'A process that kept running did not stop the update.'
+Remove-Item Function:\Get-CimInstance,Function:\Stop-Process,Function:\Wait-Process,Function:\Get-Process
 # The installer stages the package under TEMP, which Windows hands out as an 8.3 short path for long user names.
 $aliasPayload=Join-Path $area 'alias source'
 Put $aliasPayload 'installer\bootstrap.ps1' 'bootstrap fixture'

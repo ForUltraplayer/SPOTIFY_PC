@@ -40,6 +40,8 @@ FILES = (
     'scripts/test_managed_ivlyrics.ps1', '.github/workflows/dependencies.yml', 'docs/DEPENDENCIES.md',
     'scripts/auto_draft.py', 'scripts/test_auto_draft.py', '.github/workflows/draft-release.yml', '.github/workflows/release-published.yml',
     'scripts/report_upstream.py', 'scripts/test_report_upstream.py',
+    'extension_host.py', 'test_extension_host.py', 'docs/EXTENSIONS.md',
+    'extension-player.js', 'test_extension_player.cjs', 'scripts/extension_toolchain.py',
 )
 
 
