@@ -1,0 +1,31 @@
+# @file release-published.yml
+# @brief Bring a published automatic draft's branch into main: fast-forward when possible, otherwise open a pull request.
+name: Merge published draft
+on:
+  release:
+    types: [published]
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  merge:
+    if: startsWith(github.event.release.target_commitish, 'auto/')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.release.tag_name }}
+      BRANCH: ${{ github.event.release.target_commitish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fast-forward main or open a pull request
+        run: |
+          commit=$(git rev-list -n 1 "refs/tags/$TAG")
+          if git merge-base --is-ancestor origin/main "$commit"; then
+            git push origin "$commit:refs/heads/main"
+            git push origin --delete "$BRANCH"
+          else
+            gh pr create --base main --head "$BRANCH" --title "Merge $TAG into main" \
+              --body "main moved after the automatic draft was built. Merge to keep components.json and the version in main equal to the published $TAG."
+          fi

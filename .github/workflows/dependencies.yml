@@ -20,6 +20,7 @@ on:
     paths: ['components.json', 'release.json', 'requirements.txt', '*.py', '*.js', '*.css', '*.html', '*.ps1', '*.cjs', 'installer/**', 'scripts/**', 'tests/ui/**', 'third_party/**', '.github/workflows/dependencies.yml']
 permissions:
   contents: read
+  issues: write
 jobs:
   inspect:
     runs-on: windows-latest
@@ -39,6 +40,11 @@ jobs:
         run: npm ci --ignore-scripts --prefix tests/ui
       - name: Detect original project updates
         run: python scripts/upstream_updates.py check
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Report original project changes as issues
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: python scripts/report_upstream.py
         env:
           GH_TOKEN: ${{ github.token }}
       - run: python scripts/fetch_distribution_inputs.py

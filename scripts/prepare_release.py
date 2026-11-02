@@ -38,6 +38,8 @@ FILES = (
     'installer/payload-transaction.ps1', 'scripts/test_payload_transaction.ps1', 'scripts/test_upgrade_matrix.ps1',
     'youtube-now-playing.js', 'youtube-now-playing.css', 'test_youtube_now_playing.cjs',
     'scripts/test_managed_ivlyrics.ps1', '.github/workflows/dependencies.yml', 'docs/DEPENDENCIES.md',
+    'scripts/auto_draft.py', 'scripts/test_auto_draft.py', '.github/workflows/draft-release.yml', '.github/workflows/release-published.yml',
+    'scripts/report_upstream.py', 'scripts/test_report_upstream.py',
 )
 
 
