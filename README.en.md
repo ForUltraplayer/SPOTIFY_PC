@@ -4,17 +4,17 @@
 
 Shows the Korean (Hangul) pronunciation of Japanese songs in the Spotify desktop lyrics view. Pronunciation is pulled from Haneum and Namuwiki and matched line by line against Spotify's lyrics. YouTube links can also play in the same playlists as Spotify tracks.
 
-Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Public version: 0.8.1.
+Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Public version: 0.8.2.
 
 > An unofficial hobby project. Maintenance and updates are not guaranteed, so please read the [Disclaimer](#disclaimer) first.
 
-**[⬇ Download (v0.8.1)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.8.1)** · [Release history](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)
+**[⬇ Download (v0.8.2)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.8.2)** · [Release history](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)
 
 ## Install
 
 No need to install Spotify, SpotX or Python first. The installer includes Python and Node.
 
-1. Download and run `SpotifyHangul-0.8.1-Setup.exe`.
+1. Download and run `SpotifyHangul-0.8.2-Setup.exe`.
 2. Pick an install folder (default: `%LOCALAPPDATA%\Programs\SpotifyHangul`).
 3. The installer downloads the official Spotify files (~150 MB).
 
@@ -79,6 +79,7 @@ See [YouTube integration](docs/YOUTUBE_LINKS.md) and [operations](docs/OPERATION
 - 0.7.11: ivLyrics 7.0.18; ivLyrics' own update prompt, which cannot update this installation, is no longer shown
 - 0.7.12: Android Myspoti (Myspoti-ex) extensions work on the PC: install them from the same store as Myspoti under "확장 관리" in the profile menu; the playbar shows the source and quality playing now, the source picker and why that source was chosen
 - 0.7.12: updating while Spotify runs no longer fails
+- 0.8.2: the YouTube link screens, now-playing panel and list import/export follow Spotify's language (English, or Korean as before)
 - 0.8.1: fixed Spotify's window going black and playback stopping after long use (unclosed playback-state answers piled up 120 handles a minute in its page process)
 - 0.8.1: fixed lyrics pages piling up in memory, and shuffle/Connect not following YouTube playback on a Spotify in another language
 - 0.8.0: Spotify songs in YouTube/Spotify mixed playlists play from extensions too, and each song's ISRC goes to the extensions so more songs are found
@@ -97,7 +98,7 @@ The original overlay repository does not declare a license. See [THIRD_PARTY_NOT
 ## Update / Uninstall
 
 - **Automatic updates**: the shortcut checks for new versions when launched, at least 4 hours after the previous check. If one is found it asks first; on Yes it downloads, closes Spotify, installs, and relaunches. The profile menu entry 「업데이트 확인」 checks right away.
-- **Manual install / update**: close Spotify and the overlay, then run `SpotifyHangul-0.8.1-Setup.exe` into the same folder.
+- **Manual install / update**: close Spotify and the overlay, then run `SpotifyHangul-0.8.2-Setup.exe` into the same folder.
 - **Uninstall**: Windows Settings > Apps > Installed apps > **Spotify 한글 가사**. Your existing Spotify and pronunciation cache are kept.
 
 Spotify's own auto-update is blocked to keep the patches. New Spotify versions come with new installer releases.
