@@ -112,6 +112,7 @@ function button(options = {}) {
             if (selector === '[data-testid="now-playing-bar"]') return options.inBar ? {} : null;
             if (selector.includes('now-playing-widget')) return options.inWidget ? {} : null;
             if (selector.includes('action-bar-row')) return options.inHeader ? {} : null;
+            if (selector === '.player-controls__left') return options.leftControls ? {} : null;
             return null;
         },
         getAttribute(name) { if (name === 'aria-label') return options.label || ''; return null; } };
@@ -130,7 +131,7 @@ function clickHarness(overrides = {}) {
         advance: direction => calls.push(['advance', direction]), ...overrides,
     });
     // New shared header handlers are executed from the implementation when present.
-    for (const name of ['togglePlaylistPlayback', 'toggleViewPlayback', 'showQueue', 'isIvLyricsMicrophone', 'openLyrics']) {
+    for (const name of ['togglePlaylistPlayback', 'toggleViewPlayback', 'showQueue', 'isIvLyricsMicrophone', 'openLyrics', 'spotifyText', 'isPlaylistPlay']) {
         const definition = functionSource(name); if (definition) vm.runInContext(definition, context);
     }
     vm.runInContext(functionSource('click'), context);
@@ -172,6 +173,23 @@ test('a different playlist header deliberately starts that playlist', () => {
     const harness = clickHarness({ queueSource: 'local:another-list' });
     harness.invoke(button({ primary: true, inHeader: true, label: 'My list 재생하기' }));
     assert.deepEqual(harness.calls, [['start', 0]]);
+});
+test('a Spotify in another language still routes shuffle, Connect and the playlist header to the links', () => {
+    const english = { 'playlist.a11y.play': 'Play {0}', 'playlist.a11y.pause': 'Pause {0}', 'playback-control.connect-picker': 'Connect to a device' };
+    const harness = clickHarness();
+    harness.context.Spicetify.Locale = { get: (key, ...args) => (english[key] || key).replace('{0}', args[0]) };
+    harness.invoke(button({ inBar: true, leftControls: true, label: 'Enable Shuffle for My list' }));
+    assert.equal(harness.context.shuffle, true);
+    harness.calls.length = 0;
+    harness.invoke(button({ id: 'control-button-skip-back', inBar: true, leftControls: true, label: 'Previous' }));
+    assert.deepEqual(harness.calls, [['advance', -1]], 'Previous beside shuffle stays previous');
+    harness.calls.length = 0;
+    english['playback-control.connect-picker'] = 'Mit einem Gerät verbinden';
+    harness.invoke(button({ inBar: true, label: 'Mit einem Gerät verbinden' }));
+    assert.equal(harness.calls.length, 1); assert.equal(harness.calls[0][0], 'notify');
+    harness.calls.length = 0;
+    harness.invoke(button({ primary: true, label: 'Play My list' }));
+    assert.deepEqual(harness.calls, ['toggle'], 'A header button outside the action bar is found by Spotify\'s own wording');
 });
 test('the actual ivLyrics microphone opens lyrics before the generic track-widget handler', () => {
     const harness = clickHarness(); const event = harness.invoke(button({ inBar: true, inWidget: true, classes: ['ivlyrics-playbar-control'] }));

@@ -689,6 +689,7 @@ function create(host, options = {}) {
             headers: { Authorization: 'Bearer ' + token }, signal: controller.signal, cache: 'no-store' })
             .then(async response => {
                 if (response.status === 200) return Model.isrcFrom(await response.arrayBuffer());
+                void response.body?.cancel().catch(() => {});
                 if (response.status === 404) return null;
                 throw new Error('catalog ' + response.status);
             })
@@ -731,7 +732,7 @@ function create(host, options = {}) {
     function openDash(plan, media, from) {
         const source = new host.MediaSource();
         const feed = { plan, media, source, url: host.URL.createObjectURL(source), buffer: null, ready: false, closed: false,
-            job: null, held: null, wait: null, last: -1, bytes: 0, seconds: 0, status: null, from, retried: new Set() };
+            job: null, held: null, wait: null, last: -1, repeats: 0, bytes: 0, seconds: 0, status: null, from, retried: new Set() };
         source.addEventListener('sourceopen', () => {
             host.URL.revokeObjectURL(feed.url);
             if (feed.closed || feed.buffer) return;
@@ -777,6 +778,7 @@ function create(host, options = {}) {
             const response = await host.fetch(BASE + feed.media + '/' + part, { signal: controller.signal, cache: 'no-store' });
             status = response.status;
             if (status >= 200 && status < 300) bytes = await response.arrayBuffer();
+            else void response.body?.cancel().catch(() => {});
         } catch { bytes = null; } finally { clearTimeout(timer); }
         if (feed.closed || feed.job !== job) return;
         feed.job = null; feed.status = status || null;
@@ -792,6 +794,12 @@ function create(host, options = {}) {
     function append(feed, part, bytes) {
         const buffer = feed.buffer, segment = part === 'init' ? null : feed.plan.segments[part];
         if (buffer.updating) { feed.held = { part, bytes }; return; }
+        // The same segment appended again right after itself means it added no audio (an empty body, a segment the
+        // buffer drops): asked a third time, it would be fetched and appended forever, so the song goes back.
+        if (segment) {
+            feed.repeats = part === feed.last ? feed.repeats + 1 : 0;
+            if (feed.repeats >= 2) { dashFailed(feed, 'segment ' + (part + 1) + '/' + feed.plan.segments.length + ' adds no audio', undefined, false); return; }
+        }
         try {
             if (segment && part !== feed.last + 1) buffer.timestampOffset = segment.t;
             buffer.appendBuffer(bytes);

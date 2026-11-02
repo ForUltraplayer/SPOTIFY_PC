@@ -581,6 +581,19 @@ test('a DASH answer while Spotify plays is handed over in step like a plain one,
     h.cleanup();
 });
 
+test('a DASH segment that adds no audio (an empty body, nothing buffered) is not fetched and appended forever: the third time gives the song back', dom, async () => {
+    const h = harness({ answers: { [A]: dashFound('media-dash1') }, engine: { playing: false }, routes: dashRoutes({ '/ext/media/media-dash1/0': () => Promise.resolve([200, new Uint8Array(0)]) }) });
+    await flush();
+    h.Player.play();
+    h.sources[0].open();
+    const buffer = h.sources[0].buffer;
+    await flush(); buffer.done();
+    for (let i = 0; i < 6; i++) { await flush(); if (buffer.updating) buffer.done(); }
+    await flush();
+    assert.equal(h.requests.filter(r => r.route === '/ext/media/media-dash1/0').length, 3, 'asked three times, no more');
+    assert.equal(h.player.snapshot().mode, 'spotify');
+    assert.equal(h.notes().find(n => n.open && !n.open.ok)?.open.error ?? h.notes().at(-1).open?.error, 'segment 1/20 adds no audio');
+});
 test('a refused DASH segment asks the source again from the same point; a segment that fails otherwise twice gives the song back to Spotify', dom, async () => {
     const h = harness({ answers: { [A]: dashFound('media-dash1') }, engine: { playing: false }, again: dashFound('media-dash2'),
         routes: dashRoutes({ '/ext/media/media-dash1/3': 403, '/ext/media/media-dash2/3': 500 }) });

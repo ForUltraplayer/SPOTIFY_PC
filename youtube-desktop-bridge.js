@@ -85,7 +85,7 @@
                         const response = await request('http://127.0.0.1:' + port + '/playback-config', {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ bridgeUrl: BASE, token: paired.token, expiresAt: paired.expiresAt }) });
-                        desktopConnected = response.ok;
+                        desktopConnected = response.ok; void response.body?.cancel().catch(() => {});
                     } catch { desktopConnected = false; }
                 }
             }
@@ -101,6 +101,9 @@
             if (state.trackUri) {
                 const published = await request(BASE + '/playback-state', {
                     method: 'POST', headers: headers(paired.token), body: JSON.stringify(state) });
+                // Nothing in the answer is needed, but an unread body keeps its connection and a renderer handle open:
+                // twice a second that was 120 handles a minute until Spotify's page died (2026-11-03).
+                void published.body?.cancel().catch(() => {});
                 if (published.status === 401 || published.status === 403) { session = null; nextRegistration = 0; return; }
                 if (!published.ok) throw Error('Playback state unavailable');
             }

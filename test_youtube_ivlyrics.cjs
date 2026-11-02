@@ -242,6 +242,23 @@ test('new lyric containers and replaced global reload functions get independent 
     assert.ok(h.calls.some(call => call[0] === 'fetch-lyrics' && call[1] === URI && call[3] === false));
     h.adapter.dispose(); assert.equal(old.getPlaybackPaused, h.originals.paused);
 });
+test('a lyrics page that closed is let go: its hooks are dropped and the global reload uses the page open now', async () => {
+    const h = harness(); h.adapter.update(TRACK, { duration: 194 });
+    const pages = [{ page: h.host.lyricContainer, paused: h.originals.paused }];
+    // ivLyrics makes a new container (and a new global reload) for every visit of its page, and clears both on leaving.
+    for (let i = 1; i <= 20; i++) {
+        h.host.lyricContainer = null; h.adapter.install();
+        const page = h.container(), visit = i; page.fetchLyrics = async () => h.calls.push(['fetch-lyrics', visit]);
+        pages.push({ page, paused: page.getPlaybackPaused });
+        h.host.lyricContainer = page; h.host.reloadLyrics = page.reloadLyrics; h.adapter.install();
+    }
+    // A closed page carries none of our wrappers, so nothing of ours keeps it (and its lyrics DOM) alive.
+    for (const { page, paused } of pages.slice(0, -1)) assert.equal(page.getPlaybackPaused, paused, 'a closed page keeps our wrapper');
+    assert.notEqual(pages.at(-1).page.getPlaybackPaused, pages.at(-1).paused, 'the open page is wrapped');
+    h.calls.length = 0; await h.host.reloadLyrics(false);
+    assert.deepEqual(h.calls.filter(call => call[0] === 'fetch-lyrics'), [['fetch-lyrics', 20]]);
+    h.adapter.dispose();
+});
 test('deactivation restores native lookup and dispose restores hooks and stops the adapter timer', () => {
     const h = harness(); h.adapter.update(TRACK, { seconds: 10, duration: 194, playing: true });
     h.adapter.deactivate(); assert.equal(h.host.Utils.getSafePlayerProgress(), 9876);

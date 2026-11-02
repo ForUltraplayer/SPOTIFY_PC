@@ -21,7 +21,11 @@ function harness(handler) {
             if (handler) return handler(url, options);
             const body = url.endsWith('/playback-session') ? { bridgeUrl: 'http://127.0.0.1:19643', token: TOKEN, expiresAt: Date.now() + 900000 }
                 : url.endsWith('/playback-commands') ? { commands: [] } : {};
-            return { ok: true, status: 200, json: async () => body };
+            // A body is read or cancelled: an unread one keeps its pipe and a renderer handle open (2026-11-03).
+            const response = { ok: true, status: 200, read: false, cancelled: false,
+                json: async () => { response.read = true; return body; }, body: { cancel: async () => { response.cancelled = true; } } };
+            requests.at(-1).response = response;
+            return response;
         } };
     return { host, player, item, calls, timers, requests };
 }
@@ -85,6 +89,12 @@ test('pairing precedes desktop configuration, publication and queue drain withou
     assert.equal(JSON.stringify(instance.getState()).includes(TOKEN), false);
     assert.equal(instance.getState().desktopConnected, true);
     instance.dispose(); assert.equal(h.timers.size, 0);
+});
+test('every response is read or its body cancelled, so no request leaves its connection open', async () => {
+    const h = harness(), instance = bridge.create(h.host); await instance.ready; await instance.sync();
+    const unread = h.requests.filter(r => !r.response.read && !r.response.cancelled).map(r => r.path);
+    assert.deepEqual(unread, []);
+    instance.dispose();
 });
 test('a disabled ivLyrics overlay never receives the control token', async () => {
     const h = harness(); h.host.OverlaySender.enabled = false;

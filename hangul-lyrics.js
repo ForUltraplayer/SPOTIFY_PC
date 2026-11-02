@@ -129,6 +129,8 @@
                 }
                 const response = await fetch(String(url), { signal: controller.signal, credentials: 'omit' });
                 attempts.push({ host: base, status: response.status || (response.ok ? 200 : 404) });
+                // An answer not read is cancelled: an unread body keeps its connection and a renderer handle open.
+                if (!response.ok) void response.body?.cancel?.().catch(() => {});
                 if (response.status === 429 || response.status >= 500) {
                     const retry = response.headers?.get?.('Retry-After');
                     const seconds = Number(retry);
@@ -494,7 +496,7 @@
         id: ID,
         name: '기존 한글 발음 가사',
         author: 'ForUltraplayer',
-        version: '0.8.0',
+        version: '0.8.1',
         description: { ko: '웹에 작성된 한글 발음을 가져옵니다. AI·API 키·유료 호출 없이 원문과 대조합니다.',
             en: 'Existing web-authored Hangul readings; no AI or paid API.' },
         supports: { pronunciation: true, translate: false, metadata: false, tmi: false,

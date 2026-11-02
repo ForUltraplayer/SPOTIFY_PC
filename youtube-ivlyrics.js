@@ -97,6 +97,20 @@
             const wrapped = function (...args) { return handler.call(this, original, args); };
             object[name] = wrapped; hooks.push({ object, name, original, wrapped });
         }
+        // ivLyrics makes a new container for every visit of its page. The hooks of one that closed are undone and
+        // dropped, and so are hooks whose function was replaced since: kept, they would hold every closed page and its
+        // lyrics DOM for as long as Spotify runs.
+        let wrappedContainer = null;
+        function releaseClosed(container) {
+            const closed = wrappedContainer && wrappedContainer !== container ? wrappedContainer : null;
+            for (let i = hooks.length - 1; i >= 0; i--) {
+                const hook = hooks[i], live = hook.object[hook.name] === hook.wrapped;
+                if (live && hook.object !== closed) continue;
+                if (live) hook.object[hook.name] = hook.original;
+                hooks.splice(i, 1);
+            }
+            wrappedContainer = container || null;
+        }
         const cacheId = uri => videoId(uri) ? 'youtube-' + videoId(uri) : null;
         const profileKey = track => track ? JSON.stringify([track.videoId, searchInfo(track).title, searchInfo(track).artist]) : '';
         function cancelRequests() {
@@ -166,6 +180,7 @@
         function install() {
             if (disposed) return;
             const utils = host.Utils, lyrics = service(), container = host.lyricContainer;
+            releaseClosed(container);
             wrap(utils, 'getSafePlayerProgress', (original, args) => current ? position() : externalClock() ? externalPosition() : original.apply(utils, args));
             wrap(utils, 'getPlayerPlaybackSnapshot', (original, args) => snapshot() || withExternalClock(original.apply(utils, args)));
             wrap(utils, 'resolveStablePlaybackTrack', (original, args) => item() || original.apply(utils, args));
@@ -227,8 +242,9 @@
             });
             for (const name of ['fetchTempo', 'fetchMetadataTranslation', 'loadSavedVideoForTrack'])
                 wrap(container, name, (original, args) => videoId(args[0]) ? Promise.resolve() : original.apply(container, args));
-            const reload = (original, args) => current && container?.fetchLyrics
-                ? container.fetchLyrics(item(), -1, args[0] !== false) : original.apply(container, args);
+            // The page open when reload is called, not the one open when it was wrapped.
+            const reload = (original, args) => { const page = host.lyricContainer;
+                return current && page?.fetchLyrics ? page.fetchLyrics(item(), -1, args[0] !== false) : original.apply(page, args); };
             wrap(container, 'reloadLyrics', reload); wrap(host, 'reloadLyrics', reload);
             if (current && container && container.currentTrackUri !== item().uri)
                 container.schedulePlaybackTrackResolution?.(item());
