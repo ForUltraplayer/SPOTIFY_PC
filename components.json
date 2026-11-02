@@ -89,7 +89,7 @@
       "version": "2.3.0-hangul.2",
       "repository": "ForUltraplayer/SPOTIFY_ANDROID",
       "track": "release",
-      "revision": "local-tree-4f2a222ce917b158854427661b7d920c802efd59",
+      "revision": "23d7800e14ff62b00daf779c07b4cc76a486fa46",
       "artifact": "extensions-pc-2.3.0-hangul.2.jar",
       "source_artifact": "SPOTIFY_ANDROID-2.3.0-hangul.2-source.zip",
       "license": "GPL-3.0",
@@ -200,14 +200,14 @@
       "bytes": 205421281
     },
     "extensions-pc-2.3.0-hangul.2.jar": {
-      "url": "https://github.com/ForUltraplayer/SPOTIFY_ANDROID/releases/download/v2.3.0-hangul.2/extensions-pc-2.3.0-hangul.2.jar",
+      "url": "https://github.com/ForUltraplayer/SPOTIFY_PC/releases/download/v0.7.12/extensions-pc-2.3.0-hangul.2.jar",
       "sha256": "20b1a340a12cfbd95f519910786fb169a92cdcd3584323d3f3b86ba7a91e75ed",
       "bytes": 8158052
     },
     "SPOTIFY_ANDROID-2.3.0-hangul.2-source.zip": {
-      "url": "https://codeload.github.com/ForUltraplayer/SPOTIFY_ANDROID/zip/4f2a222ce917b158854427661b7d920c802efd59",
-      "sha256": "751444dd031d4b0696b2903e7a37da3bd6ed4c83b797d4dc51a9939b304ce78a",
-      "bytes": 4927704
+      "url": "https://codeload.github.com/ForUltraplayer/SPOTIFY_ANDROID/zip/23d7800e14ff62b00daf779c07b4cc76a486fa46",
+      "sha256": "4d35cc20ce9dd938f38ad55bc0778ffad1aadc878b48deea074b9d959bb3cd51",
+      "bytes": 4913822
     },
     "MPL-2.0.txt": {
       "url": "https://www.mozilla.org/media/MPL/2.0/index.txt",

@@ -51,6 +51,18 @@ class AutoDraftTest(unittest.TestCase):
             self.assertEqual('- 9.9.9: ivLyrics 7.0.19'+(' 적용' if name == 'README.md' else ''), history[-1].rstrip('\r'))
             self.assertEqual('\r\n' in before[name], '\r\n' in text)
 
+    def test_bump_after_a_pre_release_moves_the_readmes_from_the_public_version(self):
+        # A pre-release moves release.json on and leaves the READMEs on the public version.
+        auto_draft.bump(self.old, '9.9.8', ['ivLyrics 7.0.19'])
+        for name in ('README.md', 'README.en.md'):
+            path = self.area / name
+            text = path.read_text(encoding='utf-8')
+            path.write_text(text.replace('9.9.8', self.old), encoding='utf-8')
+        auto_draft.bump('9.9.8', '9.9.9', ['ivLyrics 7.0.19'])
+        self.assertIn('"version": "9.9.9"', self.read('release.json'))
+        self.assertIn('공개 버전은 9.9.9입니다', self.read('README.md'))
+        self.assertIn('Public version: 9.9.9.', self.read('README.en.md'))
+
     def test_bump_stops_when_a_file_changed_shape(self):
         (self.area / 'README.en.md').write_text('no version here', encoding='utf-8')
         with self.assertRaises(ValueError): auto_draft.bump(self.old, '9.9.9', ['ivLyrics 7.0.19'])

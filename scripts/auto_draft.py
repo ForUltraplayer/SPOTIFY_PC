@@ -52,9 +52,14 @@ def bump(old, new, changes):
     edit('bridge.py', [('VERSION = "'+old+'"', 'VERSION = "'+new+'"')])
     edit('hangul-lyrics.js', [("version: '"+old+"',", "version: '"+new+"',")])
     edit('release.json', [('"version": "'+old+'"', '"version": "'+new+'"'), ('"helper_version": "'+old+'"', '"helper_version": "'+new+'"')])
-    links = [('(v'+old+')', '(v'+new+')'), ('/tag/v'+old, '/tag/v'+new), ('SpotifyHangul-'+old+'-Setup.exe', 'SpotifyHangul-'+new+'-Setup.exe')]
-    edit('README.md', [('공개 버전은 '+old+'입니다', '공개 버전은 '+new+'입니다')] + links)
-    edit('README.en.md', [('Public version: '+old+'.', 'Public version: '+new+'.')] + links)
+    # The READMEs name the public version, which stays behind release.json while a pre-release is out.
+    with open(ROOT / 'README.md', encoding='utf-8') as file:
+        found = re.search(r'공개 버전은 (\d+\.\d+\.\d+)입니다', file.read())
+    if not found: raise ValueError('README.md: the public version sentence not found')
+    public = found.group(1)
+    links = [('(v'+public+')', '(v'+new+')'), ('/tag/v'+public, '/tag/v'+new), ('SpotifyHangul-'+public+'-Setup.exe', 'SpotifyHangul-'+new+'-Setup.exe')]
+    edit('README.md', [('공개 버전은 '+public+'입니다', '공개 버전은 '+new+'입니다')] + links)
+    edit('README.en.md', [('Public version: '+public+'.', 'Public version: '+new+'.')] + links)
     add_history('README.md', '- '+new+': '+', '.join(changes)+' 적용')
     add_history('README.en.md', '- '+new+': '+', '.join(changes))
 
