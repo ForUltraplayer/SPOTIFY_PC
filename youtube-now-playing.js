@@ -15,9 +15,56 @@
         music: '<path d="M9 18V5l11-2v13M9 8l11-2"/><ellipse cx="6" cy="18" rx="3" ry="2.5"/><ellipse cx="17" cy="16" rx="3" ry="2.5"/>',
     };
     const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+    // Every string the panel shows: English by default, Korean when Spotify's UI is Korean.
+    const STRINGS = {
+        en: {
+            panel_label: 'YouTube now playing', heading: 'Now playing', queue: 'Show queue',
+            close: 'Stop link playback', close_title: 'Stop link playback and go back to Spotify', video_base: 'YouTube video',
+            no_track_title: 'Pick a song', no_track_artist: 'Pick a song you want to hear from the queue.',
+            modes_label: 'YouTube playback mode', mode_audio: 'Audio', mode_video: 'Video',
+            mode_audio_label: 'Play audio', mode_video_label: 'Play video',
+            lyrics_label: 'Open lyrics in ivLyrics', lyrics: 'Open lyrics', search_label: 'Edit lyrics search info',
+            error_title: "Playback can't continue", retry: 'Try again', error_retry: 'Please try again.', original: 'Watch on YouTube',
+            source_audio: 'Audio', source_fallback: 'Audio instead of video', source_video: 'Video',
+            state_idle: 'Waiting to play', state_error: 'Check your connection', state_loading_audio: 'Loading audio',
+            state_loading_video: 'Loading video', state_playing: 'Playing', state_paused: 'Paused',
+            quality_bitrate: '%1 · about %2 kbps',
+            quality_audio_title: 'Based on the metadata the audio source gave, not a measure of the actual download speed.',
+            quality_auto: 'Auto quality', quality_video_title: "The YouTube player's current video quality",
+            notice_video: 'YouTube may show ads in videos. Skip them in the player.',
+            notice_fallback: "This video can't be played outside YouTube, so its audio plays instead.",
+            notice_audio: 'Streams public audio. Some videos may not play.',
+        },
+        ko: {
+            panel_label: 'YouTube 현재 재생 중', heading: '지금 재생 중', queue: '재생목록 보기',
+            close: '링크 재생 종료', close_title: '링크 재생을 종료하고 Spotify로 돌아가기', video_base: 'YouTube 영상',
+            no_track_title: '곡을 선택하세요', no_track_artist: '재생목록에서 듣고 싶은 곡을 선택하세요.',
+            modes_label: 'YouTube 재생 방식', mode_audio: '음원', mode_video: '영상',
+            mode_audio_label: '음원 재생', mode_video_label: '영상 재생',
+            lyrics_label: 'ivLyrics 가사 열기', lyrics: '가사 열기', search_label: '가사 검색 정보 수정',
+            error_title: '재생을 계속할 수 없습니다', retry: '다시 시도', error_retry: '다시 시도해 주세요.', original: 'YouTube에서 보기',
+            source_audio: '음원 재생', source_fallback: '음원으로 대체 재생', source_video: '영상 재생',
+            state_idle: '재생 대기', state_error: '연결을 확인해 주세요', state_loading_audio: '음원을 불러오는 중',
+            state_loading_video: '영상을 불러오는 중', state_playing: '재생 중', state_paused: '일시정지',
+            quality_bitrate: '%1 · 약 %2 kbps',
+            quality_audio_title: '제공된 음원 메타데이터 기준이며 실제 수신 속도 측정값은 아닙니다.',
+            quality_auto: '자동 화질', quality_video_title: 'YouTube 플레이어의 현재 영상 화질',
+            notice_video: '영상에는 YouTube 광고가 나올 수 있습니다. 건너뛰기는 플레이어에서 조작하세요.',
+            notice_fallback: '외부 영상 재생이 제한되어 이 영상은 음원으로 재생 중입니다.',
+            notice_audio: '공개 음원을 스트리밍합니다. 영상에 따라 재생이 제한될 수 있습니다.',
+        },
+    };
+    // The language is read on each call, so a later Spotify language change shows on the next update.
+    function translate(host, key, ...args) {
+        const locale = host.Spicetify?.Locale?.getLocale?.() || host.navigator?.language;
+        const lang = /^ko(?:[-_]|$)/i.test(String(locale || '')) ? 'ko' : 'en';
+        const text = STRINGS[lang][key] ?? STRINGS.en[key] ?? key;
+        return text.replace(/%(\d)/g, (mark, n) => args[n - 1] === undefined ? mark : String(args[n - 1]));
+    }
     function create(host, callbacks = {}) {
         const doc = host.document;
         if (!doc?.createElement) throw new TypeError('A document is required for the current-track panel.');
+        const t = (key, ...args) => translate(host, key, ...args);
         const ownedListeners = [];
         const node = (tag, className, value) => {
             const element = doc.createElement(tag);
@@ -59,13 +106,13 @@
         };
         const element = node('section', 'hl-now-playing');
         element.dataset.testid = 'hangul-now-playing';
-        element.setAttribute('aria-label', 'YouTube 현재 재생 중');
+        element.setAttribute('aria-label', t('panel_label'));
         const header = node('header', 'hl-np-header');
-        const heading = node('h2', 'hl-np-heading', '지금 재생 중');
+        const heading = node('h2', 'hl-np-heading', t('heading'));
         const headerActions = node('div', 'hl-np-header-actions');
-        const queueAction = action('재생목록 보기', 'onQueue', 'hangul-queue-action', 'queue', 'hl-np-icon-button');
-        const closeAction = action('링크 재생 종료', 'onClose', 'hangul-close-action', 'close', 'hl-np-icon-button');
-        closeAction.title = '링크 재생을 종료하고 Spotify로 돌아가기';
+        const queueAction = action(t('queue'), 'onQueue', 'hangul-queue-action', 'queue', 'hl-np-icon-button');
+        const closeAction = action(t('close'), 'onClose', 'hangul-close-action', 'close', 'hl-np-icon-button');
+        closeAction.title = t('close_title');
         headerActions.append(queueAction, closeAction); header.append(heading, headerActions);
 
         // This node remains stable for the entire component lifetime. The caller
@@ -75,7 +122,7 @@
         mediaAnchor.dataset.testid = 'hangul-media-anchor';
         const videoBase = node('div', 'hl-np-video-base');
         videoBase.setAttribute('aria-hidden', 'true');
-        videoBase.append(icon('youtube'), node('span', '', 'YouTube 영상'));
+        videoBase.append(icon('youtube'), node('span', '', t('video_base')));
         const art = node('div', 'hl-np-artwork');
         const backdrop = node('div', 'hl-np-artwork-backdrop');
         backdrop.setAttribute('aria-hidden', 'true');
@@ -94,22 +141,22 @@
         const divider = node('span', 'hl-np-dot', '·'); divider.setAttribute('aria-hidden', 'true');
         const sourceMode = node('span', 'hl-np-source-mode');
         source.append(sourceLogo, sourceText, divider, sourceMode);
-        const title = node('h3', 'hl-np-title', '곡을 선택하세요'); title.dataset.testid = 'hangul-now-title';
+        const title = node('h3', 'hl-np-title', t('no_track_title')); title.dataset.testid = 'hangul-now-title';
         const artist = node('p', 'hl-np-artist'); artist.dataset.testid = 'hangul-now-artist';
         info.append(source, title, artist);
 
         const modeGroup = node('div', 'hl-np-modes');
-        modeGroup.setAttribute('role', 'group'); modeGroup.setAttribute('aria-label', 'YouTube 재생 방식');
-        const modeButton = (mode, label, glyph) => {
+        modeGroup.setAttribute('role', 'group'); modeGroup.setAttribute('aria-label', t('modes_label'));
+        const modeButton = (mode, glyph) => {
             const control = node('button', 'hl-np-mode'); control.type = 'button';
             control.dataset.testid = 'hangul-mode-' + mode;
-            control.setAttribute('aria-label', label + ' 재생');
-            control.append(icon(glyph), node('span', '', label));
+            control.setAttribute('aria-label', t('mode_' + mode + '_label'));
+            control.append(icon(glyph), node('span', '', t('mode_' + mode)));
             listen(control, 'click', () => invoke('onMode', mode));
             return control;
         };
-        const audioMode = modeButton('audio', '음원', 'music');
-        const videoMode = modeButton('video', '영상', 'youtube'); modeGroup.append(audioMode, videoMode);
+        const audioMode = modeButton('audio', 'music');
+        const videoMode = modeButton('video', 'youtube'); modeGroup.append(audioMode, videoMode);
 
         const status = node('div', 'hl-np-status');
         status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
@@ -117,23 +164,23 @@
         const statusLabel = node('span', 'hl-np-status-label');
         const quality = node('span', 'hl-np-quality'); status.append(statusDot, statusLabel, quality);
         const actions = node('div', 'hl-np-actions');
-        const lyricsAction = action('ivLyrics 가사 열기', 'onLyrics', 'hangul-lyrics-action', 'lyrics', 'hl-np-primary');
-        lyricsAction.append(node('span', '', '가사 열기'));
-        const searchAction = action('가사 검색 정보 수정', 'onSearch', 'hangul-search-action', 'search', 'hl-np-icon-button hl-np-search-action');
+        const lyricsAction = action(t('lyrics_label'), 'onLyrics', 'hangul-lyrics-action', 'lyrics', 'hl-np-primary');
+        lyricsAction.append(node('span', '', t('lyrics')));
+        const searchAction = action(t('search_label'), 'onSearch', 'hangul-search-action', 'search', 'hl-np-icon-button hl-np-search-action');
         actions.append(lyricsAction, searchAction);
 
         const notice = node('div', 'hl-np-notice');
         notice.append(icon('info')); const noticeText = node('p'); notice.append(noticeText);
         const errorCard = node('div', 'hl-np-error'); errorCard.hidden = true;
-        const errorTitle = node('p', 'hl-np-error-title', '재생을 계속할 수 없습니다');
+        const errorTitle = node('p', 'hl-np-error-title', t('error_title'));
         const errorText = node('p', 'hl-np-error-text');
         errorText.setAttribute('role', 'alert');
-        const retryAction = action('다시 시도', 'onRetry', 'hangul-retry-action', 'retry', 'hl-np-retry');
-        retryAction.append(node('span', '', '다시 시도')); errorCard.append(errorTitle, errorText, retryAction);
+        const retryAction = action(t('retry'), 'onRetry', 'hangul-retry-action', 'retry', 'hl-np-retry');
+        retryAction.append(node('span', '', t('retry'))); errorCard.append(errorTitle, errorText, retryAction);
 
         const original = node('a', 'hl-np-original'); original.dataset.testid = 'hangul-original-action';
         original.target = '_blank'; original.rel = 'noopener noreferrer';
-        original.append(node('span', '', 'YouTube에서 보기'), icon('external'));
+        original.append(node('span', '', t('original')), icon('external'));
         listen(original, 'click', event => {
             if (typeof callbacks.onOriginal === 'function') { event.preventDefault(); invoke('onOriginal'); }
         });
@@ -143,7 +190,7 @@
         let currentVideoId = null;
         function showActionError(error) {
             if (disposed) return;
-            errorText.textContent = error instanceof Error ? error.message : String(error || '다시 시도해 주세요.');
+            errorText.textContent = error instanceof Error ? error.message : String(error || t('error_retry'));
             errorCard.hidden = false;
         }
         function update(model = {}) {
@@ -162,10 +209,10 @@
             element.dataset.error = String(!!error);
             mediaAnchor.setAttribute('aria-busy', String(loading));
             art.hidden = mode !== 'audio'; mediaAnchor.hidden = mode !== 'video';
-            setText(title, hasTrack ? String(track.title || videoId) : '곡을 선택하세요');
+            setText(title, hasTrack ? String(track.title || videoId) : t('no_track_title'));
             title.title = title.textContent;
-            setText(artist, hasTrack ? String(track.artist || 'YouTube') : '재생목록에서 듣고 싶은 곡을 선택하세요.');
-            setText(sourceMode, mode === 'audio' ? (model.fallback ? '음원으로 대체 재생' : '음원 재생') : '영상 재생');
+            setText(artist, hasTrack ? String(track.artist || 'YouTube') : t('no_track_artist'));
+            setText(sourceMode, mode === 'audio' ? t(model.fallback ? 'source_fallback' : 'source_audio') : t('source_video'));
             audioMode.setAttribute('aria-pressed', String(preferred === 'audio'));
             videoMode.setAttribute('aria-pressed', String(preferred === 'video'));
             lyricsAction.disabled = searchAction.disabled = !hasTrack;
@@ -181,27 +228,23 @@
                     image.removeAttribute('src'); original.removeAttribute('href'); backdrop.style.backgroundImage = '';
                 }
             }
-            const stateText = !hasTrack ? '재생 대기' : error ? '연결을 확인해 주세요' : loading
-                ? (mode === 'audio' ? '음원을 불러오는 중' : '영상을 불러오는 중')
-                : model.playing ? '재생 중' : '일시정지';
+            const stateText = t(!hasTrack ? 'state_idle' : error ? 'state_error' : loading
+                ? (mode === 'audio' ? 'state_loading_audio' : 'state_loading_video')
+                : model.playing ? 'state_playing' : 'state_paused');
             if (statusLabel.textContent !== stateText) statusLabel.textContent = stateText;
             let qualityText = '';
             if (mode === 'audio' && !loading && !error && hasTrack) {
                 const codec = String(state.codec || 'Opus').slice(0, 16);
                 qualityText = codec;
                 const bitrate = Number(state.bitrate);
-                if (Number.isFinite(bitrate) && bitrate > 0) qualityText += ' · 약 ' + Math.round(bitrate) + ' kbps';
-                quality.title = '제공된 음원 메타데이터 기준이며 실제 수신 속도 측정값은 아닙니다.';
+                if (Number.isFinite(bitrate) && bitrate > 0) qualityText = t('quality_bitrate', codec, Math.round(bitrate));
+                quality.title = t('quality_audio_title');
             } else if (mode === 'video' && !loading && !error && hasTrack) {
-                qualityText = ({ hd2160: '2160p', hd1440: '1440p', hd1080: '1080p', hd720: '720p', large: '480p', medium: '360p', small: '240p', tiny: '144p' })[state.quality] || '자동 화질';
-                quality.title = 'YouTube 플레이어의 현재 영상 화질';
+                qualityText = ({ hd2160: '2160p', hd1440: '1440p', hd1080: '1080p', hd720: '720p', large: '480p', medium: '360p', small: '240p', tiny: '144p' })[state.quality] || t('quality_auto');
+                quality.title = t('quality_video_title');
             }
             setText(quality, qualityText); quality.hidden = !qualityText;
-            setText(noticeText, mode === 'video'
-                ? '영상에는 YouTube 광고가 나올 수 있습니다. 건너뛰기는 플레이어에서 조작하세요.'
-                : model.fallback
-                    ? '외부 영상 재생이 제한되어 이 영상은 음원으로 재생 중입니다.'
-                    : '공개 음원을 스트리밍합니다. 영상에 따라 재생이 제한될 수 있습니다.');
+            setText(noticeText, t(mode === 'video' ? 'notice_video' : model.fallback ? 'notice_fallback' : 'notice_audio'));
             errorCard.hidden = !error; setText(errorText, error);
             retryAction.disabled = loading || !hasTrack;
             const reduced = host.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;

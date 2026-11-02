@@ -7,6 +7,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, 'youtube-links.js'), 'utf8');
+// The text table, language() and t() run inside each harness, so the harness's Spicetify picks the language; a context
+// has no navigator of its own, so the messages are English whatever this machine's language is.
+const textSource = source.slice(source.indexOf('const STRINGS'), source.indexOf('function t(')) + functionSource('t');
+const withText = context => { vm.runInContext(textSource, context); return context; };
 
 test('current-track presentation separates loading, failure and actual fallback engine without using lookup titles', () => {
     const models=[],item={kind:'youtube',videoId:'rKQptWhAvO0',title:'Actual cover',artist:'Cover artist',lyricTitle:'Lookup only'};
@@ -61,13 +65,13 @@ test('a dropped helper connection is retried twice, an abort or third failure is
 test('a player page that never reports ready is reopened at most twice per track', () => {
     let now = 1000; const item = { kind: 'youtube', videoId: 'MZNKiadMo3U' };
     const frame = { src: 'http://127.0.0.1:19643/youtube/player#session=s' };
-    const context = vm.createContext({ BASE: 'http://127.0.0.1:19643', session: 's', frame, queue: [item], queueIndex: 0,
+    const context = withText(vm.createContext({ BASE: 'http://127.0.0.1:19643', session: 's', frame, queue: [item], queueIndex: 0,
         active: true, mediaMode: 'youtube', state: { ready: false }, frameWaitStart: 0, frameReloads: 0, frameItem: null,
-        Date: { now: () => now }, encodeURIComponent });
+        Date: { now: () => now }, encodeURIComponent }));
     vm.runInContext(functionSource('frameWatchdog'), context);
     const reloads = () => (frame.src.match(/\?r=/) ? frame.src : null);
     context.frameWatchdog(); now = 10000; context.frameWatchdog(); assert.equal(reloads(), null, 'waits 10 s first');
-    now = 11001; context.frameWatchdog(); assert.match(frame.src, /\/youtube\/player\?r=11001#session=s$/);
+    now = 11001; context.frameWatchdog(); assert.match(frame.src, /\/youtube\/player\?r=11001#session=s&lang=en$/);
     now = 21002; context.frameWatchdog(); now = 31003; context.frameWatchdog();
     assert.equal(context.frameReloads, 2); assert.match(frame.src, /\?r=21002#/, 'no third reload');
     context.state = { ready: true }; context.frameWatchdog(); assert.equal(context.frameWaitStart, 0);
@@ -130,6 +134,7 @@ function clickHarness(overrides = {}) {
         notify: message => calls.push(['notify', message]), updateBar() {}, send: command => calls.push(['send', command]),
         advance: direction => calls.push(['advance', direction]), ...overrides,
     });
+    withText(context);
     // New shared header handlers are executed from the implementation when present.
     for (const name of ['togglePlaylistPlayback', 'toggleViewPlayback', 'showQueue', 'isIvLyricsMicrophone', 'openLyrics', 'spotifyText', 'isPlaylistPlay']) {
         const definition = functionSource(name); if (definition) vm.runInContext(definition, context);
@@ -191,6 +196,14 @@ test('a Spotify in another language still routes shuffle, Connect and the playli
     harness.invoke(button({ primary: true, label: 'Play My list' }));
     assert.deepEqual(harness.calls, ['toggle'], 'A header button outside the action bar is found by Spotify\'s own wording');
 });
+test('a Korean Spotify gets the link messages in Korean, any other language in English', () => {
+    const harness = clickHarness();
+    harness.invoke(button({ inBar: true, leftControls: true, label: 'Shuffle' }));
+    assert.deepEqual(harness.calls, [['notify', 'Linked music shuffle on']]);
+    harness.calls.length = 0; harness.context.Spicetify.Locale = { getLocale: () => 'ko' };
+    harness.invoke(button({ inBar: true, leftControls: true, label: 'Shuffle' }));
+    assert.deepEqual(harness.calls, [['notify', '링크 음악 셔플 꺼짐']]);
+});
 test('the actual ivLyrics microphone opens lyrics before the generic track-widget handler', () => {
     const harness = clickHarness(); const event = harness.invoke(button({ inBar: true, inWidget: true, classes: ['ivlyrics-playbar-control'] }));
     assert.deepEqual(harness.calls, ['lyrics']); assert.equal(event.prevented, true); assert.equal(event.stopped, true);
@@ -247,7 +260,7 @@ function messageHarness(intent = true, wasPlaying = true) {
         send: (command, extra) => sent.push([command, extra]), ivLyrics: { update() {} },
         renderStatus() {}, updateBar() {}, startDirect() {}, advance() {},
     });
-    vm.runInContext(functionSource('onMessage'), context);
+    withText(context); vm.runInContext(functionSource('onMessage'), context);
     return { context, sent, child, ready() { context.onMessage({ origin: 'http://127.0.0.1:19643', source: child,
         data: { type: 'spotify-hangul-youtube-state', session: 'my-session', event: 'ready', state: -1, seconds: 0, duration: 0 } }); } };
 }
@@ -277,7 +290,7 @@ test('pre-ready load and pause commands produce only one authoritative restored 
     const host = messageHarness(false, true), parent = { postMessage(data) { host.context.onMessage({ origin: 'http://127.0.0.1:19643', source: host.child, data }); } };
     const window = { addEventListener: (type, callback) => listeners.set(type, callback) };
     const context = vm.createContext({ window, parent, URLSearchParams, location: { hash: '#session=my-session', origin: 'http://127.0.0.1:19643' },
-        document: { getElementById: () => ({ style: {} }), createElement: () => ({}), head: { append() {} } },
+        document: { documentElement: {}, getElementById: () => ({ style: {} }), createElement: () => ({}), head: { append() {} } },
         YT: { Player: function (_id, options) { config = options; return player; } }, setInterval: () => 1, setTimeout: () => 1, clearInterval() {} });
     vm.runInContext(script, context); window.onYouTubeIframeAPIReady();
     const receive = data => listeners.get('message')({ origin: 'https://xpui.app.spotify.com', source: parent,
@@ -313,7 +326,7 @@ function modeHarness(options = {}) {
         autoRetried: null, autoRetryTimer: null, clearTimeout() {}, autoRetryOnce: () => false,
         Spicetify: { Player: {}, Platform: {} }, originals: {}, ...options.context,
     });
-    vm.runInContext(volumeSource, context);
+    withText(context); vm.runInContext(volumeSource, context);
     for (const name of ['readPlaybackMode', 'updateModeControls', 'cancelStream', 'clearAudio', 'send', 'updateAudio', 'applyAudioResume', 'setPlaybackMode'])
         vm.runInContext(functionSource(name), context);
     vm.runInContext('async ' + functionSource('startDirect'), context);
@@ -376,7 +389,7 @@ test('a late extraction response cannot replace a newer mode selection for the s
 test('audio extraction failure remains explicit and never silently starts ad-capable video', async () => {
     const h = modeHarness({ fetch: async () => ({ ok: false, status: 404, json: async () => ({ error: 'Unavailable' }) }) });
     h.context.setPlaybackMode('audio'); await h.settle();
-    assert.equal(h.context.mediaMode, 'direct'); assert.match(h.context.lastError, /YouTube 영상을 선택/);
+    assert.equal(h.context.mediaMode, 'direct'); assert.match(h.context.lastError, /choose YouTube video/);
     assert.equal(h.calls.filter(c => Array.isArray(c) && c[0] === 'frame' && c[1] === 'load').length, 0);
     assert.equal(h.audio.src, '');
 });
@@ -442,7 +455,7 @@ function iframeVolumeHarness() {
     const parent = { postMessage(data) { messages.push(data); onState(data); } },
         window = { addEventListener: (type, callback) => listeners.set(type, callback) };
     const context = vm.createContext({ window, parent, URLSearchParams, location: { hash: '#session=mode-test', origin: 'http://127.0.0.1:19643' },
-        document: { getElementById: () => ({ style: {} }), createElement: () => ({}), head: { append() {} } },
+        document: { documentElement: {}, getElementById: () => ({ style: {} }), createElement: () => ({}), head: { append() {} } },
         YT: { Player: function (_id, options) { config = options; return player; } }, setInterval: () => 1, setTimeout: () => 1, clearInterval() {} });
     vm.runInContext(script, context); window.onYouTubeIframeAPIReady();
     return { calls, messages, ready: () => config.events.onReady(), onState: callback => { onState = callback; },

@@ -12,6 +12,18 @@
         pause: 'M3 2h4v12H3zM9 2h4v12H9z',
         next: 'M11 2h2v12h-2zM3 2v12l8-6z'
     };
+    // Every string the module shows. English is the default; Korean follows Spotify's UI language.
+    const STRINGS = {
+        en: { play: 'Play', pause: 'Pause', previous: 'Previous song', next: 'Next song',
+            toolbar: 'Lyrics playback controls', action_failed: 'Could not complete the playback action.' },
+        ko: { play: '재생', pause: '일시정지', previous: '이전 곡', next: '다음 곡',
+            toolbar: '가사 재생 컨트롤', action_failed: '재생 조작을 완료하지 못했습니다.' }
+    };
+    // The language is read on each call, from Spotify's locale and then the browser's.
+    function t(host, key) {
+        const lang = /^ko(?:[-_]|$)/i.test(String(host.Spicetify?.Locale?.getLocale?.() || host.navigator?.language || '')) ? 'ko' : 'en';
+        return STRINGS[lang]?.[key] ?? STRINGS.en[key] ?? key;
+    }
 
     function readPlayback(host) {
         try {
@@ -90,7 +102,7 @@
                 attributes: { title: button.getAttribute('title'), 'aria-label': button.getAttribute('aria-label') },
                 html: image?.innerHTML ?? null, viewBox: image?.getAttribute('viewBox') ?? null
             });
-            const label = state.playing ? '일시정지' : '재생';
+            const label = t(host, state.playing ? 'pause' : 'play');
             if (button.getAttribute('title') !== label) button.setAttribute('title', label);
             if (button.getAttribute('aria-label') !== label) button.setAttribute('aria-label', label);
             const path = state.playing ? ICON.pause : ICON.play;
@@ -110,7 +122,7 @@
             node.addEventListener('click', event => {
                 event.preventDefault(); event.stopPropagation();
                 invokeAction(host, action).then(sync).catch(error => {
-                    host.Spicetify?.showNotification?.(error.message || '재생 조작을 완료하지 못했습니다.', true);
+                    host.Spicetify?.showNotification?.(error.message || t(host, 'action_failed'), true);
                 });
             });
             return node;
@@ -119,10 +131,10 @@
             removeToolbar(); mountedRoot = root;
             toolbar = document.createElement('div');
             toolbar.dataset.testid = MARKER;
-            toolbar.setAttribute('role', 'toolbar'); toolbar.setAttribute('aria-label', '가사 재생 컨트롤');
-            const previous = button('back', '이전 곡', ICON.back);
-            playButton = button('togglePlay', '재생', ICON.play);
-            const next = button('next', '다음 곡', ICON.next);
+            toolbar.setAttribute('role', 'toolbar'); toolbar.setAttribute('aria-label', t(host, 'toolbar'));
+            const previous = button('back', t(host, 'previous'), ICON.back);
+            playButton = button('togglePlay', t(host, 'play'), ICON.play);
+            const next = button('next', t(host, 'next'), ICON.next);
             toolbar.append(previous, playButton, next);
             // Keep existing lyric/background click gestures from also firing.
             toolbar.addEventListener('pointerdown', event => event.stopPropagation());
@@ -149,7 +161,7 @@
             for (const control of toolbar.querySelectorAll('button')) {
                 control.disabled = typeof host.Spicetify?.Player?.[control.dataset.action] !== 'function';
             }
-            const label = state.playing ? '일시정지' : '재생';
+            const label = t(host, state.playing ? 'pause' : 'play');
             if (playButton.getAttribute('aria-label') !== label) {
                 playButton.setAttribute('aria-label', label); playButton.setAttribute('title', label);
                 playButton.replaceChildren(svg(state.playing ? ICON.pause : ICON.play));

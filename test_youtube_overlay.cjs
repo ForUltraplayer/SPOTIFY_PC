@@ -82,7 +82,7 @@ test('controls mount only in an already visible fullscreen surface and clean up 
 test('visible upstream controls are reused and their original icon and labels are restored', () => {
     const h = harness({ nativeVisible: true }); const instance = controls.create(h.host);
     assert.equal(h.toolbar(), undefined);
-    assert.equal(h.native.getAttribute('aria-label'), '일시정지'); assert.equal(h.icon.getAttribute('viewBox'), '0 0 16 16');
+    assert.equal(h.native.getAttribute('aria-label'), 'Pause'); assert.equal(h.icon.getAttribute('viewBox'), '0 0 16 16');
     h.source.active = false; instance.sync();
     assert.equal(h.native.getAttribute('title'), '기존 재생'); assert.equal(h.native.getAttribute('aria-label'), '기존 라벨');
     assert.equal(h.icon.innerHTML, '<path d="original"/>'); assert.equal(h.icon.getAttribute('viewBox'), '0 0 24 24');
@@ -91,7 +91,7 @@ test('visible upstream controls are reused and their original icon and labels ar
 test('hidden controls get accessible buttons and one click performs exactly one action', async () => {
     const h = harness(); const instance = controls.create(h.host), toolbar = h.toolbar();
     assert.equal(toolbar.getAttribute('role'), 'toolbar');
-    assert.deepEqual(toolbar.children.map(node => node.getAttribute('aria-label')), ['이전 곡', '일시정지', '다음 곡']);
+    assert.deepEqual(toolbar.children.map(node => node.getAttribute('aria-label')), ['Previous song', 'Pause', 'Next song']);
     for (const button of toolbar.children) { const click = event(); button.emit('click', click); assert.equal(click.prevented, true); assert.equal(click.stopped, true); }
     await new Promise(resolve => setImmediate(resolve));
     assert.deepEqual(h.calls, ['back', 'togglePlay', 'next']);
@@ -107,4 +107,11 @@ test('focused fallback controls remain stable when upstream controls become visi
 test('a missing player action disables its fallback button without altering settings', () => {
     const h = harness(); delete h.player.next; const before = Object.keys(h.host).sort(); const instance = controls.create(h.host);
     assert.equal(h.toolbar().children[2].disabled, true); assert.deepEqual(Object.keys(h.host).sort(), before); instance.dispose();
+});
+test('a Korean Spotify gets Korean control labels', () => {
+    const h = harness(); h.host.Spicetify.Locale = { getLocale: () => 'ko' }; const instance = controls.create(h.host), toolbar = h.toolbar();
+    assert.equal(toolbar.getAttribute('aria-label'), '가사 재생 컨트롤');
+    assert.deepEqual(toolbar.children.map(node => node.getAttribute('title')), ['이전 곡', '일시정지', '다음 곡']);
+    h.source.playing = false; instance.sync(); assert.equal(toolbar.children[1].getAttribute('aria-label'), '재생');
+    instance.dispose();
 });

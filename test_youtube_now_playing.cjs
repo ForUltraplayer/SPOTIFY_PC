@@ -18,8 +18,9 @@ const track = { videoId: 'UWa_OiXDiQA', title: '유령도쿄(Ayase) / 아오쿠�
 const model = overrides => ({ track: { ...track }, state: { quality: 'hd720', codec: 'opus', bitrate: 136 },
     preferredMode: 'video', mediaMode: 'youtube', playing: false, loading: false, error: '', ...overrides });
 
-function fixture({ reducedMotion = false } = {}) {
+function fixture({ reducedMotion = false, locale } = {}) {
     const { window } = parseHTML('<!doctype html><html><body></body></html>');
+    if (locale) window.Spicetify = { Locale: { getLocale: () => locale } };
     const animations = [], calls = [];
     window.matchMedia = () => ({ matches: reducedMotion, addEventListener() {}, removeEventListener() {} });
     window.HTMLElement.prototype.animate = function (frames, settings) {
@@ -182,4 +183,26 @@ test('dispose clears interaction and animation without taking ownership of the c
     assert.equal(frame.parentElement, f.view.mediaAnchor);
     f.view.update(model({ track: { ...track, title: '해제 뒤 갱신' } }));
     assert.equal(f.find('hangul-now-title').textContent, title);
+});
+
+test('the panel speaks English by default and Korean when Spotify is Korean', options, () => {
+    const english = fixture();
+    try {
+        english.view.update(model({ playing: true }));
+        assert.equal(english.view.element.querySelector('.hl-np-heading').textContent, 'Now playing');
+        assert.equal(english.view.element.querySelector('.hl-np-status-label').textContent, 'Playing');
+        assert.equal(english.find('hangul-mode-audio').getAttribute('aria-label'), 'Play audio');
+        english.view.update(model({ preferredMode: 'audio', mediaMode: 'direct' }));
+        assert.equal(english.view.element.querySelector('.hl-np-quality').textContent, 'opus · about 136 kbps');
+    } finally { english.cleanup(); }
+    const korean = fixture({ locale: 'ko' });
+    try {
+        korean.view.update(model({ playing: true }));
+        assert.equal(korean.view.element.querySelector('.hl-np-heading').textContent, '지금 재생 중');
+        assert.equal(korean.view.element.querySelector('.hl-np-status-label').textContent, '재생 중');
+        assert.equal(korean.find('hangul-mode-audio').getAttribute('aria-label'), '음원 재생');
+        korean.view.update(model({ preferredMode: 'audio', mediaMode: 'direct' }));
+        assert.equal(korean.view.element.querySelector('.hl-np-quality').textContent, 'opus · 약 136 kbps');
+        assert.equal(korean.view.element.querySelector('.hl-np-notice p').textContent, '공개 음원을 스트리밍합니다. 영상에 따라 재생이 제한될 수 있습니다.');
+    } finally { korean.cleanup(); }
 });

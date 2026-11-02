@@ -4,6 +4,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const library = require('./youtube-library.js');
+// Node reports this machine's language: the messages are English unless a test sets a Korean Spotify.
+Object.defineProperty(globalThis, 'navigator', { value: { language: 'en-US' }, configurable: true });
 const native = { kind: 'spotify', uri: 'spotify:track:6x7SB38tuekpu4xpH9OIPY', title: '地球儀', artist: 'Kenshi Yonezu',
     duration: 273, entryKey: 'recording-one', album: 'Album', image: 'spotify:image:ab67616d00004851ff04f64ce0d75dc523c8bbf7' };
 const youtube = { kind: 'youtube', videoId: 'rKQptWhAvO0', title: 'Cover', artist: 'Singer', duration: 194,
@@ -111,12 +113,12 @@ test('an Android phone list brings its YouTube links in order and leaves out pho
     const tools = library.create(host, { onImport: async value => { received = value; } });
     await tools.importFile({ size: Buffer.byteLength(source), text: async () => '﻿' + source });
     assert.equal(received.id, 'phone-id'); assert.equal(received.local, true); assert.equal('skipped' in received, false);
-    assert.match(notice, /휴대폰 목록/); assert.match(notice, /4 개 항목 제외/);
+    assert.match(notice, /휴대폰 목록/); assert.match(notice, /4 items left out/);
     // The PC export of the imported list is the PC's own format again.
     assert.equal(library.documentFor(received).format, library.FORMAT);
 });
 test('an Android phone list without YouTube links or a name becomes an empty list with the default name', () => {
-    assert.deepEqual(library.parse(phoneFile([phoneOnly], { name: '  ' })), { name: '가져온 혼합 목록', nativeTracks: [], tracks: [], order: [] });
+    assert.deepEqual(library.parse(phoneFile([phoneOnly], { name: '  ' })), { name: 'Imported mixed list', nativeTracks: [], tracks: [], order: [] });
     assert.deepEqual(library.parse(JSON.stringify({ format: 'myspoti-hangul-local-playlist', version: 1 })).tracks, []);
 });
 test('an Android phone list is checked against the same limits as the PC file', () => {
@@ -136,4 +138,15 @@ test('an Android phone list is checked against the same limits as the PC file', 
     // A look-alike address is not a YouTube link: it is left out, never played.
     for (const uri of ['myspoti-yt://video/rKQptWhAvO0/x', 'myspoti-yt://video/rKQptWhAvO', 'https://youtube.com/watch?v=rKQptWhAvO0', 'MYSPOTI-YT://video/rKQptWhAvO0'])
         assert.deepEqual(library.parse(phoneFile([{ ...phoneLink('rKQptWhAvO0'), uri }])).tracks, [], uri);
+});
+test('a Korean Spotify gets the Korean default name, errors and import notice', async () => {
+    const saved = globalThis.Spicetify; globalThis.Spicetify = { Locale: { getLocale: () => 'ko' } };
+    try {
+        assert.equal(library.parse(phoneFile([phoneOnly], { name: '' })).name, '가져온 혼합 목록');
+        assert.throws(() => library.parse('not json'), { message: '올바른 JSON 목록 파일이 아닙니다.' });
+    } finally { globalThis.Spicetify = saved; }
+    const source = phoneFile([phoneLink('rKQptWhAvO0'), phoneOnly]); let notice;
+    const host = { crypto: { randomUUID: () => 'ko-id' }, Spicetify: { Locale: { getLocale: () => 'ko' }, showNotification: message => { notice = message; } } };
+    await library.create(host, { onImport: async () => {} }).importFile({ size: Buffer.byteLength(source), text: async () => source });
+    assert.equal(notice, '새 로컬 목록으로 가져왔습니다: 휴대폰 목록 (휴대폰 파일과 중복 영상 등 1 개 항목 제외)');
 });

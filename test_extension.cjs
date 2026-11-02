@@ -7,6 +7,8 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const linkModel = require('./youtube-links.js');
+// Node reports this machine's language: the messages are English unless a test sets a Korean Spotify.
+Object.defineProperty(globalThis, 'navigator', { value: { language: 'en-US' }, configurable: true });
 
 test('link player accepts canonical YouTube, Music and short links without media downloads', () => {
     for (const value of ['https://www.youtube.com/watch?v=rKQptWhAvO0', 'https://music.youtube.com/watch?v=rKQptWhAvO0&list=PLtest', 'https://youtu.be/rKQptWhAvO0?t=3', 'https://www.youtube.com/shorts/rKQptWhAvO0']) {
@@ -30,7 +32,7 @@ test('link queue has bounded end, repeat-one, repeat-all and nonrepeating shuffl
     assert.equal(linkModel.nextIndex(0, 0, 1, 'all', true), -1);
 });
 test('malformed persisted link lists recover without activating playback', () => {
-    for (const value of [null, {}, { schema: 2, playlists: [] }, { schema: 1, playlists: [null] }]) assert.deepEqual(linkModel.library(value), { schema: 1, playlists: [{ id: 'default', name: '링크 음악', tracks: [] }] });
+    for (const value of [null, {}, { schema: 2, playlists: [] }, { schema: 1, playlists: [null] }]) assert.deepEqual(linkModel.library(value), { schema: 1, playlists: [{ id: 'default', name: 'Linked music', tracks: [] }] });
 });
 
 const nativeItems = [
@@ -98,11 +100,11 @@ test('native playlist integration waits for router and topbar readiness before c
     }
 });
 
-function loadYouTubeFrame() {
+function loadYouTubeFrame(hash = '#session=trusted-session') {
     const html = fs.readFileSync(path.join(__dirname, 'youtube-player.html'), 'utf8');
     const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
     assert.equal(scripts.length, 1);
-    const messages=[],listeners = new Map(), calls = [], parent = { postMessage(value) {messages.push(value);} };
+    const messages=[],listeners = new Map(), calls = [], parent = { postMessage(value) {messages.push(value);} }, documentElement = {}, errorBox = { style: {}, textContent: '' };
     let playerConfig;
     const player = {
         getVideoData: () => ({ video_id: 'rKQptWhAvO0' }), getPlayerState: () => 2,
@@ -115,20 +117,30 @@ function loadYouTubeFrame() {
         seekTo: value => calls.push(['seek', value]),
     };
     const window = { addEventListener: (type, listener) => listeners.set(type, listener) };
-    const context = vm.createContext({ window, parent, location: { hash: '#session=trusted-session', origin: 'http://127.0.0.1:19643' }, URLSearchParams,
-        document: { getElementById: () => ({ style: {}, textContent: '' }), createElement: () => ({}), head: { append() {} } },
+    const context = vm.createContext({ window, parent, location: { hash, origin: 'http://127.0.0.1:19643' }, URLSearchParams,
+        document: { documentElement, getElementById: () => errorBox, createElement: () => ({}), head: { append() {} } },
         YT: { Player: function (_id, config) { playerConfig = config; return player; } },
         setInterval: () => 1, setTimeout: () => 1, clearInterval() {}, console,
     });
     new vm.Script(scripts[0][1], { filename: 'youtube-player.html' }).runInContext(context);
     window.onYouTubeIframeAPIReady(); playerConfig.events.onReady(); calls.length = 0;
-    return { listener: listeners.get('message'), calls, parent, config:playerConfig, messages };
+    return { listener: listeners.get('message'), calls, parent, config:playerConfig, messages, document: context.document, errorBox };
 }
 test('standard player reports embed errors and video quality events for the fallback boundary', () => {
     const frame=loadYouTubeFrame();frame.config.events.onError({data:150});
     assert.equal(frame.messages.at(-1).errorCode,150);
     frame.config.events.onPlaybackQualityChange({data:'hd720'});
     assert.equal(frame.messages.at(-1).quality,'hd720');
+});
+test('the player page shows its errors in the language the link screen passes in its hash', () => {
+    const english = loadYouTubeFrame(); english.config.events.onError({ data: 100 });
+    assert.equal(english.document.documentElement.lang, 'en'); assert.equal(english.document.title, 'YouTube linked music');
+    assert.equal(english.messages.at(-1).error, 'This video was removed or is private.'); assert.equal(english.errorBox.textContent, 'This video was removed or is private.');
+    english.config.events.onError({ data: 5 }); assert.equal(english.messages.at(-1).error, 'YouTube playback error: 5');
+    const korean = loadYouTubeFrame('#session=trusted-session&lang=ko'); korean.config.events.onError({ data: 150 });
+    assert.equal(korean.document.documentElement.lang, 'ko'); assert.equal(korean.document.title, 'YouTube 링크 음악');
+    assert.equal(korean.messages.at(-1).error, '이 영상은 외부 플레이어 재생이 허용되지 않습니다.');
+    assert.equal(korean.errorBox.textContent, '이 영상은 외부 플레이어 재생이 허용되지 않습니다.');
 });
 test('isolated player ignores untrusted origins, frames and session identifiers', () => {
     const frame = loadYouTubeFrame();
