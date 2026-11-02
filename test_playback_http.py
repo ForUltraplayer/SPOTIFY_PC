@@ -147,5 +147,77 @@ class PlaybackHTTPTests(unittest.TestCase):
         self.assertEqual(self.request('OPTIONS', '/resolve', origin='http://tauri.localhost')[0], 403)
 
 
+class ExtensionMediaRouteTests(unittest.TestCase):
+    """The helper's /ext routes in this process, with a fake runner and a source on this computer."""
+
+    def setUp(self):
+        import bridge, http.server, tempfile, threading
+        from unittest.mock import patch
+        import extension_host
+        import test_extension_host as fakes
+        area = Path(tempfile.mkdtemp())
+        (area / 'runner.py').write_text(fakes.FAKE_RUNNER, encoding='utf-8')
+        host = extension_host.ExtensionHost('0.0-test', data=area / 'data', command=[sys.executable, str(area / 'runner.py')],
+                                            check_host=lambda name: name == '127.0.0.1')
+        self.addCleanup(host.stop)
+        source =http.server.ThreadingHTTPServer(('127.0.0.1', 0), fakes.Source)
+        threading.Thread(target=source.serve_forever, daemon=True).start()
+        self.addCleanup(source.server_close)
+        self.addCleanup(source.shutdown)
+        self.here = f'http://127.0.0.1:{source.server_port}'
+        self.fakes, self.origin = fakes, bridge.ORIGIN
+        servers = []
+
+        class Recorded(bridge.HelperServer):
+            def __init__(self, *args):
+                super().__init__(*args)
+                servers.append(self)
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1', 0))
+            self.port = probe.getsockname()[1]
+        with patch.object(bridge, 'HelperServer', Recorded), patch.object(bridge, 'ExtensionHost', lambda *_: host):
+            threading.Thread(target=bridge.serve, kwargs={'port': self.port, 'lifetime': False}, daemon=True).start()
+            for _ in range(100):
+                if servers:
+                    break
+                time.sleep(0.05)
+        self.addCleanup(lambda: servers[0].shutdown())
+
+    def get(self, path, headers=None):
+        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
+        try:
+            connection.request('GET', path, headers={'Origin': self.origin, **(headers or {})})
+            response = connection.getresponse()
+            return response.status, dict(response.headers), response.read()
+        finally:
+            connection.close()
+
+    def test_a_dash_answer_is_played_by_its_parts_through_the_helper(self):
+        fakes = self.fakes
+        manifest = fakes.mpd(fakes.flac(fakes.TIDAL.replace('https://cdn.example', self.here)))
+        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=20)
+        try:
+            connection.request('POST', '/ext/audio', body=json.dumps({'track': {'id': 'a', 'manifest': manifest}}),
+                               headers={'Origin': self.origin, 'X-Hangul-Lyrics-Client': 'ivlyrics', 'Content-Type': 'application/json'})
+            response = connection.getresponse()
+            answer = json.loads(response.read())
+        finally:
+            connection.close()
+        self.assertEqual(200, response.status)
+        self.assertNotIn(self.here, json.dumps(answer))
+        media, plan = answer['stream']['media'], answer['stream']['dash']
+        self.assertEqual(('audio/mp4; codecs="flac"', 63), (plan['mime'], len(plan['segments'])))
+        code, headers, body = self.get(media + '/init')
+        self.assertEqual(200, code)
+        self.assertEqual(fakes.Source.body, body)
+        self.assertEqual(self.origin, headers['Access-Control-Allow-Origin'])
+        code, headers, body = self.get(media + '/62', {'Range': 'bytes=10-'})
+        self.assertEqual(206, code)
+        self.assertEqual(fakes.Source.body[10:], body)
+        self.assertIn('Content-Range', headers['Access-Control-Expose-Headers'])
+        for path in (media, media + '/63', media + '/x', media + '/1/2', media + '/-1'):
+            self.assertEqual(404, self.get(path)[0], path)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -86,16 +86,46 @@
       ]
     },
     "extensions_pc": {
-      "version": "2.3.0-hangul.2",
+      "version": "2.3.0-hangul.3",
       "repository": "ForUltraplayer/SPOTIFY_ANDROID",
       "track": "release",
-      "revision": "23d7800e14ff62b00daf779c07b4cc76a486fa46",
-      "artifact": "extensions-pc-2.3.0-hangul.2.jar",
-      "source_artifact": "SPOTIFY_ANDROID-2.3.0-hangul.2-source.zip",
+      "revision": "ca84b1f7c22efacfc62291b3bf6e366e9757c278",
+      "artifact": "extensions-pc-2.3.0-hangul.3.jar",
+      "source_artifact": "SPOTIFY_ANDROID-2.3.0-hangul.3-source.zip",
       "license": "GPL-3.0",
       "notices": {
         "Extensions-Rhino-MPL-2.0.txt": "MPL-2.0.txt"
       }
+    },
+    "webview2": {
+      "version": "1.0.4314.35",
+      "artifact": "microsoft.web.webview2.1.0.4314.35.nupkg",
+      "license": "Microsoft WebView2 SDK license (BSD-3-Clause style) with the package NOTICE.txt",
+      "delivery": "sign-in-window",
+      "files": {
+        "lib/net462/Microsoft.Web.WebView2.Core.dll": {
+          "to": "Microsoft.Web.WebView2.Core.dll",
+          "sha256": "acdd517b951829f763d1255f32df1e6a936cb8623a7ebff6b8b24172dede6bd6"
+        },
+        "lib/net462/Microsoft.Web.WebView2.WinForms.dll": {
+          "to": "Microsoft.Web.WebView2.WinForms.dll",
+          "sha256": "c66437f80886aecf074804b61af4cc10ad90a95310c8e0a717f31ea377c26b03"
+        },
+        "runtimes/win-x64/native/WebView2Loader.dll": {
+          "to": "WebView2Loader.dll",
+          "sha256": "d3fce90bdeecb08596e377dea6a316354dd8949e32ff09b89d51be00c14e21b6"
+        },
+        "runtimes/win-arm64/native/WebView2Loader.dll": {
+          "to": "arm64/WebView2Loader.dll",
+          "sha256": "05429881d918fd64a3fe4955155c1af79e66d7b7d944034467874f420bc2265a"
+        }
+      },
+      "notices": {
+        "WebView2-SDK-LICENSE.txt": "LICENSE.txt",
+        "WebView2-SDK-NOTICE.txt": "NOTICE.txt"
+      },
+      "bootstrapper_link": "https://go.microsoft.com/fwlink/p/?LinkId=2124703",
+      "runtime_bootstrapper": "fetched from Microsoft by webview-auth.ps1 where the runtime is missing; not shipped"
     }
   },
   "artifacts": {
@@ -199,20 +229,25 @@
       "sha256": "a4dbaa05fca4bd89d84584e58c459bd732efebb1722af80ab13c6516832004f9",
       "bytes": 205421281
     },
-    "extensions-pc-2.3.0-hangul.2.jar": {
-      "url": "https://github.com/ForUltraplayer/SPOTIFY_PC/releases/download/v0.7.12/extensions-pc-2.3.0-hangul.2.jar",
-      "sha256": "20b1a340a12cfbd95f519910786fb169a92cdcd3584323d3f3b86ba7a91e75ed",
-      "bytes": 8158052
-    },
-    "SPOTIFY_ANDROID-2.3.0-hangul.2-source.zip": {
-      "url": "https://codeload.github.com/ForUltraplayer/SPOTIFY_ANDROID/zip/23d7800e14ff62b00daf779c07b4cc76a486fa46",
-      "sha256": "4d35cc20ce9dd938f38ad55bc0778ffad1aadc878b48deea074b9d959bb3cd51",
-      "bytes": 4913822
-    },
     "MPL-2.0.txt": {
       "url": "https://www.mozilla.org/media/MPL/2.0/index.txt",
       "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
       "bytes": 16726
+    },
+    "microsoft.web.webview2.1.0.4314.35.nupkg": {
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.4314.35/microsoft.web.webview2.1.0.4314.35.nupkg",
+      "sha256": "90778deb1b77e36292828b4b5833c9255c27533f40e0ddd55891ae718944edc4",
+      "bytes": 9818548
+    },
+    "extensions-pc-2.3.0-hangul.3.jar": {
+      "url": "https://github.com/ForUltraplayer/SPOTIFY_PC/releases/download/v0.8.0/extensions-pc-2.3.0-hangul.3.jar",
+      "sha256": "e53500db0ccaa5e35afd34875c06875d25adba8ddcc30bd82a2cf2931e17bc4a",
+      "bytes": 8172453
+    },
+    "SPOTIFY_ANDROID-2.3.0-hangul.3-source.zip": {
+      "url": "https://codeload.github.com/ForUltraplayer/SPOTIFY_ANDROID/zip/ca84b1f7c22efacfc62291b3bf6e366e9757c278",
+      "sha256": "f9c7c46b26a6a6c08157b7bb664a241bf57cb89842a6a1e584dbfbbb009e6ecc",
+      "bytes": 4927348
     }
   },
   "test_fixtures": {

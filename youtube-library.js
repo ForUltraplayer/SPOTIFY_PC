@@ -1,9 +1,10 @@
 /** @file youtube-library.js
- * @brief Export and import complete local mixed playlists without Spotify server writes or stream URLs.
+ * @brief Export and import complete local mixed playlists, and import the Android app's list files, without Spotify server writes or stream URLs.
  */
 (() => {
     'use strict';
     const FORMAT = 'SpotifyHangulMixedPlaylist', MAX_BYTES = 3000000, MAX_TRACKS = 2000;
+    const PHONE_FORMAT = 'myspoti-hangul-local-playlist', phoneYoutube = /^myspoti-yt:\/\/video\/([A-Za-z0-9_-]{11})$/;
     const spotifyTrack = /^spotify:track:[A-Za-z0-9]{22}$/;
     const spotifyPlaylist = /^spotify:playlist:[A-Za-z0-9]{22}$/;
     const youtubeId = /^[A-Za-z0-9_-]{11}$/;
@@ -71,12 +72,32 @@
         if (new TextEncoder().encode(JSON.stringify(value)).length > MAX_BYTES) fail('목록 파일은 3 MB까지 저장할 수 있습니다.');
         return value;
     }
-    function parse(source) {
+    // A list file of the Android app (Myspoti-ex): its YouTube links come over in the phone's order.
+    // Phone files only play on that phone and a PC list holds each video once, so both are left out and counted.
+    function fromPhone(value) {
+        if (value.items != null && !Array.isArray(value.items)) fail('휴대폰 목록의 곡 항목이 올바르지 않습니다.');
+        const items = value.items || [];
+        if (items.length > MAX_TRACKS) fail('각 종류의 곡은 2,000 곡까지 입출력할 수 있습니다.');
+        const seen = new Set();
+        const tracks = items.flatMap(item => {
+            const videoId = typeof item?.uri === 'string' ? item.uri.match(phoneYoutube)?.[1] : undefined;
+            if (!videoId || seen.has(videoId)) return [];
+            seen.add(videoId);
+            // The phone keeps one title and artist, also its lyric search name; the PC search reads the title then.
+            return [{ kind: 'youtube', videoId, title: item.title || undefined, artist: item.artist || undefined,
+                duration: typeof item.duration === 'number' ? item.duration / 1000 : item.duration }];
+        });
+        const name = text(value.name, 100).trim() || undefined;
+        return { playlist: cleanPlaylist({ name, nativeTracks: [], tracks, order: tracks.map(key) }), skipped: items.length - tracks.length };
+    }
+    function read(source) {
         if (typeof source !== 'string' || new TextEncoder().encode(source).length > MAX_BYTES) fail('목록 파일은 3 MB까지 가져올 수 있습니다.');
         let value; try { value = JSON.parse(source.replace(/^\uFEFF/, '')); } catch { fail('올바른 JSON 목록 파일이 아닙니다.'); }
-        if (!value || value.format !== FORMAT || value.schema !== 1) fail('지원하는 Spotify 한글 혼합 목록 파일이 아닙니다.');
-        return cleanPlaylist(value.playlist);
+        if (value?.format === PHONE_FORMAT && value.version === 1) return fromPhone(value);
+        if (!value || value.format !== FORMAT || value.schema !== 1) fail('지원하는 Spotify 한글 혼합 목록이나 휴대폰 목록 파일이 아닙니다.');
+        return { playlist: cleanPlaylist(value.playlist), skipped: 0 };
     }
+    const parse = source => read(source).playlist;
     function imported(source, id) {
         return { id, local: true, ...parse(source) };
     }
@@ -111,8 +132,9 @@
         async function importFile(file) {
             check(); if (!file || typeof file.text !== 'function' || !Number.isFinite(file.size) || file.size > MAX_BYTES || file.size < 1) fail('3 MB 이하의 JSON 파일을 선택해 주세요.');
             const source = await file.text(); check();
-            const playlist = imported(source, host.crypto.randomUUID());
-            await options.onImport(playlist); check(); notify('새 로컬 목록으로 가져왔습니다: ' + playlist.name);
+            const { playlist: value, skipped } = read(source), playlist = { id: host.crypto.randomUUID(), local: true, ...value };
+            await options.onImport(playlist); check();
+            notify('새 로컬 목록으로 가져왔습니다: ' + playlist.name + (skipped ? ` (휴대폰 파일과 중복 영상 등 ${skipped} 개 항목 제외)` : ''));
             return playlist;
         }
         function openPicker() {

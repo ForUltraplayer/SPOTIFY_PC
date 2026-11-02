@@ -31,9 +31,12 @@ ivLyrics의 LyricsPlus 제공자와 결과 계약을 참조하는 호환 어댑�
 | NSIS 설치 도구와 기본 zlib 압축 | 3.13 | zlib/libpng 등 원본 COPYING | licenses/NSIS-COPYING.txt |
 | SpotX 패치 | 3cfbdfd1fac3dc755155e434116e28b51acfec07 | MIT, Copyright (c) 2021-2026 amd64fox | third_party/spotx/LICENSE와 원본 전체 및 분리 패치 소스 |
 | Java 런타임(Eclipse Temurin, jlink 축소본) | 21.0.13+9 | GPL-2.0 with Classpath Exception 및 포함된 제삼자 고지 | ext-runtime/legal의 원본 고지, 대응 소스는 https://github.com/adoptium/jdk21u/tree/jdk-21.0.13+9 |
-| Myspoti 확장 실행기(extensions-pc) | 2.3.0-hangul.2 | GPL-3.0 | extensions/extensions-pc.jar와 third_party_sources의 안드로이드 저장소 소스 압축 |
+| Myspoti 확장 실행기(extensions-pc) | 2.3.0-hangul.3 | GPL-3.0 | extensions/extensions-pc.jar와 third_party_sources의 안드로이드 저장소 소스 압축 |
 | 확장 실행기에 포함된 Kotlin 표준 라이브러리, kotlinx.coroutines, kotlinx.serialization, OkHttp, Okio | 실행기 빌드 고정 버전 | Apache-2.0 | licenses/Extensions-Apache-2.0.txt |
 | 확장 실행기에 포함된 Mozilla Rhino | 1.8.1 | MPL-2.0 | licenses/Extensions-Rhino-MPL-2.0.txt, 소스는 https://github.com/mozilla/rhino/tree/Rhino1_8_1_Release |
+| Microsoft WebView2 SDK(확장 로그인 창의 Core, WinForms 어셈블리와 x64, arm64 로더) | 1.0.4314.35 | Microsoft의 BSD-3-Clause 형식 라이선스, 패키지 NOTICE의 제삼자 고지 | extensions/webview2, licenses/WebView2-SDK-LICENSE.txt와 licenses/WebView2-SDK-NOTICE.txt(NuGet 패키지 원본 파일) |
+
+WebView2 런타임이 없는 PC(일부 Windows 10)에서는 확장 로그인 창이 Microsoft 공식 주소에서 Evergreen 부트스트래퍼를 받아, Microsoft 서명을 확인한 뒤 실행한다. 이 프로젝트는 부트스트래퍼와 런타임을 설치본에 넣거나 재배포하지 않는다.
 
 PyKakasi, jaconv, Deprecated와 wrapt의 원본 소스 배포 압축도 third_party_sources에 제공한다. 각 설치 패키지의 dist-info 고지를 유지한다. 빌드에 사용한 공개 URL과 SHA-256은 licenses/distribution-inputs.json에 보존한다. 안드로이드의 현재 대응 소스와 APK 배포는 https://github.com/ForUltraplayer/SPOTIFY_ANDROID 에서 관리한다.
 

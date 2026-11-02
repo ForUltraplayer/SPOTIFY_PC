@@ -95,3 +95,45 @@ test('disposed tools and an oversized input never invoke import callbacks', asyn
     tools.dispose(); await assert.rejects(tools.importFile({ size: 1, text: async () => '{}' }), { name: 'AbortError' });
     assert.equal(imports, 0);
 });
+// What LocalPlaylists.export() of the Android app writes: phone files and YouTube links of one phone list.
+const phoneFile = (items, extra = {}) => JSON.stringify({ format: 'myspoti-hangul-local-playlist', version: 1, name: '휴대폰 목록', items, ...extra }, null, 2);
+const phoneLink = (id, title = 'Cover', artist = 'Singer', duration = 194500) => ({ key: 'k-' + id, uri: 'myspoti-yt://video/' + id,
+    title, artist, album: 'YouTube', duration, art: 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg' });
+const phoneOnly = { key: 'k-file', uri: 'content://media/external/audio/media/42', title: 'Recording', artist: 'Me', album: 'Voice', duration: 1000, art: 'content://media/external/audio/albumart/1' };
+
+test('an Android phone list brings its YouTube links in order and leaves out phone files and repeated videos', async () => {
+    const source = phoneFile([phoneLink('rKQptWhAvO0', '東京テディベア', 'Neru'), phoneOnly, phoneLink('abcdefghijk', '', '', 0), phoneLink('rKQptWhAvO0'), 7, { uri: 'javascript:alert(1)' }]);
+    assert.deepEqual(library.parse(source), { name: '휴대폰 목록', nativeTracks: [], order: ['yt:rKQptWhAvO0', 'yt:abcdefghijk'], tracks: [
+        { kind: 'youtube', videoId: 'rKQptWhAvO0', title: '東京テディベア', artist: 'Neru', duration: 194.5 },
+        { kind: 'youtube', videoId: 'abcdefghijk', title: 'abcdefghijk', artist: 'YouTube', duration: 0 }] });
+    let received, notice;
+    const host = { crypto: { randomUUID: () => 'phone-id' }, fetch: () => assert.fail('Import must stay local'), Spicetify: { showNotification: message => { notice = message; } } };
+    const tools = library.create(host, { onImport: async value => { received = value; } });
+    await tools.importFile({ size: Buffer.byteLength(source), text: async () => '﻿' + source });
+    assert.equal(received.id, 'phone-id'); assert.equal(received.local, true); assert.equal('skipped' in received, false);
+    assert.match(notice, /휴대폰 목록/); assert.match(notice, /4 개 항목 제외/);
+    // The PC export of the imported list is the PC's own format again.
+    assert.equal(library.documentFor(received).format, library.FORMAT);
+});
+test('an Android phone list without YouTube links or a name becomes an empty list with the default name', () => {
+    assert.deepEqual(library.parse(phoneFile([phoneOnly], { name: '  ' })), { name: '가져온 혼합 목록', nativeTracks: [], tracks: [], order: [] });
+    assert.deepEqual(library.parse(JSON.stringify({ format: 'myspoti-hangul-local-playlist', version: 1 })).tracks, []);
+});
+test('an Android phone list is checked against the same limits as the PC file', () => {
+    for (const source of [
+        phoneFile([phoneLink('rKQptWhAvO0')], { version: 2 }),
+        phoneFile({ uri: 'myspoti-yt://video/rKQptWhAvO0' }),
+        phoneFile(Array.from({ length: 2001 }, () => phoneOnly)),
+        phoneFile([phoneLink('rKQptWhAvO0')], { name: '목'.repeat(101) }),
+        phoneFile([phoneLink('rKQptWhAvO0')], { name: 5 }),
+        phoneFile([phoneLink('rKQptWhAvO0', 'x'.repeat(301))]),
+        phoneFile([phoneLink('rKQptWhAvO0', 'Cover', 'a\0b')]),
+        phoneFile([phoneLink('rKQptWhAvO0', 'Cover', 'Singer', -1)]),
+        phoneFile([phoneLink('rKQptWhAvO0', 'Cover', 'Singer', '194500')]),
+        phoneFile([phoneLink('rKQptWhAvO0', { toString: () => 'x' })]),
+        phoneFile([phoneOnly], { name: 'x'.repeat(library.MAX_BYTES) }),
+    ]) assert.throws(() => library.parse(source), source.slice(0, 120));
+    // A look-alike address is not a YouTube link: it is left out, never played.
+    for (const uri of ['myspoti-yt://video/rKQptWhAvO0/x', 'myspoti-yt://video/rKQptWhAvO', 'https://youtube.com/watch?v=rKQptWhAvO0', 'MYSPOTI-YT://video/rKQptWhAvO0'])
+        assert.deepEqual(library.parse(phoneFile([{ ...phoneLink('rKQptWhAvO0'), uri }])).tracks, [], uri);
+});

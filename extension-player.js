@@ -21,13 +21,33 @@
  *   Spotify simply plays; nothing on screen changes but the quality line ("Spotify").
  * - Address refused (401, 403, 404, 410) or a media error: /ext/audio/again once, then back to
  *   Spotify at the same position, with the fallback noted for "Why this source?".
+ * - A DASH answer (stream.dash, a manifest's segment plan from the helper) plays through a MediaSource on
+ *   the same <audio>, so all of the above applies to it: its segments are appended in order about
+ *   POLICY.dashAheadSec ahead, a seek starts again from the segment holding the new position. A refused
+ *   segment asks again as above; a segment that fails otherwise twice gives the song back to Spotify.
+ *
+ * The link layer (youtube-links.js, mixed YouTube/Spotify lists) and this player share Spicetify.Player:
+ * - options.linkBusy(): a link item (YouTube) is heard; the link layer paused Spotify itself. Nothing is
+ *   asked and the extension audio stops. A Spotify song of a mixed list is not busy: it is played here
+ *   like any other song.
+ * - options.skip(direction): the mixed list's order. Called when the extension's song is skipped (1 next,
+ *   -1 previous) or has ended (0); true when the mixed list moved on, and Spotify's queue is then left alone.
+ * - options.bindPlayer(): called before this player wraps a replaced Player object, so the link layer's
+ *   wrapping is inside this one (its next/back reach the mixed list when this player passes them on).
+ * - owns(): the extension audio is heard for Spotify's song and the engine is kept paused under it; the
+ *   engine's pause and position then say nothing about the song's end, which comes through skip(0).
+ * - yieldToLink(): the link layer starts a link item; the extension audio stops and the playbar is given
+ *   back in the same task, before the link layer draws its own.
  */
 
 const Model = (() => {
     const POLICY = {
         switchWindowMs: 10000, handoverMs: 8000, handoverLeadSec: 0.8, alignSec: 0.12, holdMaxSec: 3,
         maxHandoverSeeks: 3, aheadAtMs: 10000, aheadKeepMs: 10 * 60000, expirySafetyMs: 30000,
-        transitionMs: 4000, restartBackSec: 3, lookupTimeoutMs: 17000, stateKeepMs: 10000,
+        transitionMs: 4000, restartBackSec: 3, lookupTimeoutMs: 17000, stateKeepMs: 10000, isrcTimeoutMs: 3000,
+        // DASH answers (MediaSource): seconds buffered ahead, played seconds kept when Chromium's audio buffer is full,
+        // and how long a segment may take, when one that failed is tried again, when a full buffer is tried again.
+        dashAheadSec: 30, dashBehindSec: 10, segmentTimeoutMs: 15000, segmentRetryMs: 1000, dashFullWaitMs: 2000,
     };
     const REFUSED = [401, 403, 404, 410];
 
@@ -41,6 +61,8 @@ const Model = (() => {
             other_device: 'Another device plays: extensions are used when this computer plays.',
             source_title: 'Source', source_detail: 'Plays this song and the next ones from the source you pick, until Spotify is closed. Your order stays as it is.',
             source_playing: 'Playing now', source_tag: 'temporary', source_reset: 'Back to my order',
+            search_again: 'Search again', search_again_detail: 'Asks every source on again for this song, even one that had nothing a minute ago.',
+            search_again_none: 'Still no source could play it: %1', searching: 'Searching every source…',
             source_missing: "%1 doesn't have this song: it goes on from where it played, and your order stays as it was.",
             source_next: '%1 plays from the next song: this one goes on as it plays.',
             source_active: 'Temporary choice for this session: %1 is asked first, until Spotify is closed.',
@@ -57,6 +79,13 @@ const Model = (() => {
             note_recent_miss: 'Spotify: no extension had it under a minute ago, not asked again', note_no_source: 'Spotify: no source to ask',
             note_none_had: 'Spotify: no extension had it', note_refused: 'asked the extensions again: its address was refused (expired or gone)',
             note_set_aside: 'set aside: %1', note_inactive: 'inactive: %1',
+            note_encrypted: 'encrypted audio, which the PC does not play', note_dash: 'a DASH manifest, which this version does not play',
+            note_format: 'a format the PC does not play: %1', note_not_running: 'not a running audio source (starting or turned off)',
+            note_not_needed: 'not asked: a source above answered',
+            miss_encrypted: 'only encrypted audio (not played on the PC)', miss_limited: 'the source limited requests, try again later',
+            miss_down: 'the source did not answer (server or network)', miss_connect: 'connect the extension in its settings',
+            miss_format: 'only a format the PC does not play', miss_none: 'not in the extensions', miss_recent: 'not in the extensions a minute ago',
+            miss_no_source: 'no audio source extension is on', miss_starting: 'extensions are still starting',
             manage_title: 'Extensions', manage_open: 'Manage extensions', loading: 'Reading…', play: 'Play', pause: 'Pause',
             third_party: 'Extensions are made by third parties and are not reviewed by Spotify Hangul Lyrics. You are responsible for the sources you install.',
             install_title: 'Install from an address', install_hint: 'Repository or package address (https://…)', install_continue: 'Continue',
@@ -120,6 +149,8 @@ const Model = (() => {
             other_device: '다른 기기에서 재생 중입니다. 확장은 이 컴퓨터에서 재생할 때 사용됩니다.',
             source_title: '소스', source_detail: 'Spotify를 닫을 때까지 이 곡과 다음 곡들을 선택한 소스에서 재생합니다. 설정한 순서는 그대로 유지됩니다.',
             source_playing: '지금 재생 중', source_tag: '임시', source_reset: '내 순서로 돌아가기',
+            search_again: '다시 찾기', search_again_detail: '켜진 소스 전체에 이 곡을 다시 묻습니다. 1분 안에 없다고 한 소스도 다시 묻습니다.',
+            search_again_none: '여전히 재생할 수 있는 소스가 없음: %1', searching: '모든 소스에 다시 묻는 중…',
             source_missing: '%1에 이 곡이 없습니다. 재생하던 소스에서 계속 재생되며, 순서는 그대로 유지됩니다.',
             source_next: '%1에서 다음 곡부터 재생합니다. 이 곡은 지금처럼 계속 재생됩니다.',
             source_active: '이번 세션의 임시 선택: Spotify를 닫을 때까지 %1을(를) 가장 먼저 확인합니다.',
@@ -136,6 +167,13 @@ const Model = (() => {
             note_recent_miss: 'Spotify: 1분 안에 이 곡을 가진 확장이 없어 다시 묻지 않음', note_no_source: 'Spotify: 물어볼 소스가 없음',
             note_none_had: 'Spotify: 이 곡을 가진 확장이 없음', note_refused: '확장에 다시 물음: 음원 주소가 거부됨(만료되었거나 사라짐)',
             note_set_aside: '잠시 제외됨: %1', note_inactive: '비활성: %1',
+            note_encrypted: '암호화된 음원이라 PC에서 재생하지 않음', note_dash: '이 버전에서 재생하지 않는 DASH 음원',
+            note_format: 'PC에서 재생하지 않는 형식: %1', note_not_running: '실행 중인 오디오 소스가 아님(시작 중이거나 꺼짐)',
+            note_not_needed: '위 소스가 먼저 답해서 묻지 않음',
+            miss_encrypted: '암호화된 음원만 있음(PC에서 재생 안 함)', miss_limited: '확장 서버가 요청을 제한함, 잠시 뒤 다시 시도',
+            miss_down: '확장 서버가 응답하지 않음(서버 또는 네트워크)', miss_connect: '확장 설정에서 연결이 필요함',
+            miss_format: 'PC에서 재생하지 않는 형식만 있음', miss_none: '확장에 이 곡이 없음', miss_recent: '1분 전 확장에 없었음',
+            miss_no_source: '켜진 오디오 소스 확장이 없음', miss_starting: '확장이 아직 시작 중',
             manage_title: '확장', manage_open: '확장 관리', loading: '읽는 중…', play: '재생', pause: '일시정지',
             third_party: '확장은 제3자가 만들며 Spotify 한글 가사가 검토하지 않습니다. 설치하는 소스에 대한 책임은 사용자에게 있습니다.',
             install_title: '주소로 설치', install_hint: '저장소 또는 패키지 주소(https://…)', install_continue: '계속',
@@ -200,7 +238,11 @@ const Model = (() => {
         'Spotify: no extension had it under a minute ago, not asked again': 'note_recent_miss', 'Spotify: no source to ask': 'note_no_source',
         'Spotify: no extension had it': 'note_none_had', 'asked the extensions again: its address was refused (expired or gone)': 'note_refused',
     };
-    const PREFIXED = [['set aside: ', 'note_set_aside'], ['inactive: ', 'note_inactive']];
+    NOTES['not playable here: its audio is encrypted (transform), which the PC does not decrypt'] = 'note_encrypted';
+    NOTES['not playable here: a DASH manifest, which the PC does not play'] = 'note_dash';
+    NOTES['not a running audio source'] = 'note_not_running';
+    NOTES['not needed: a source above answered'] = 'note_not_needed';
+    const PREFIXED = [['set aside: ', 'note_set_aside'], ['inactive: ', 'note_inactive'], ['not playable here: ', 'note_format']];
     const ACTIONS = {
         en: { 'playback.control': 'Control playback', 'playback.queue': 'Edit the queue', 'playback.events': 'Know what you play',
             'lyrics.provide': 'Provide lyrics', 'trackinfo.provide': 'Add song details', 'audio.source': 'Play audio from elsewhere',
@@ -245,9 +287,29 @@ const Model = (() => {
         // The runner's own label (the source's free text when it gave no codec, depth or rate).
         return stream.quality ? String(stream.quality).replace(/\s+/g, ' ').trim().slice(0, 80) : '';
     }
-    /** The line under the playbar: "<source> · FLAC · 24-bit · 48 kHz", "Spotify", with the temporary tag of a session pick. */
+    /**
+     * Why no extension plays a song, as one key of the playbar line, from the runner's attempt: the most telling
+     * reason wins (encrypted audio found somewhere says more than "not found" elsewhere). null when one was chosen.
+     */
+    function missReason(attempt) {
+        if (!attempt || attempt.chosen) return null;
+        const fallback = String(attempt.fallback || '');
+        if (fallback.includes('under a minute ago')) return 'miss_recent';
+        if (fallback.includes('no source to ask')) return 'miss_no_source';
+        const asked = Array.isArray(attempt.asked) ? attempt.asked : [];
+        const said = a => String(a.skippedReason || a.detail || '');
+        if (asked.some(a => said(a).includes('encrypted'))) return 'miss_encrypted';
+        if (asked.some(a => said(a).startsWith('not playable here'))) return 'miss_format';
+        if (asked.some(a => a.outcome === 'rate-limited' || /\b429\b/.test(said(a)))) return 'miss_limited';
+        if (asked.some(a => a.outcome === 'sign-in' || said(a).startsWith('inactive: '))) return 'miss_connect';
+        if (asked.length && asked.every(a => said(a) === 'not a running audio source')) return 'miss_starting';
+        if (asked.length && asked.every(a => ['server-down', 'network'].includes(a.outcome) || said(a) === 'not a running audio source')) return 'miss_down';
+        return asked.length ? 'miss_none' : null;
+    }
+    /** The line under the playbar: "<source> · FLAC · 24-bit · 48 kHz", "Spotify" (with why, when the runner said), with the temporary tag of a session pick. */
     function sourceLine(lang, playing) {
-        const label = playing?.extension ? [playing.name || playing.extension, qualityLabel(playing.stream)].filter(Boolean).join(' · ') : 'Spotify';
+        const miss = !playing?.extension && playing?.miss ? ' · ' + t(lang, playing.miss) : '';
+        const label = playing?.extension ? [playing.name || playing.extension, qualityLabel(playing.stream)].filter(Boolean).join(' · ') : 'Spotify' + miss;
         return playing?.temporary ? label + ' · ' + t(lang, 'source_tag') : label;
     }
     /** What the page measured: "audio/flac · 3:45 · 2116 kbit/s"; "" when nothing is known. */
@@ -303,8 +365,46 @@ const Model = (() => {
         const expires = entry.answer.stream.expiresAt;
         return now < (expires ? Math.min(entry.at + POLICY.aheadKeepMs, expires - POLICY.expirySafetyMs) : entry.at + POLICY.aheadKeepMs);
     }
-    // The helper's media address of a found answer; anything else is not played.
-    const mediaPath = answer => /^\/ext\/media\/[A-Za-z0-9_-]{8,80}$/.test(answer.stream.media) ? answer.stream.media : null;
+    /**
+     * A DASH answer's segment plan as the helper gives it ({mime, durationMs, segments: [{t, d}] in seconds, in order});
+     * null for a plain address or a plan that is not one. Its parts are asked as <media>/init and <media>/<index>.
+     */
+    function dashPlan(stream) {
+        const plan = stream?.dash;
+        if (!plan || typeof plan !== 'object' || !/^audio\/mp4; codecs="(?:flac|opus)"$/.test(String(plan.mime))) return null;
+        const segments = Array.isArray(plan.segments) ? plan.segments : [];
+        const valid = segments.length > 0 && segments.length <= 5000 && Number(plan.durationMs) > 0
+            && segments.every(s => Number.isFinite(s?.t) && s.t >= 0 && Number.isFinite(s.d) && s.d > 0);
+        return valid ? plan : null;
+    }
+    // The helper's media address of a found answer; anything else is not played (a DASH answer needs its plan too).
+    const mediaPath = answer => /^\/ext\/media\/[A-Za-z0-9_-]{8,80}$/.test(answer.stream.media) && (answer.stream.dash === undefined || dashPlan(answer.stream))
+        ? answer.stream.media : null;
+    /**
+     * The next DASH step from what is buffered ([[start, end]] seconds) at [at]: {index} of the segment to append,
+     * {end: true} when the buffer reaches the last segment's end, or null while aheadSec is buffered. A seek lands
+     * in the segment holding it; buffered audio goes on from the segment after its end.
+     */
+    function dashNext(segments, ranges, at, aheadSec = POLICY.dashAheadSec) {
+        const last = segments[segments.length - 1], total = last.t + last.d;
+        const range = ranges.find(([start, end]) => start <= at + 0.1 && at < end);
+        const from = range ? range[1] : at;
+        if (from >= total - 0.05) return { end: true };
+        if (range && from - at >= aheadSec) return null;
+        // A buffered end falls a frame short of its segment's end or on it: the next segment starts there. One that ends
+        // past a segment's middle means that segment went in shorter than the manifest says (fewer samples, a trimmed
+        // last frame); asking it again would append it over itself forever, so the one after it follows.
+        const probe = range ? from + 0.05 : from;
+        let index = segments.findIndex(s => probe < s.t + s.d);
+        if (range && index >= 0 && from > segments[index].t + segments[index].d / 2) index++;
+        if (index >= segments.length) return { end: true };
+        return { index: index < 0 ? segments.length - 1 : index };
+    }
+    /** What the page measured of a DASH answer: its type, length and the bit rate of the segments received so far. */
+    function dashDetected(plan, bytes, seconds) {
+        const durationSec = plan.durationMs / 1000;
+        return detectedLabel({ mime: plan.mime, durationSec, bytes: seconds > 0 ? bytes / seconds * durationSec : 0 });
+    }
 
     function image(value) {
         const text = String(value || '');
@@ -325,6 +425,26 @@ const Model = (() => {
         return { id, uri, title: String(item.name || meta.title || '').slice(0, 300), artist: artists[0] || '', artists,
             album: String(item.album?.name || meta.album_title || '').slice(0, 300), durationMs: Math.max(0, Math.round(duration)),
             ...(isrc ? { isrc: String(isrc).toUpperCase() } : {}), ...(cover ? { cover } : {}) };
+    }
+
+    // Sources match a song by its ISRC far better than by its words (15 of 15 against 10 of 15, measured on the same
+    // songs); Spicetify's item has none, so it is read from Spotify's catalog as Android's Extensions.withIsrc does.
+    const BASE62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    /** The catalog's 32-digit hex id of a 22-character track id; null for anything else. */
+    function trackHex(id) {
+        const text = String(id || '');
+        if (!/^[0-9A-Za-z]{22}$/.test(text)) return null;
+        const value = [...text].reduce((n, c) => n * 62n + BigInt(BASE62.indexOf(c)), 0n);
+        return value < 1n << 128n ? value.toString(16).padStart(32, '0') : null;
+    }
+    /** The ISRC in a metadata/4 track answer (protobuf, ExternalId { type: "isrc", id }), or null. */
+    function isrcFrom(bytes) {
+        let view;
+        try { view = new Uint8Array(bytes); } catch { return null; }
+        let text = '';
+        for (let i = 0; i < view.length; i += 8192) text += String.fromCharCode(...view.subarray(i, i + 8192));
+        const found = text.match(/\x0a\x04isrc\x12\x0c([A-Za-z0-9]{12})/)?.[1]?.toUpperCase();
+        return found && /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(found) ? found : null;
     }
 
     const outcomeLabel = (lang, key) => t(lang, OUTCOMES[key] || 'outcome_bug');
@@ -487,8 +607,8 @@ const Model = (() => {
     }
     const httpsOnly = value => /^https:\/\/[^\s"'<>]+$/.test(String(value || '')) ? value : null;
 
-    return { POLICY, STRINGS, language, t, maskText, qualityLabel, sourceLine, detectedLabel, shouldAsk, onAnswer, handoverStep,
-        refused, previousAction, volumeFor, aheadFresh, mediaPath, trackInfo, outcomeLabel, note, attemptLines, actionLabel, consent,
+    return { POLICY, STRINGS, language, t, maskText, qualityLabel, sourceLine, missReason, detectedLabel, shouldAsk, onAnswer, handoverStep,
+        refused, previousAction, volumeFor, aheadFresh, mediaPath, dashPlan, dashNext, dashDetected, trackInfo, trackHex, isrcFrom, outcomeLabel, note, attemptLines, actionLabel, consent,
         keepChoices, changeLine, updateMessage, statusLine, settingFields, settingValues, orderMove, errorKey, clock,
         CATEGORIES, storeMatches, storeView, ratingLine, authorLine, incompatibleLine, storeButton, downloadsRepo, updateCount, httpsOnly };
 })();
@@ -507,10 +627,12 @@ function create(host, options = {}) {
     const P = Model.POLICY, now = () => Date.now();
     const audio = new host.Audio();
     audio.preload = 'auto';
-    const originals = {}, listeners = [], savedNodes = new Map();
+    const originals = {}, wrappers = {}, listeners = [], savedNodes = new Map();
     let disposed = false, epoch = 0, song = null, mode = 'spotify', answer = null, lookup = null, intent = false;
     let transitionUntil = 0, pinned = 0, pinUntil = 0, retried = false, openedAt = 0, opened = false, startAt = null;
     let handover = null, detected = '', clockShown = false, dragging = false, aheadFor = null, state = null, stateAt = 0, lead = null;
+    // The DASH feed of the answer loaded (null for a plain address); a failure is handled once per load.
+    let dash = null, failing = false;
     const ahead = new Map(), names = new Map();
 
     const remote = () => Spicetify.Platform?.ConnectAPI?.state?.activeDevice?.isLocal === false;
@@ -543,7 +665,7 @@ function create(host, options = {}) {
     // Read again every stateKeepMs while it plays: a state missed at start (the helper not ready) or an extension
     // installed since would otherwise wait for the next song, with no quality line and the song left to Spotify.
     // The song last looked at, and whether it played elsewhere then: playback moved back here asks it again.
-    let stateReading = false, seenUri;
+    let stateReading = false, seenUri, miss = null;
     const seenKey = () => (Player.data?.item?.uri || '') + (remote() ? ' remote' : '');
     function refreshState() {
         if (stateReading || now() - stateAt < P.stateKeepMs) return;
@@ -554,19 +676,143 @@ function create(host, options = {}) {
             if (!had && next?.audio && mode === 'spotify' && !disposed) void onSong();
         });
     }
+    // ISRC per song id from Spotify's catalog (null: it has none). A request that fails, takes more than
+    // isrcTimeoutMs or has no sign-in is not kept, so a later ask tries again; the song is asked without it meanwhile.
+    // The sign-in token goes only into this request's header.
+    const isrcs = new Map();
+    function catalogIsrc(id) {
+        const token = Spicetify.Platform?.AuthorizationAPI?.getState?.()?.token?.accessToken, hex = Model.trackHex(id);
+        if (typeof token !== 'string' || !token || !hex) return Promise.resolve(null);
+        if (isrcs.has(id)) return isrcs.get(id);
+        const controller = new AbortController(), timer = setTimeout(() => controller.abort(), P.isrcTimeoutMs);
+        const read = host.fetch('https://spclient.wg.spotify.com/metadata/4/track/' + hex + '?market=from_token', {
+            headers: { Authorization: 'Bearer ' + token }, signal: controller.signal, cache: 'no-store' })
+            .then(async response => {
+                if (response.status === 200) return Model.isrcFrom(await response.arrayBuffer());
+                if (response.status === 404) return null;
+                throw new Error('catalog ' + response.status);
+            })
+            .catch(() => { isrcs.delete(id); return null; })
+            .finally(() => clearTimeout(timer));
+        isrcs.set(id, read);
+        [...isrcs.keys()].slice(0, Math.max(0, isrcs.size - 200)).forEach(key => isrcs.delete(key));
+        return read;
+    }
+    /** The track as sent to the runner: with its ISRC when the catalog has one. Never fails. */
+    async function withIsrc(track) {
+        if (!track || track.isrc) return track;
+        // The boundary: Spotify's sign-in state or catalog failing in any way leaves the song as it is.
+        let isrc = null;
+        try { isrc = await catalogIsrc(track.id); } catch { isrcs.delete(track.id); }
+        return isrc ? { ...track, isrc } : track;
+    }
     const note = body => song && quiet(call('POST', '/ext/attempts/note', { trackId: song.track.id, ...body }, 8000));
     const playingInfo = () => mode === 'extension' && answer ? { extension: answer.extension, name: answer.name || names.get(answer.extension),
-        stream: answer.stream, temporary: !!lead } : { temporary: !!lead };
+        stream: answer.stream, temporary: !!lead } : { temporary: !!lead, miss: miss && miss.uri === song?.uri ? miss.reason : null };
 
     // ── Audio element ──
     function syncVolume() { audio.volume = Model.volumeFor(Player.getVolume?.(), !!Player.getMute?.()); }
     function load(next, { at = 0, play = false, silent = false } = {}) {
+        closeDash(); failing = false;
         answer = next; opened = false; detected = ''; openedAt = performance.now(); startAt = at;
         audio.muted = silent; syncVolume();
-        audio.src = BASE + Model.mediaPath(next);
+        const plan = Model.dashPlan(next.stream);
+        if (plan) { dash = openDash(plan, Model.mediaPath(next), at); audio.src = dash.url; }
+        else audio.src = BASE + Model.mediaPath(next);
         if (play) audio.play().catch(playRefused);
     }
-    function clearAudio() { startAt = null; audio.pause(); audio.removeAttribute('src'); audio.load(); }
+    function clearAudio() { closeDash(); startAt = null; audio.pause(); audio.removeAttribute('src'); audio.load(); }
+    // An answer this player can play: a helper address, and for DASH a type Spotify's MediaSource takes.
+    const playable = value => !!Model.mediaPath(value) && (!value.stream.dash || !!host.MediaSource?.isTypeSupported?.(value.stream.dash.mime));
+
+    // ── DASH: the segments of a manifest answer, appended in order to a MediaSource ──
+    // The helper keeps the source's addresses and headers; the page asks <media>/init and <media>/<index>. The
+    // SourceBuffer is in sequence mode: a segment that does not follow the last one appended is placed at its plan time.
+    function openDash(plan, media, from) {
+        const source = new host.MediaSource();
+        const feed = { plan, media, source, url: host.URL.createObjectURL(source), buffer: null, ready: false, closed: false,
+            job: null, held: null, wait: null, last: -1, bytes: 0, seconds: 0, status: null, from, retried: new Set() };
+        source.addEventListener('sourceopen', () => {
+            host.URL.revokeObjectURL(feed.url);
+            if (feed.closed || feed.buffer) return;
+            try {
+                feed.buffer = source.addSourceBuffer(plan.mime);
+                feed.buffer.mode = 'sequence';
+                source.duration = plan.durationMs / 1000;
+            } catch (error) { dashFailed(feed, 'dash: ' + (error?.message || error), undefined, false); return; }
+            feed.buffer.addEventListener('updateend', () => pump(feed));
+            void fetchPart(feed, 'init');
+        }, { once: true });
+        return feed;
+    }
+    function closeDash() {
+        if (!dash) return;
+        const feed = dash;
+        dash = null; feed.closed = true;
+        feed.job?.controller.abort(); clearTimeout(feed.wait);
+        host.URL.revokeObjectURL(feed.url);
+    }
+    const bufferedRanges = buffered => Array.from({ length: buffered.length }, (_, i) => [buffered.start(i), buffered.end(i)]);
+    /** Appends what the playing position needs next, ends the stream at the last segment, or waits. */
+    function pump(feed) {
+        if (feed !== dash || feed.closed || !feed.ready || feed.wait || feed.buffer.updating) return;
+        const next = Model.dashNext(feed.plan.segments, bufferedRanges(feed.buffer.buffered), feed.from ?? audio.currentTime);
+        if (!next) return;
+        if (next.end) {
+            if (feed.job) { feed.job.controller.abort(); feed.job = null; }
+            feed.held = null;
+            if (feed.source.readyState === 'open') feed.source.endOfStream();
+            return;
+        }
+        if (feed.held) { if (feed.held.part === next.index) { append(feed, feed.held.part, feed.held.bytes); return; } feed.held = null; }
+        if (feed.job) { if (feed.job.part === next.index) return; feed.job.controller.abort(); feed.job = null; }
+        void fetchPart(feed, next.index);
+    }
+    async function fetchPart(feed, part) {
+        const controller = new AbortController(), job = { part, controller }, timer = setTimeout(() => controller.abort(), P.segmentTimeoutMs);
+        feed.job = job;
+        let status = 0, bytes = null;
+        // The fetch boundary: a seek (superseded), the timeout and the network all end here and are told apart below.
+        try {
+            const response = await host.fetch(BASE + feed.media + '/' + part, { signal: controller.signal, cache: 'no-store' });
+            status = response.status;
+            if (status >= 200 && status < 300) bytes = await response.arrayBuffer();
+        } catch { bytes = null; } finally { clearTimeout(timer); }
+        if (feed.closed || feed.job !== job) return;
+        feed.job = null; feed.status = status || null;
+        if (bytes) { append(feed, part, bytes); return; }
+        const what = 'segment ' + (part === 'init' ? 'init' : part + 1 + '/' + feed.plan.segments.length) + (status ? ' HTTP ' + status : ' unreachable');
+        // A refused address (expired, gone) asks the source again; a network error, timeout or server error is tried
+        // once more, then the song goes back to Spotify.
+        if (Model.refused(status)) { dashFailed(feed, what, status, true); return; }
+        if (feed.retried.has(part)) { dashFailed(feed, what, status || undefined, false); return; }
+        feed.retried.add(part);
+        feed.wait = setTimeout(() => { feed.wait = null; if (part === 'init') void fetchPart(feed, 'init'); else pump(feed); }, P.segmentRetryMs);
+    }
+    function append(feed, part, bytes) {
+        const buffer = feed.buffer, segment = part === 'init' ? null : feed.plan.segments[part];
+        if (buffer.updating) { feed.held = { part, bytes }; return; }
+        try {
+            if (segment && part !== feed.last + 1) buffer.timestampOffset = segment.t;
+            buffer.appendBuffer(bytes);
+        } catch (error) {
+            // Chromium's audio buffer is full: the played part is let go, else the append waits for playback.
+            if (error?.name === 'QuotaExceededError') { feed.held = { part, bytes }; makeRoom(feed); return; }
+            dashFailed(feed, 'dash: ' + (error?.message || error), undefined, false);
+            return;
+        }
+        feed.held = null;
+        if (!segment) { feed.ready = true; return; }
+        feed.last = part; feed.bytes += bytes.byteLength; feed.seconds += segment.d;
+    }
+    function makeRoom(feed) {
+        const played = audio.currentTime - P.dashBehindSec, buffered = feed.buffer.buffered;
+        if (buffered.length && played > buffered.start(0) + 1) { feed.buffer.remove(0, played); return; }
+        feed.wait = setTimeout(() => { feed.wait = null; pump(feed); }, P.dashFullWaitMs);
+    }
+    function dashFailed(feed, error, status, askAgain) { if (feed === dash && !feed.closed) void failed(error, status, askAgain); }
+    audio.addEventListener('seeking', () => { if (dash) { dash.from = null; pump(dash); } });
+    audio.addEventListener('timeupdate', () => { if (dash) pump(dash); });
     function playRefused(error) { if (error?.name !== 'AbortError') failed(String(error?.message || error)); }
     function onMetadata() {
         if (startAt === null) return;
@@ -576,10 +822,11 @@ function create(host, options = {}) {
     async function onOpened() {
         if (opened || !answer) return;
         opened = true;
-        const ms = Math.round(performance.now() - openedAt), current = song, media = Model.mediaPath(answer);
-        const probe = await probeMedia(media);
+        const ms = Math.round(performance.now() - openedAt), current = song, media = Model.mediaPath(answer), feed = dash;
+        // A DASH answer is measured from its segments (their status and sizes); a plain address by a small range.
+        const probe = feed ? { status: feed.status } : await probeMedia(media);
         if (song !== current) return;
-        detected = Model.detectedLabel({ mime: probe.type, durationSec: audio.duration, bytes: probe.bytes });
+        detected = feed ? Model.dashDetected(feed.plan, feed.bytes, feed.seconds) : Model.detectedLabel({ mime: probe.type, durationSec: audio.duration, bytes: probe.bytes });
         note({ open: { ok: true, ms, ...(probe.status ? { httpStatus: probe.status } : {}) }, ...(detected ? { detected } : {}) });
         render();
     }
@@ -596,19 +843,24 @@ function create(host, options = {}) {
         } finally { clearTimeout(timer); controller.abort(); }
     }
     const MEDIA_ERRORS = { 1: 'aborted', 2: 'network', 3: 'decode', 4: 'not supported' };
-    async function failed(reason) {
-        if (mode === 'spotify' || !answer || !song) return;
+    /**
+     * The loaded answer failed: [reason] (else the media error), with the HTTP status a DASH segment had. The source is
+     * asked once more unless [askAgain] is false (a DASH segment that failed for another reason than a refusal).
+     */
+    async function failed(reason, httpStatus, askAgain = true) {
+        if (mode === 'spotify' || !answer || !song || failing) return;
+        failing = true;
         const current = song, at = mode === 'extension' ? extSeconds() : null, ms = Math.round(performance.now() - openedAt);
         const error = reason || 'media ' + (MEDIA_ERRORS[audio.error?.code] || 'error');
-        const probe = await probeMedia(Model.mediaPath(answer));
+        const probe = dash || httpStatus !== undefined ? { status: httpStatus } : await probeMedia(Model.mediaPath(answer));
         if (song !== current) return;
         note({ open: { ok: false, ms, error, ...(probe.status ? { httpStatus: probe.status } : {}) } });
         // Refused (401, 403, 404, 410) or any other media failure: the source is asked once more.
-        if (!retried) {
+        if (!retried && askAgain) {
             retried = true;
-            const { status, value } = await quiet(call('POST', '/ext/audio/again', { track: current.track }, P.lookupTimeoutMs));
+            const { status, value } = await quiet(call('POST', '/ext/audio/again', { track: await withIsrc(current.track) }, P.lookupTimeoutMs));
             if (song !== current) return;
-            if (status === 200 && value.found && Model.mediaPath(value)) {
+            if (status === 200 && value.found && playable(value)) {
                 if (mode === 'pending' || at === null) startHandover(value);
                 else load(value, { at, play: intent });
                 return;
@@ -683,15 +935,19 @@ function create(host, options = {}) {
         intent = resume ?? enginePlaying();
         const kept = ahead.get(track.id);
         ahead.delete(track.id);
-        if (Model.aheadFresh(kept, now()) && Model.mediaPath(kept.answer)) { startNow(kept.answer); return; }
+        if (Model.aheadFresh(kept, now()) && playable(kept.answer)) { startNow(kept.answer); return; }
         setTimeout(keepPlaying, 400);
         const controller = new AbortController(); lookup = controller;
-        const { status, value } = await quiet(call('POST', '/ext/audio', { track }, P.lookupTimeoutMs, controller.signal));
+        const asked = await withIsrc(track);
+        if (mine !== epoch || controller.signal.aborted) return;
+        const { status, value } = await quiet(call('POST', '/ext/audio', { track: asked }, P.lookupTimeoutMs, controller.signal));
         if (mine !== epoch || controller.signal.aborted) return;
         lookup = null;
+        // Why it stays with Spotify, shown on the line: people read "not found" as a fault when the source only has encrypted audio.
+        miss = status === 200 && !value.found ? { uri: song.uri, reason: Model.missReason(value.attempt) } : null;
         if (status === 200 && value.name && value.extension) names.set(value.extension, value.name);
         const playing = enginePlaying();
-        const decision = Model.onAnswer({ found: status === 200 && !!value.found && !!Model.mediaPath(value), sinceSongMs: now() - song.startedAt, known: false, playing });
+        const decision = Model.onAnswer({ found: status === 200 && !!value.found && playable(value), sinceSongMs: now() - song.startedAt, known: false, playing });
         if (remote() || linkBusy()) return;
         if (decision === 'start') {
             // Paused now: by the user (it stays paused), or Spotify did not start after the extension's song (it plays on).
@@ -699,6 +955,7 @@ function create(host, options = {}) {
             startNow(value);
         } else if (decision === 'handover') startHandover(value);
         else if (decision === 'late') note({ fallback: 'Spotify', error: 'answered after ' + Math.round((now() - song.startedAt) / 1000) + ' s' });
+        else if (status === 200 && value.found && Model.mediaPath(value)) note({ fallback: 'Spotify', error: 'this player does not play ' + value.stream.dash?.mime });
         render();
     }
     function maybeAhead() {
@@ -709,8 +966,8 @@ function create(host, options = {}) {
         const entry = (Spicetify.Queue?.nextTracks || []).map(e => e?.contextTrack || e).find(e => /^spotify:track:/.test(String(e?.uri || '')));
         const next = Model.trackInfo(entry);
         if (!next || next.id === song.track.id || Model.aheadFresh(ahead.get(next.id), now())) return;
-        quiet(call('POST', '/ext/audio', { track: next, ahead: true }, P.lookupTimeoutMs)).then(({ status, value }) => {
-            if (disposed || status !== 200 || !value.found || !Model.mediaPath(value)) return;
+        withIsrc(next).then(track => quiet(call('POST', '/ext/audio', { track, ahead: true }, P.lookupTimeoutMs))).then(({ status, value }) => {
+            if (disposed || status !== 200 || !value.found || !playable(value)) return;
             if (value.name && value.extension) names.set(value.extension, value.name);
             ahead.set(next.id, { answer: value, at: now() });
             [...ahead.keys()].slice(0, Math.max(0, ahead.size - 4)).forEach(key => ahead.delete(key));
@@ -725,8 +982,10 @@ function create(host, options = {}) {
         render();
     }
     function seekTo(seconds) { audio.currentTime = Math.max(0, Math.min(extDuration() || Infinity, Number(seconds) || 0)); showClock(); updateBar(); }
-    function nextSong() { transitionUntil = now() + P.transitionMs; originals.next.call(Player); }
+    function nextSong() { transitionUntil = now() + P.transitionMs; if (!options.skip?.(1)) originals.next.call(Player); }
     function previous() {
+        // A mixed list goes back by its own order, as its Spotify songs do without the extension.
+        if (options.skip?.(-1)) return;
         if (Model.previousAction(extSeconds()) === 'restart') { seekTo(0); return; }
         // Spotify restarts its song rather than going back when its own position is past 3 s.
         originals.seek.call(Player, 0); pinned = 0;
@@ -735,6 +994,8 @@ function create(host, options = {}) {
     }
     function ended() {
         if (!owning()) return;
+        // The engine stays paused under this audio, so only this end moves a mixed list on (its own repeat applies).
+        if (options.skip?.(0)) return;
         if (Player.getRepeat?.() === 2) { audio.currentTime = 0; audio.play().catch(playRefused); return; }
         nextSong();
     }
@@ -748,7 +1009,7 @@ function create(host, options = {}) {
     function wrapPlayer() {
         Object.keys(handlers).filter(name => typeof Player[name] === 'function').forEach(name => {
             const original = Player[name]; originals[name] = original;
-            Player[name] = function (...args) {
+            Player[name] = wrappers[name] = function (...args) {
                 if (!owning()) return original.apply(this, args);
                 if (handlers[name]) return handlers[name](...args);
                 const result = original.apply(this, args); syncVolume(); return result;
@@ -756,7 +1017,8 @@ function create(host, options = {}) {
         });
     }
     function unwrapPlayer() {
-        Object.entries(originals).forEach(([name, original]) => { Player[name] = original; delete originals[name]; });
+        // Only where this wrapping is still in place: the link layer may have given the object its own controls back already.
+        Object.entries(originals).forEach(([name, original]) => { if (Player[name] === wrappers[name]) Player[name] = original; delete originals[name]; delete wrappers[name]; });
         Player.removeEventListener?.('songchange', songChanged); Player.removeEventListener?.('onplaypause', guardEngine);
     }
     /** Moves the wrapped controls and the listeners to the Player Spicetify now has, then looks at its song. */
@@ -764,6 +1026,7 @@ function create(host, options = {}) {
         const next = host.Spicetify?.Player;
         if (!next || next === Player) return false;
         unwrapPlayer();
+        options.bindPlayer?.();   // The link layer wraps the new object first: this wrapping stays outside it.
         Player = next;
         wrapPlayer(); listenPlayer();
         return true;
@@ -928,10 +1191,14 @@ function create(host, options = {}) {
         anchor?.parentElement?.insertBefore(line, anchor.parentElement.firstChild);
     }
     let detailsBox = null;
+    // A press redraws the box (replaceChildren), and Spotify's modal then takes the click, whose button is gone, for one
+    // outside it and closes: clicks stop at the box. Links still bubble, for Spotify's own link handling.
+    const keepInside = event => { if (!event.target.closest?.('a')) event.stopPropagation(); };
     function render() { renderLine(); if (detailsBox?.isConnected) void fillDetails(detailsBox); }
 
     async function openDetails() {
         detailsBox = el('div', undefined, 'hl-ext');
+        detailsBox.addEventListener('click', keepInside);
         detailsBox.append(el('p', t('loading'), 'hl-ext-muted'));
         Spicetify.PopupModal.display({ title: t('details_title'), content: detailsBox, isLarge: true });
         await fillDetails(detailsBox);
@@ -972,6 +1239,11 @@ function create(host, options = {}) {
             picker.append(pickMessage);
         }
         const why = el('section'); why.append(el('h3', t('why_title')));
+        if (current && !remote()) {
+            const row = el('div', undefined, 'hl-ext-row');
+            row.append(button(t('search_again'), searchAgain, 'hl-ext-primary'), searchMessage);
+            why.append(row, el('p', t('search_again_detail'), 'hl-ext-muted'));
+        }
         Model.attemptLines(lang, attempt.status === 200 ? attempt.value.attempt : null, Object.fromEntries(names), mode === 'extension' ? detected : null)
             .forEach(item => why.append(item.kind === 'head' ? el('h4', item.text) : el('p', item.text, item.kind === 'muted' ? 'hl-ext-muted' : undefined)));
         box.replaceChildren(quality, picker, why, el('div', undefined, 'hl-ext-row'));
@@ -982,14 +1254,14 @@ function create(host, options = {}) {
         const current = song;
         if (!current) return;
         const at = mode === 'extension' ? extSeconds() : null;
-        const { status, value } = await quiet(call('POST', '/ext/audio/pick', { track: current.track, source: id }, P.lookupTimeoutMs));
+        const { status, value } = await quiet(call('POST', '/ext/audio/pick', { track: await withIsrc(current.track), source: id }, P.lookupTimeoutMs));
         if (song !== current) return;
         ahead.clear();
         if (status !== 200) { pickMessage.textContent = t(Model.errorKey(status, value), value.error || status); return; }
         lead = id;
         pickMessage.textContent = '';
         if (value.reason === 'spotify-picked') { if (mode !== 'spotify') giveBack(at); }
-        else if (value.found && Model.mediaPath(value)) {
+        else if (value.found && playable(value)) {
             if (value.name) names.set(id, value.name);
             retried = false;
             // The song goes on where it played, from the source picked.
@@ -997,6 +1269,28 @@ function create(host, options = {}) {
             else if (enginePlaying()) startHandover(value);
             else { intent = false; startNow(value); }
         } else pickMessage.textContent = t('source_missing', names.get(id) || id);
+        render();
+    }
+    const searchMessage = el('span', '', 'hl-ext-muted');
+    /** "Search again": every source is asked anew for the song playing (its miss of a minute ago forgotten); a source found plays from where the song is. */
+    async function searchAgain() {
+        const current = song;
+        if (!current) return;
+        searchMessage.textContent = t('searching');
+        const at = mode === 'extension' ? extSeconds() : null;
+        const { status, value } = await quiet(call('POST', '/ext/audio/again', { track: await withIsrc(current.track), refresh: true }, P.lookupTimeoutMs));
+        if (song !== current) return;
+        if (status !== 200) { searchMessage.textContent = t(Model.errorKey(status, value), value.error || status); return; }
+        if (value.name && value.extension) names.set(value.extension, value.name);
+        if (value.found && playable(value)) {
+            miss = null; retried = false; searchMessage.textContent = '';
+            if (mode === 'extension') load(value, { at, play: intent });
+            else if (enginePlaying()) startHandover(value);
+            else { intent = false; startNow(value); }
+        } else {
+            miss = { uri: current.uri, reason: Model.missReason(value.attempt) };
+            searchMessage.textContent = t('search_again_none', t(miss.reason || 'miss_none'));
+        }
         render();
     }
     /** Back to the saved order: the runner asks nothing again, the song goes on from where it plays. */
@@ -1012,6 +1306,7 @@ function create(host, options = {}) {
     const downloadCounts = new Map();
     async function openManager() {
         managerBox = el('div', undefined, 'hl-ext');
+        managerBox.addEventListener('click', keepInside);
         view = null; detail = null;
         Spicetify.PopupModal.display({ title: t('manage_title'), content: managerBox, isLarge: true });
         await fillManager();
@@ -1415,8 +1710,11 @@ function create(host, options = {}) {
 
     return {
         model: Model, openDetails, openManager,
+        owns: () => mode === 'extension',
+        yieldToLink() { if (disposed || mode === 'spotify') return; stopExtension(); render(); },
         snapshot: () => ({ mode, intent, song: song ? { ...song.track } : null, answer: answer ? { extension: answer.extension, name: answer.name, stream: { ...answer.stream } } : null,
-            seconds: extSeconds(), detected, lead, ahead: [...ahead.keys()], line: line.hidden ? null : line.textContent }),
+            seconds: extSeconds(), detected, lead, ahead: [...ahead.keys()], line: line.hidden ? null : line.textContent,
+            dash: dash ? { segments: dash.plan.segments.length, last: dash.last, bytes: dash.bytes, buffered: dash.buffer ? bufferedRanges(dash.buffer.buffered) : [] } : null }),
         dispose() {
             if (disposed) return;
             const at = mode === 'extension' ? extSeconds() : null;
@@ -1424,6 +1722,7 @@ function create(host, options = {}) {
             disposed = true; epoch++; lookup?.abort();
             clearInterval(timer); listeners.forEach(remove => remove());
             unwrapPlayer();
+            detailsBox?.removeEventListener('click', keepInside); managerBox?.removeEventListener('click', keepInside);
             menu?.deregister(); line.remove(); style.remove(); ivLyrics?.setExternalClock?.(null);
         },
     };

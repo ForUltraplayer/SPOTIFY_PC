@@ -45,6 +45,20 @@
 
 측정은 이 PC의 네트워크에서 한 번씩 잰 값이며, 결과 목록은 그 시각의 검색 결과다.
 
+같은 날 설치된 실행기 jar(0.7.12)를 설치된 확장의 사본(별도 임시 데이터 폴더)으로 띄우고, `/v1/audio/pick`에 `accept.manifest: true`와 ISRC를 넣어 `codeberg.kotazi_dev.lossless`와 `community.spotiflacbridge`에 `work/queue-tracks.json`의 두 곡(4:12, 3:37)을 물었다. 네 답 모두 DASH 매니페스트였고 구조는 같았다. 주소, 토큰, 쿼리 값은 기록하지 않았다.
+
+| 항목 | 결과 |
+|---|---|
+| 답의 형태 | `url`은 빈 문자열, `headers`는 비어 있음, `expiresAt` 있음. 매니페스트는 base64 2,492~2,496 자(해독 1,869~1,871 바이트), XML 선언 있음, DOCTYPE과 ENTITY 없음 |
+| MPD | `type="static"`, `profiles="urn:mpeg:dash:profile:isoff-main:2011"`, `mediaPresentationDuration` 있음, Period 1 개, AdaptationSet 1 개(`audio/mp4`), Representation 1 개(`codecs="flac"`, `id="FLAC,44100,16"`, bandwidth 약 1 Mbit/s, `audioSamplingRate="44100"`) |
+| 세그먼트 | Representation 안의 SegmentTemplate(`timescale="44100"`, `startNumber="1"`), `initialization`과 `media`는 쿼리가 붙은 절대 https 주소, `media`의 표기는 `$Number$`만. SegmentTimeline은 `S` 2 개(`d="176128"`의 반복과 마지막 짧은 세그먼트, `t` 없음). 4:12 곡은 63 개, 3:37 곡은 55 개(세그먼트 약 3.99 초) |
+| 길이 | 타임라인 합(251.573 초)이 `mediaPresentationDuration`(PT4M11.573S)과 같고, 소스가 알린 `durationMs`(252000)와는 0.4 초 다르다 |
+| 초기화 세그먼트 | 623 바이트, `audio/mp4`, `ftyp`과 `moov`(`mvex`, `trex` 포함). 표본 항목 `fLaC`(2 채널, 16 비트, 44,100 Hz)와 `dfLa` |
+| 미디어 세그먼트 | 앞 4 KB만 Range로 받아 확인했다. HTTP 206, `moof`(`mfhd`, `traf`의 `tfhd`, `tfdt`, `trun`) 다음 `mdat`, 첫 세그먼트의 `tfdt`는 0. 크기는 약 170~290 KB |
+| 소스가 알린 값 | Mornye(`codeberg.kotazi_dev.lossless`)는 `mimeType: "audio/flac"`, `codec: "flac"`, 16-bit, 44.1 kHz를 알렸다(실제 형식은 `audio/mp4`). FLAC Bridge Multi(`community.spotiflacbridge`)는 codec, 비트 깊이, 표본율 없이 `quality`만 `Tidal · FLAC · 16-bit · 44.1 kHz`였다 |
+
+구현 뒤 도우미의 `ExtensionHost.relay`와 `open_media`로 같은 확인을 다시 했다. 두 소스 모두 페이지 답에 주소가 없고 계획은 `audio/mp4; codecs="flac"`, 63 개, 251,573 ms였다. 초기화 세그먼트와 마지막 세그먼트를 도우미 중계로 `Range: bytes=0-0`만 받아 HTTP 206, `audio/mp4`를 확인했다. 실제 Spotify에서의 재생은 확인하지 않았다(아래 "미확인과 위험").
+
 ## 구조
 
 ### 확장 실행기
@@ -68,12 +82,86 @@
 - 서비스 등록, 부팅 자동 시작, 실패 후 자동 재시작은 넣지 않는다. 실행기가 연속으로 시작에 실패하면 간격을 두고 재시도하다가 상한에서 멈추고, 그동안 곡은 Spotify가 재생한다.
 - 실행기는 루프백 주소의 임의 포트에서 도우미가 만든 일회용 토큰으로만 요청을 받는다. Spotify 안의 스크립트는 지금처럼 도우미(127.0.0.1:19643)만 부른다.
 
+### 확장 로그인 창
+
+확장이 `myspoti.auth.open({url, callback, hidden})`을 부르면(Mornye의 "Connect Mornye", FLAC Bridge의 "Attiva Tidal" 등) 실행기가 로그인 창을 띄운다. 계약은 Myspoti 엔진의 `Host.openAuth`와 `AuthRequest`, `AuthResult`를 그대로 따르고, 동작은 안드로이드 앱의 `ExtensionAuth`에 맞췄다.
+
+| 단계 | 내용 |
+| --- | --- |
+| 요청 | 엔진이 `AuthRequest.checked()`로 주소를 검사한 뒤 실행기의 `openAuth`를 부른다. 실행기는 id(`auth-1`처럼)를 바로 돌려주고, 결과는 나중에 `auth` 이벤트 `{id, url}` 또는 `{id, error}`로 보낸다 |
+| 창 시작 | 실행기가 `HANGUL_EXT_AUTH`가 가리키는 `webview-auth.ps1`을 Windows PowerShell 5.1(`-NoProfile -NonInteractive -ExecutionPolicy Bypass -STA -File`)로 띄운다. 도우미(`extension_host.py`)가 설치 폴더의 이 스크립트를 환경 변수로 넘긴다. 스크립트가 없으면 `auth.open`이 "the sign-in window is not installed on this PC" 오류로 끝난다 |
+| 요청 전달 | 시작 페이지, 콜백, hidden, 쿠키 폴더, 확장 이름, 8 초, 180 초를 JSON 한 줄로 창의 표준 입력에 쓴다. 명령줄에는 스크립트 경로만 있다. 실행기는 표준 입력을 열어 둔다 |
+| 페이지 | 창은 설치 폴더 `extensions\webview2`의 WebView2 SDK 어셈블리로 WinForms 창 하나를 연다. 쿠키와 저장소는 확장별 폴더 `%LOCALAPPDATA%\ivLyricsHangul\extensions\<id>\webview`에 두므로 앱, Spotify, 다른 확장과 섞이지 않고 같은 확장의 다음 로그인까지 남는다. 확장을 제거하면 폴더와 함께 지워진다 |
+| 콜백 감지 | 주 프레임의 이동(링크, 리디렉션, 폼 POST, 사용자 지정 스킴), 하위 프레임의 이동, `window.open`, 외부 스킴 실행 요청에서 주소가 엔진의 `AuthRequest.reached`와 같은 규칙으로 콜백에 닿으면 이동을 취소하고 그 주소만 표준 출력에 `{"url": …}` 한 줄로 쓰고 닫는다. 실행기는 받은 주소를 `reached`로 한 번 더 검사하고, 맞지 않으면 `helper-failed`로 바꾼다 |
+| 막는 것 | http, https, about 외의 스킴 이동, 새 창, 다운로드, 권한 요청(위치, 카메라 등), 개발자 도구, 페이지와 앱 사이의 스크립트 연결 |
+| hidden | 같은 크기의 테두리 없는 창을 모든 화면 바깥에 두고 작업 표시줄에서 뺀 채 페이지를 연다. 8 초 안에 콜백에 닿지 않으면 같은 WebView2 컨트롤을 로그인 창으로 옮겨 보인다. 페이지는 다시 불러오지 않는다. 창 자체를 작업 표시줄에 올리면 Windows 창이 다시 만들어져 초기화 중인 페이지가 끝나므로(실측, 0x80004004) 이 방식을 쓴다 |
+| 창 모양 | 제목 "<확장 이름>: 로그인", 안내문(입력한 내용과 쿠키는 이 확장의 로그인 창에만 남고 확장은 마지막 주소만 받는다), 현재 호스트 줄. Windows 화면 언어가 한국어면 한국어, 아니면 영어다. 백그라운드 프로세스가 띄운 창이 Spotify 뒤에 남지 않게 보일 때 한 번 맨 위로 올린다(계속 위에 두지는 않는다) |
+| 오류 | 창을 닫으면 `closed`(안드로이드와 같은 값), 180 초 안에 콜백에 닿지 않으면 `timeout`, 페이지를 불러오지 못하면 `network: <WebErrorStatus>`(HTTP 403, 503 같은 확인 페이지 상태는 오류로 보지 않는다), 런타임이 없고 설치도 실패하면 `webview2-missing`, WebView2 초기화 실패는 `webview2-failed: <HRESULT>`, 부품 누락이나 응답 없는 종료는 `helper-failed` |
+| 한 번에 하나 | 같은 확장의 창이 열려 있으면 두 번째 요청을 "a sign-in page is already open"으로 거절한다. 안드로이드는 앱 전체에서 하나지만, PC는 확장마다 창과 쿠키 폴더가 따로 있어 확장별로 하나다 |
+| 기록 | 실행기 기록에는 "sign-in auth-1 opened on <시작 호스트> (hidden)"과 "reached the callback" 또는 오류 키만 남는다. 콜백 주소와 그 쿼리, 쿠키는 어디에도 쓰지 않고 확장에만 넘긴다 |
+
+프로세스 수명은 다음과 같다.
+
+- 로그인 창은 `auth.open` 때만 뜨고 결과를 쓰면 바로 끝난다. 서비스, 자동 시작, 재시작 설정은 없다.
+- 확장을 끄거나 제거하거나 다시 시작하면 열린 창을 결과 없이 닫는다(안드로이드의 `ExtensionAuth.cancel`). 실행기가 끝날 때도 모두 닫는다. 창의 자식 프로세스(WebView2 브라우저 프로세스)도 함께 끝낸다.
+- 실행기가 강제로 끝나 표준 입력이 닫히면 창이 0.2 초 간격 확인에서 이를 보고 결과 없이 닫힌다.
+- 창이 답하지 않으면 실행기가 14 분(창이 세는 180 초, 런타임 설치 여유 10 분, 여유 1 분) 뒤 창을 끝내고 `timeout`을 보낸다.
+- 런타임 확인은 `CoreWebView2Environment.GetAvailableBrowserVersionString()`으로 한다. 없으면 Microsoft 공식 주소(`go.microsoft.com/fwlink/p/?LinkId=2124703`)에서 Evergreen 부트스트래퍼를 임시 폴더로 받아, Authenticode 서명이 유효하고 서명자가 Microsoft Corporation일 때만 Microsoft 안내대로 `/silent /install`로 실행하고(관리자 권한이 아니면 사용자 단위 설치) 최대 10 분 기다린 뒤 다시 확인한다.
+- 같은 확장의 로그인을 끝난 직후 다시 열면 이전 브라우저 프로세스가 쿠키 폴더를 놓을 때까지 약 5 초 더 걸렸다(실측 3 회). 그 사이 초기화가 실패하면 1 초 뒤 최대 두 번 다시 만든다.
+
+WebView2를 고른 이유와 대안은 다음과 같다.
+
+- 확장 API가 요구하는 것은 앱과 분리된 쿠키를 가진 전체 웹 보기와 콜백 주소 감지다(`Actions.kt`의 `WEBVIEW_AUTH`). 기본 브라우저로 열면 사용자 지정 스킴 콜백과 리디렉션 중간 주소를 받을 수 없고, 쿠키가 사용자 브라우저와 섞인다.
+- Edge 브라우저는 EEA에서 공식적으로 제거할 수 있으므로 Edge 실행 파일에 기대지 않는다. Evergreen WebView2 Runtime은 Windows 11에 포함되고 Windows 10 대부분에도 설치되어 있다(Microsoft 배포 문서). 없는 PC를 위해 약 1.9 MB 부트스트래퍼만 넣는다.
+- Fixed Version 런타임(현재 212.2 MB 설치 파일)은 업데이트 설치 파일 한도(250 MB)에 걸리므로 넣지 않았다. Spotify의 내장 Chromium은 Spotify 프로세스 안이라 확장별 쿠키 분리와 주소 가로채기를 할 수 없어 쓰지 않았다. 둘 다 시도하지 않았다.
+- 창은 실행기(Java) 안이 아니라 별도 PowerShell 프로세스다. Java에서 WebView2를 쓰려면 네이티브 연결 라이브러리를 새로 넣어야 하고, Windows PowerShell 5.1과 .NET Framework 4.x는 모든 Windows 10, 11에 있어 SDK의 .NET Framework 어셈블리를 그대로 쓸 수 있다. 이 프로세스는 로그인 중에만 있다.
+- 설치본 증가: SDK 어셈블리 2 개와 로더 2 개(x64 194,912 바이트, arm64 180,104 바이트), 고지 2 개로 압축 전 약 3.0 MB다. 압축한 Setup.exe의 실제 증가량은 아래 "미확인과 위험"에 적는다.
+
 ### 재생
 
 - 곡이 바뀌면 Spotify 안의 스크립트가 도우미에 그 곡의 음원을 묻는다. 도우미는 실행기에 묻고, 실행기는 켜진 오디오 소스를 순서대로 묻는다(곡당 15 초 안).
 - 음원이 있으면 Spotify를 일시정지하고, 도우미의 미디어 중계 주소를 `<audio>`로 재생한다. 중계는 확장이 준 헤더를 붙이고, Range 요청과 탐색을 넘기고, 주소가 401, 403, 404, 410으로 거절되면 실행기에 한 번 다시 묻는다. 리디렉션은 안드로이드의 ExtensionMediaHttp처럼 다룬다. 최대 5 번까지 따라가고, https에서 http로 내려가는 것과 이 컴퓨터나 사설망 주소(루프백, 사설, 링크 로컬, 예약 주소)로 가는 것은 따라가지 않는다. 호스트나 포트가 바뀌면 확장의 헤더를 빼고 보낸다. 확장 헤더의 Accept-Encoding은 넘기지 않는다(중계가 Content-Encoding을 넘기지 않으므로). 첫 주소는 엔진이 확장의 허용 호스트로 검사한 것이다. 이름 해석과 실제 연결 사이에 주소가 바뀌는 경우(DNS rebinding)는 막지 않는다.
 - 재생바, 탐색, 이전과 다음, 음량, 가사 싱크는 지금의 YouTube 직접 재생 경로(`youtube-links.js`의 `new Audio()`와 Spotify 정지 유지, ivLyrics의 외부 재생 시간)를 확장해 연결한다. 가사는 원래 Spotify 곡 ID를 그대로 쓰므로 시간 출처만 바꾼다.
-- 1 단계에서는 일반 FLAC, Opus, MP3 주소를 재생한다. DASH-FLAC(MediaSource)은 2 단계로 미룬다. AAC와 DRM 음원은 재생하지 않는다.
+- 일반 FLAC, Opus, MP3, Vorbis 주소는 `<audio>`로, DASH 매니페스트(fragmented MP4 안의 FLAC 또는 Opus)는 같은 `<audio>`에 붙인 MediaSource로 재생한다(아래 "DASH 재생"). AAC와 DRM 음원은 재생하지 않는다.
+
+### DASH 재생
+
+Tidal 계열 소스(Mornye, FLAC Bridge)는 음원을 주소 대신 MPEG-DASH 매니페스트(base64 MPD)로 준다. 엔진 계약(`Hooks.kt`의 `AudioStream`)은 "FLAC in fragmented MP4, 세그먼트를 순서대로, 탐색 가능하게 재생"이다. PC는 다음처럼 나눠 재생한다.
+
+| 단계 | 맡는 곳 | 하는 일 |
+|---|---|---|
+| 받기 | 도우미(`extension_host.py`) | 실행기 요청에 `accept.manifest: true`를 넣는다. 실행기는 매니페스트를 받은 그대로 `stream.manifest`로 돌려준다 |
+| 해석 | 도우미 `dash_plan` | MPD를 표준 라이브러리 XML 해석기로 읽어 세그먼트 계획을 만든다. 페이지에는 계획과 도우미 주소 하나만 주고, 매니페스트, 세그먼트 주소, 확장 헤더는 넘기지 않는다 |
+| 중계 | 도우미 `open_media`, `bridge.py` `/ext/media/<id>/init`, `/ext/media/<id>/<번호>` | 일반 주소와 같은 중계를 쓴다. 확장 헤더, Range 전달, 리디렉션 규칙(같은 호스트에만 헤더, https에서 http로 내려가지 않음, 사설 주소 거부), 20 초 제한이 같다 |
+| 재생 | 페이지(`extension-player.js`) | MediaSource와 SourceBuffer(sequence 모드)에 초기화 세그먼트, 이어서 세그먼트를 순서대로 붙인다 |
+
+도우미가 페이지에 주는 답은 일반 답의 `stream`에서 `url`, `headers`, `manifest`를 빼고 다음을 더한 것이다.
+
+```json
+{"media": "/ext/media/<id>", "dash": {"mime": "audio/mp4; codecs=\"flac\"", "durationMs": 251573, "segments": [{"t": 0, "d": 3.9938}]}}
+```
+
+`segments`의 `t`(시작)와 `d`(길이)는 초 단위이며 첫 세그먼트를 0으로 둔다. 페이지는 `<media>/init`과 `<media>/<0부터 센 번호>`를 요청한다. 계획이 형식에 맞지 않으면 페이지는 그 답을 재생하지 않는다(`Model.dashPlan`).
+
+도우미가 받는 MPD와 거절하는 MPD는 다음과 같다. 안드로이드의 `DashLive.parse`는 SegmentTemplate과 SegmentTimeline, `$Number$`, 절대 주소만 다루고, 실제 두 확장의 답도 이 형태였다(아래 "실측 사실"). 도우미는 같은 형태에 표준이 정한 상속과 표기 몇 가지를 더 받는다.
+
+| 구분 | 내용 |
+|---|---|
+| 받음 | 정적(`type="static"`) MPD 하나의 Period, `audio/mp4`의 `flac` 또는 `opus` Representation(여럿이면 bandwidth가 가장 큰 것), SegmentTemplate과 SegmentTimeline(`S@t`, `S@d`, `S@r`, 마지막 `S`의 `r="-1"`) 또는 고정 `duration`, `$Number$`, `$Time$`, `$RepresentationID$`, `$Bandwidth$`, `%0Nd` 자릿수, `$$`, MPD, Period, AdaptationSet, Representation 단계의 BaseURL 상대 주소 결합, 위 단계에서 아래 단계로 이어지는 SegmentTemplate 속성 |
+| 거절 | DOCTYPE, ENTITY, CDATA가 든 문서(엔티티 확장을 원천 차단), 1 MB 초과, 동적(live) MPD, Period 2 개 이상, SegmentList와 SegmentBase, AAC 등 다른 코덱, 모르는 `$` 식별자, 세그먼트 5,000 개 초과, BaseURL 결합 뒤 http(s)가 아니거나 4,096 자를 넘는 주소, 호스트 5 개 이상, 도우미의 호스트 검사(`public_host`, 모든 해석 주소가 공인 주소)를 통과하지 못한 호스트 |
+
+거절한 답은 페이지에 `{found: false, reason: "not-playable"}`로 가고 Spotify가 그 곡을 재생한다. 도우미는 거절 사유를 `/v1/attempts/note`에 `DASH manifest not played: <사유>`로 남겨 "이 소스를 선택한 이유"에서 보이게 한다.
+
+페이지의 재생 규칙은 다음과 같다.
+
+- 재생 위치에서 약 30 초 앞까지 붙인다(`POLICY.dashAheadSec`). 재생 중 `timeupdate`, 탐색의 `seeking`, 붙이기를 마친 `updateend`마다 다음에 붙일 세그먼트를 정한다(`Model.dashNext`). 붙여 둔 구간 안이면 그 구간 끝 다음 세그먼트를, 밖이면 새 위치를 담은 세그먼트를 고른다. 받는 중인 세그먼트가 필요 없어지면 그 요청을 취소한다.
+- 바로 앞 세그먼트에 이어지지 않는 세그먼트(곡 중간에서 시작, 탐색)는 `timestampOffset`을 계획의 시작 시간으로 두고 붙인다. 이어지는 세그먼트는 sequence 모드가 앞 세그먼트 끝에 잇는다. 세그먼트 안의 시간값(`tfdt`)이나 `presentationTimeOffset`에 기대지 않는다.
+- 마지막 세그먼트 끝까지 붙으면 `endOfStream()`을 부르고, 그 뒤의 `ended`는 일반 주소와 같이 다음 곡이나 한 곡 반복으로 이어진다.
+- 세그먼트가 401, 403, 404, 410이면 일반 주소의 거절과 같이 `/ext/audio/again`에 한 번 묻고 같은 위치에서 새 답으로 잇는다. 그 밖의 실패(네트워크, 15 초 제한, 5xx)는 1 초 뒤 그 세그먼트를 한 번 더 받고, 다시 실패하면 Spotify가 같은 위치에서 재생한다. 미디어 요소의 오류(해독 등)는 일반 주소와 같이 다시 묻기부터 한다.
+- Chromium의 오디오 버퍼가 차서 `QuotaExceededError`가 나면 재생 위치 10 초 전까지의 구간을 지우고, 지울 것이 없으면 2 초 뒤 다시 붙인다. 받은 세그먼트는 버리지 않고 들고 있다가 붙인다.
+- 맞춘 전환, 재생바, 가사 시간, 음량, 혼합 재생목록 계약, 음질 줄은 같은 `<audio>`를 쓰므로 일반 주소와 같다. 감지한 정보는 범위 확인 대신 받은 세그먼트의 크기와 길이로 비트레이트를 셈한다(예: `audio/mp4 · 4:11 · 1035 kbit/s`).
+- 곡을 바꾸거나 재생기를 정리할 때 MediaSource의 객체 주소를 해제하고 받는 중인 요청을 취소한다. 객체 주소는 `sourceopen`에서도 해제한다.
+- `MediaSource.isTypeSupported`가 그 형식을 받지 않으면 그 곡은 Spotify가 재생하고 사유를 기록에 남긴다.
 
 ### 페이지의 재생 전환 규칙
 
@@ -129,7 +217,7 @@
 | `POST /v1/extensions/{id}/remove` | 제거 |
 | `POST /v1/extensions/{id}/update` | 업데이트 확인과 적용(권한이 늘면 다시 동의를 받는 `pending`을 돌려준다) |
 | `GET /v1/order`, `POST /v1/order` `{order}` | 오디오 소스 순서. `"spotify"`도 한 자리로 들어간다 |
-| `POST /v1/audio` `{track, ahead, accept}` | 순서대로 오디오 소스를 묻는다. `accept`는 PC가 재생할 수 있는 형식(`flac`, `opus`, `mp3`, `vorbis`)과 DASH 가능 여부다. 받을 수 없는 답(AAC, DASH 미지원 단계의 manifest, 변환이 필요한 transform)은 다음 소스로 넘기고 기록에 남긴다. 결과: `{found, attempt, extension, name, stream:{url, headers, mimeType, codec, bitDepth, sampleRate, quality, expiresAt}}` 또는 `{found:false, attempt, reason}` |
+| `POST /v1/audio` `{track, ahead, accept}` | 순서대로 오디오 소스를 묻는다. `accept`는 PC가 재생할 수 있는 형식(`flac`, `opus`, `mp3`, `vorbis`)과 DASH 가능 여부(`manifest`)다. 도우미는 `manifest: true`를 보낸다. 받을 수 없는 답(AAC, `manifest: false`일 때의 manifest, 변환이 필요한 transform)은 다음 소스로 넘기고 기록에 남긴다. 결과: `{found, attempt, extension, name, stream:{url, headers, mimeType, codec, bitDepth, sampleRate, quality, expiresAt, manifest?}}` 또는 `{found:false, attempt, reason}`. DASH 답은 `url`이 빈 문자열이고 `manifest`에 확장이 준 base64 MPD가 그대로 온다 |
 | `POST /v1/audio/pick` `{track, source}` | 소스 선택기에서 고른 소스(또는 `"spotify"`)만 묻고, 실행기가 끝날 때까지 다음 곡에도 그 소스를 먼저 쓴다 |
 | `POST /v1/audio/again` `{track}` | 주소가 401, 403, 404, 410으로 거절됐을 때 고른 소스에 한 번 다시 묻는다 |
 | `POST /v1/attempts/note` `{trackId, open, detected, fallback, error}` | 재생기가 주소를 연 결과와 감지한 형식을 기록에 더한다 |
@@ -144,7 +232,7 @@ Myspoti의 차단 목록(ExtensionUpdates.blocked)과 권한 검사, 요청 제�
 
 도우미는 페이지의 `/ext/...` 요청을 위 경로로만 넘긴다(`extension_host.py`의 `FORWARD`). 쿼리는 `attempts/latest`의 `track=`, `store`의 `force=1`, `store/downloads`의 `repo=<owner/name>`만 넘기고 나머지는 404로 막는다. 스토어 읽기와 스토어 설치는 실행기 응답을 120 초까지 기다리고, 다른 요청은 25 초다.
 
-구현(안드로이드 저장소 `base/extensions-pc`, 2026-11-02)은 안드로이드 동작을 그대로 따르며 위 표와 다른 점은 다음과 같다. `/v1/audio/again`은 안드로이드의 `ExtensionAudio`처럼 보관한 답을 버리고 순서 전체에 다시 묻는다. 모든 소스에 동시에 묻고 순서상 첫 답을 고르며, 나머지는 취소한다. 실행기는 시작할 때와 6 시간마다 Myspoti 공식 저장소의 차단 목록(`blocked.json`)을 받고, 저장소에서 설치한 확장의 업데이트를 확인한다. 권한이 늘지 않는 업데이트는 안드로이드처럼 24 시간 뒤 적용한다. 실행기는 자신을 띄운 도우미가 끝나면 함께 끝난다(`ProcessHandle.parent().onExit()`). 화면이 필요한 기능(확인 창, 로그인 페이지, 웹 페이지)과 `myspoti.spotify`, 재생 제어, 기기 증명, 가사와 다운로드 훅은 아직 PC에서 지원하지 않는다. ISRC는 Spotify 카탈로그를 조회하지 않고 같은 곡의 이전 요청 값만 쓴다.
+구현(안드로이드 저장소 `base/extensions-pc`, 2026-11-02)은 안드로이드 동작을 그대로 따르며 위 표와 다른 점은 다음과 같다. `/v1/audio/again`은 안드로이드의 `ExtensionAudio`처럼 보관한 답을 버리고 순서 전체에 다시 묻는다. 모든 소스에 동시에 묻고 순서상 첫 답을 고르며, 나머지는 취소한다. 실행기는 시작할 때와 6 시간마다 Myspoti 공식 저장소의 차단 목록(`blocked.json`)을 받고, 저장소에서 설치한 확장의 업데이트를 확인한다. 권한이 늘지 않는 업데이트는 안드로이드처럼 24 시간 뒤 적용한다. 실행기는 자신을 띄운 도우미가 끝나면 함께 끝난다(`ProcessHandle.parent().onExit()`). 로그인 페이지(`myspoti.auth.open`)는 아래 "확장 로그인 창"으로 연다. 그 밖에 화면이 필요한 기능(확인 창, 확장의 웹 페이지)과 `myspoti.spotify`, 재생 제어, 기기 증명, 가사와 다운로드 훅은 아직 PC에서 지원하지 않는다. ISRC는 Spotify 카탈로그를 조회하지 않고 같은 곡의 이전 요청 값만 쓴다.
 
 ## 구현 순서
 
@@ -196,12 +284,23 @@ Myspoti의 차단 목록(ExtensionUpdates.blocked)과 권한 검사, 요청 제�
 ## 미확인과 위험
 
 - 스토어 화면은 가짜 Spotify DOM(linkedom)으로만 검사했다. 실제 Spotify에서 확인하지 않은 것: 색인이 준 아이콘 주소를 Spotify 페이지가 불러오는지(못 불러오면 아이콘을 뺀다), 홈페이지와 저장소 링크가 외부 브라우저로 열리는지, 긴 목록의 배치.
-- components.json의 `extensions_pc`는 안드로이드 커밋 23d7800의 GitHub 소스 압축과, 그 커밋으로 빌드해 PC 0.7.12 릴리스에 첨부한 jar를 가리킨다. 안드로이드 한글판 앱은 시험판 릴리스도 업데이트로 받으므로, APK 없는 jar만의 안드로이드 릴리스는 만들지 않는다. 이 첨부 파일을 지우면 다음 빌드가 jar를 받지 못한다.
+- components.json의 `extensions_pc`는 안드로이드 커밋 ca84b1f(2.3.0-hangul.3)의 GitHub 소스 압축과, 그 커밋으로 빌드해 PC 0.8.0 릴리스에 첨부한 jar를 가리킨다. 안드로이드 한글판 앱은 시험판 릴리스도 업데이트로 받으므로, APK 없는 jar만의 안드로이드 릴리스는 만들지 않는다. 이 첨부 파일을 지우면 다음 빌드가 jar를 받지 못한다.
 - 24-bit 음원의 출력 경로: Windows 공유 믹서를 거치므로 비트 그대로의 출력은 아니다. 실제 FLAC 재생은 위 시험에서 확인했지만, 소리를 직접 듣지는 않았다(집에 사람이 없는 상태에서 음량 5%).
 - 시험하는 동안 Spotify 음량을 5%로 낮췄고 되돌리지 않았다.
+- 확장 로그인 창(2026-11-02 이 PC, Windows 11, WebView2 Runtime 156.0.4314.58): 루프백 시험 페이지로 https 리디렉션, 사용자 지정 스킴, 폼 POST, 하위 프레임, `window.open`, 연결 실패, 콜백과 앞부분만 같은 주소의 무시, hidden에서 보이는 창으로의 전환(페이지 요청 1 회, 페이지 타이머 유지), 180 초 대신 짧게 준 시간 제한, 창 닫기, 표준 입력 닫힘을 확인했다. 실행기 jar와 실제 창을 이은 경로는 시작 주소가 곧 콜백인 hidden 페이지로 확인했다(약 2 초). 런타임이 없는 경로는 런타임 위치 환경 변수를 빈 폴더로 돌리고 부트스트래퍼 자리에 다른 실행 파일을 두어 `webview2-missing`까지만 확인했고, 실제 부트스트래퍼 설치는 하지 않았다. 런타임이 없는 Windows 10, ARM64 Windows(arm64 로더 선택), 고해상도 배율에서의 창 크기와 선명도, Mornye와 FLAC Bridge의 실제 연결은 확인하지 않았다.
+- 실행기를 띄운 Java가 콘솔 없이 실행될 때 로그인 창의 PowerShell에도 콘솔 창이 생기지 않는 것은 `GetConsoleWindow()`가 0을 돌려주는 것으로 확인했다. 백그라운드 프로세스가 띄운 창이 실제로 Spotify 위에 보이는지는 사용자가 다른 전체 화면 앱을 쓰는 중이라 화면으로 확인하지 않았다(창 위치와 제목은 UI Automation으로 확인).
+- 업데이트가 실행기를 멈출 때 열려 있던 로그인 창은 업데이트의 프로세스 정리 목록(`payload-transaction.ps1`)에 들어 있다. 이 설치본의 `webview-auth.ps1`을 실행하는 시스템 PowerShell을 멈추고 끝날 때까지 기다린 뒤 `extensions\webview2`의 DLL을 바꾼다(2026-11-02 Fable 검토 반영, 가짜 프로세스 목록으로만 검사). WebView2 브라우저 프로세스(msedgewebview2)는 SDK DLL을 쓰지 않으므로 목록에 넣지 않았다.
+- 로그인 창이 열린 채 확장을 제거하면 WebView2가 쿠키 폴더(`<id>\webview`)를 몇 초 더 잡고 있어 그 폴더가 남을 수 있다(추정, 재현하지 않음). 같은 확장을 다시 설치하면 이전 로그인이 남아 있을 수 있다.
+- 확장 관리와 재생 상세 상자 안의 클릭은 Spotify 모달이 닫히지 않도록 문서 수준으로 전파하지 않는다. 그래서 상자 안을 눌러도 열려 있던 Spotify 메뉴가 닫히지 않을 수 있다(추정).
+- DASH: 붙인 구간 끝이 세그먼트 중간을 넘었으면 그 세그먼트는 들어간 것으로 보고 다음 세그먼트를 받는다. MPD의 길이보다 짧게 들어간 세그먼트를 같은 자리에 끝없이 다시 붙이던 경우를 막는다(2026-11-02 Fable 검토 반영, 모델 테스트로만 확인).
+- WebView2 부트스트래퍼는 사용권 2(b)항(재배포자에게 최종 사용자 동의 조건과 Microsoft 면책을 요구)을 피하려고 동봉하지 않고 필요할 때 Microsoft에서 받는다(2026-11-02 결정). 그래서 런타임이 없는 오프라인 PC에서는 로그인 창을 쓸 수 없다.
 - 설치본 증가량: 시험 빌드(2026-11-02)의 Setup.exe가 212,139,684 바이트로, 배포 중인 0.7.11(166,859,339 바이트)보다 45.3 MB 컸다. 런타임 48 MB, jar 8 MB, 실행기 소스 압축 4.7 MB를 압축한 결과다.
+- 로그인 창이 더하는 크기: 새 파일 8 개(`webview-auth.ps1`, `extensions\webview2`의 5 개, 고지 2 개)는 압축 전 3,024,256 바이트다. 설치본과 같은 NSIS 3.13 zlib로 이 파일만 담은 시험 패키지를 만들어 빈 패키지와 비교하면 2,133,754 바이트(약 2.1 MB) 늘었다(2026-11-02). 전체 Setup.exe와 Update.exe는 다시 빌드하지 않았다.
 - Spotify와 Spicetify 업데이트로 재생기 API가 바뀔 수 있다.
 - Myspoti 확장 API가 원본에서 바뀌면 실행기 jar를 다시 빌드해야 한다.
 - 곡 전환 직후 Spotify 음원이 잠깐 들릴 수 있다.
 - 페이지 쪽 전환은 가짜 Spotify와 가짜 `<audio>`로만 검사했다. 실제 Spotify에서 확인하지 않은 것: 다음 곡으로 넘길 때 일시정지된 엔진이 재생을 시작하는지, 맞춘 전환의 실제 끊김, Spotify의 루프백 미디어 요청 허용, 재생바와 음질 줄의 DOM 위치, 미디어 키와 Connect 명령의 처리.
+- DASH 재생은 가짜 MediaSource와 가짜 SourceBuffer로만 검사했다(붙이는 순서, 탐색, 버퍼 가득 참, 끝, 거절 뒤 다시 묻기, 맞춘 전환). 실제 Spotify에서 확인하지 않은 것: 실제 세그먼트를 붙였을 때 소리가 나는지, sequence 모드와 `timestampOffset`으로 이은 세그먼트 경계의 끊김, 탐색 뒤 재생 재개, `endOfStream()` 뒤의 `ended`, 곡이 바뀔 때 MediaSource 정리, 페이지에서 도우미로 가는 세그먼트 요청의 CORS. 실제 MPD의 세그먼트 수와 길이, 도우미의 해석과 중계까지는 확인했다(위 "실측 사실").
+- Chromium의 오디오 SourceBuffer 한도는 약 12 MB로 알려져 있으나 Spotify의 Chromium에서 재지 않았다. 측정한 16-bit 44.1 kHz(약 1 Mbit/s)의 30 초는 약 3.8 MB라 닿지 않는다. 24-bit 96 kHz(약 4~5 Mbit/s로 추정)면 30 초가 한도를 넘을 수 있고, 그때는 `QuotaExceededError` 처리로 앞서 받는 양이 줄어든다.
+- 도우미의 MPD 해석은 실측한 형태와 그 표준 변형을 단위 검사로만 확인했다. `$Time$`, BaseURL 결합, 고정 `duration`, `r="-1"`을 쓰는 실제 소스는 보지 못했다.
 - 확장 음원을 재생하는 동안 Spotify 엔진은 일시정지 상태이므로 Spotify의 재생 기록, 다른 기기의 재생 표시, Windows 미디어 표시에는 일시정지로 보일 수 있다. Spotify의 음량 평준화는 확장 음원에 적용되지 않는다.

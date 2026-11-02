@@ -374,7 +374,7 @@ test('a changed recording rejects an extraction response even when the network i
 test('the saved audio choice starts the next YouTube queue item without loading the video player', async () => {
     const h = modeHarness({ context: { active: false, kind: null, preferredMode: 'audio', lyricAbort: null,
         queueSource: null, lyrics: [], lyricsResult: null, lyricBox: { textContent: '' },
-        Spicetify: { Platform: {}, Player: {} }, originals: { pause() {} }, remember() {}, markPlaying() {} } });
+        Spicetify: { Platform: {}, Player: {} }, originals: { pause() {} }, remember() {}, markPlaying() {}, bindPlayer() {}, extensionPlayer: null } });
     vm.runInContext(functionSource('playCurrent'), h.context);
     h.context.playCurrent(); await h.settle();
     assert.equal(h.context.kind, 'youtube'); assert.equal(h.context.active, true);
@@ -493,7 +493,7 @@ test('audio mode follows Spotify loudness for the slider and the official player
 test('a YouTube item starts at Spotify volume and slider changes are written back for the next Spotify song', async () => {
     const written = [];
     const h = modeHarness({ context: { active: false, kind: null, preferredMode: 'audio', lyricAbort: null,
-        queueSource: null, lyrics: [], lyricsResult: null, lyricBox: { textContent: '' }, remember() {}, markPlaying() {},
+        queueSource: null, lyrics: [], lyricsResult: null, lyricBox: { textContent: '' }, remember() {}, markPlaying() {}, bindPlayer() {}, extensionPlayer: null,
         state: { seconds: 0, duration: 194, volume: 25, muted: false },
         Spicetify: { Platform: {}, Player: { getVolume: () => 0.4 } },
         originals: { pause() {}, setVolume(value) { written.push(value); } } } });

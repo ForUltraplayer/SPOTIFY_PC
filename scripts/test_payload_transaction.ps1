@@ -447,14 +447,16 @@ function Get-CimInstance {
         [PSCustomObject]@{ProcessId=107;ExecutablePath=(Join-Path $root 'Spotify\Spotify.exe');CommandLine='spotify'},
         [PSCustomObject]@{ProcessId=108;ExecutablePath=(Join-Path $root 'runtime\python.exe');CommandLine=('python.exe -c "print('+(Join-Path $root 'bridge.py')+')"')},
         [PSCustomObject]@{ProcessId=109;ExecutablePath=(Join-Path $root 'ext-runtime\bin\java.exe');CommandLine='java -jar extensions-pc.jar'},
-        [PSCustomObject]@{ProcessId=110;ExecutablePath='C:\external\java.exe';CommandLine='another java'}
+        [PSCustomObject]@{ProcessId=110;ExecutablePath='C:\external\java.exe';CommandLine='another java'},
+        [PSCustomObject]@{ProcessId=111;ExecutablePath=(Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe');CommandLine=('powershell.exe -NoProfile -STA -File "'+(Join-Path $root 'webview-auth.ps1')+'"')},
+        [PSCustomObject]@{ProcessId=112;ExecutablePath=(Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe');CommandLine='powershell.exe -File "C:\another\webview-auth.ps1"'}
     )
 }
 function Stop-Process { param($Id,$ErrorAction) $script:stopped += $Id }
 function Wait-Process { param($Id,$Timeout,$ErrorAction) }
 function Get-Process { param($Id,$ErrorAction) }
 Stop-PayloadProcesses $root
-Assert (($script:stopped -join ',') -eq '101,102,105,107,109') 'Owned pythonw, Python, Spotify, overlay and extension runner processes were not stopped precisely.'
+Assert (($script:stopped -join ',') -eq '101,102,105,107,109,111') 'Owned pythonw, Python, Spotify, overlay, extension runner and sign-in window processes were not stopped precisely.'
 # Stopping Spotify's main process ends its other Spotify.exe processes, which are still in the list taken before.
 $spotify=Join-Path $root 'Spotify\Spotify.exe'
 function Get-CimInstance { param($ClassName,$ErrorAction) @(201,202,203 | ForEach-Object { [PSCustomObject]@{ProcessId=$_;ExecutablePath=$spotify;CommandLine='spotify'} }) }

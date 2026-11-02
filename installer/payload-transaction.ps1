@@ -75,6 +75,10 @@ function Stop-PayloadProcesses([string]$Root) {
     $bridge=Join-Path $Root 'bridge.py'
     # The extension runner leaves with the helper, but its runtime files must not be in use while they are replaced.
     $runner=Join-Path $Root 'ext-runtime\bin\java.exe'
+    # An open extension sign-in window (PowerShell running this installation's webview-auth.ps1) has the WebView2 SDK
+    # DLLs under extensions\webview2 loaded; stopping the runner by force does not close it in time.
+    $signIn=Join-Path $Root 'webview-auth.ps1'
+    $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $targets=@(foreach ($process in @(Get-CimInstance Win32_Process -ErrorAction Stop)) {
         $owned=$process.ExecutablePath -and $process.ExecutablePath -in @($spotify,$overlay,$runner)
         $helper=$false
@@ -86,7 +90,8 @@ function Stop-PayloadProcesses([string]$Root) {
             while ($scriptIndex -lt $arguments.Count -and $arguments[$scriptIndex] -cin @('-u','-B','-I')) { $scriptIndex++ }
             $helper=$scriptIndex -eq $arguments.Count-1 -and [string]::Equals($arguments[$scriptIndex],$bridge,[StringComparison]::OrdinalIgnoreCase)
         }
-        if ($owned -or $helper) { $process.ProcessId }
+        $window=$process.ExecutablePath -and [string]::Equals($process.ExecutablePath,$powershell,[StringComparison]::OrdinalIgnoreCase) -and $process.CommandLine -and $process.CommandLine.IndexOf($signIn,[StringComparison]::OrdinalIgnoreCase) -ge 0
+        if ($owned -or $helper -or $window) { $process.ProcessId }
     })
     foreach ($id in $targets) {
         # Stopping Spotify's main process also ends its other Spotify.exe processes listed here. Those are gone, or still

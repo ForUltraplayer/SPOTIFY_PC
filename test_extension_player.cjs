@@ -58,6 +58,24 @@ test('a song is asked only on this computer, for a catalog track, outside link p
     assert.equal(Model.shouldAsk({ uri, state: null }), 'off');
 });
 
+test('why a song stays with Spotify: the most telling reason of the attempt, in words on the line', () => {
+    const ask = (extension, outcome, skippedReason, detail) => ({ extension, outcome, ms: 1, ...(skippedReason ? { skippedReason } : {}), ...(detail ? { detail } : {}) });
+    const attempt = asked => ({ asked, chosen: null, fallback: 'Spotify: no extension had it' });
+    assert.equal(Model.missReason(attempt([ask('a', 'not-found'), ask('b', 'skipped', 'not playable here: its audio is encrypted (transform), which the PC does not decrypt')])), 'miss_encrypted');
+    assert.equal(Model.missReason(attempt([ask('a', 'not-found'), ask('b', 'rate-limited')])), 'miss_limited');
+    assert.equal(Model.missReason(attempt([ask('a', 'skipped', 'inactive: Not connected: connect Mornye in Settings')])), 'miss_connect');
+    assert.equal(Model.missReason(attempt([ask('a', 'network'), ask('b', 'server-down')])), 'miss_down');
+    assert.equal(Model.missReason(attempt([ask('a', 'skipped', 'not a running audio source')])), 'miss_starting');
+    assert.equal(Model.missReason(attempt([ask('a', 'not-found'), ask('b', 'not-found')])), 'miss_none');
+    assert.equal(Model.missReason({ asked: [], chosen: null, fallback: 'Spotify: no extension had it under a minute ago, not asked again' }), 'miss_recent');
+    assert.equal(Model.missReason({ asked: [ask('a', 'found')], chosen: 'a' }), null);
+    assert.equal(Model.sourceLine('ko', { miss: 'miss_encrypted' }), 'Spotify · 암호화된 음원만 있음(PC에서 재생 안 함)');
+    assert.equal(Model.sourceLine('en', { miss: 'miss_none' }), 'Spotify · not in the extensions');
+    assert.equal(Model.sourceLine('en', {}), 'Spotify');
+    assert.equal(Model.note('ko', 'not playable here: its audio is encrypted (transform), which the PC does not decrypt'), '암호화된 음원이라 PC에서 재생하지 않음');
+    assert.equal(Model.note('ko', 'not playable here: aac is not one of flac, mp3'), 'PC에서 재생하지 않는 형식: aac is not one of flac, mp3');
+});
+
 test('the switch policy: known answers switch at once, late ones leave the song to Spotify', () => {
     const { switchWindowMs } = Model.POLICY;
     assert.equal(Model.onAnswer({ found: false, sinceSongMs: 0, playing: true }), 'spotify');
@@ -95,6 +113,21 @@ test('refusals, the previous button rule, volume matching and fresh ahead answer
     assert.equal(Model.mediaPath(answer), '/ext/media/abcdefgh12');
     assert.equal(Model.mediaPath({ stream: { media: 'https://elsewhere.example/a' } }), null);
     assert.equal(Model.mediaPath({ stream: { media: '/ext/media/../../health' } }), null);
+});
+
+// metadata/4 track answers as Spotify sends them: protobuf, the ISRC in an ExternalId { type: "isrc", id }.
+const catalog = isrc => new Uint8Array([0x0a, 0x10, ...Buffer.from('Song name bytes.'), ...(isrc ? [0x5a, 0x14, 0x0a, 0x04, ...Buffer.from('isrc'), 0x12, 0x0c, ...Buffer.from(isrc)] : []), 0xff, 0x00]);
+test('the catalog id of a track and the ISRC in its metadata answer: found, missing or malformed', () => {
+    assert.equal(Model.trackHex('4uLU6hMCjMI75M1A2tKUQC'), '93bc414a606747b2b612491ef83d5a3e');
+    assert.equal(Model.trackHex('0000000000000000000000'), '0'.repeat(32));
+    for (const bad of ['', 'short', '4uLU6hMCjMI75M1A2tKUQ!', 'ZZZZZZZZZZZZZZZZZZZZZZ', null]) assert.equal(Model.trackHex(bad), null, String(bad));
+    assert.equal(Model.isrcFrom(catalog('USUM71703861').buffer), 'USUM71703861');
+    assert.equal(Model.isrcFrom(catalog('gbum71029604')), 'GBUM71029604', 'read as upper case');
+    assert.equal(Model.isrcFrom(catalog(null)), null, 'no ExternalId');
+    assert.equal(Model.isrcFrom(catalog('US-UM7170386')), null, 'not an ISRC');
+    assert.equal(Model.isrcFrom(catalog('USUM71703861').slice(0, 30)), null, 'cut short');
+    assert.equal(Model.isrcFrom(new Uint8Array([0x0a, 0x04, 0x69, 0x73, 0x72, 0x63, 0x12, 0x05, 0x41])), null, 'a wrong length');
+    for (const nothing of [null, undefined, new ArrayBuffer(0), 'text']) assert.equal(Model.isrcFrom(nothing), null);
 });
 
 test('the track sent to the runner comes from Spicetify\'s item or queue entry', () => {
@@ -242,7 +275,38 @@ const plain = value => JSON.parse(JSON.stringify(value));
 const flush = async (rounds = 8) => { for (let i = 0; i < rounds; i++) await new Promise(resolve => setImmediate(resolve)); };
 const item = (uri, name) => ({ uri, name, metadata: { title: name, artist_name: 'Artist', album_title: 'Album' }, duration: { milliseconds: 200000 } });
 
-function harness({ answers = {}, engine = {}, remote = false, linkBusy = false, again = missing, probeStatus = 206, routes = () => undefined } = {}) {
+// A MediaSource as Chromium's: sourceopen when the test opens it, one SourceBuffer whose appends the test completes
+// (done), buffered ranges the test sets, a full buffer (QuotaExceededError) when the test says so.
+class FakeSourceBuffer extends EventTarget {
+    constructor(mime, log) { super(); Object.assign(this, { mime, log, updating: false, mode: 'segments', offset: 0, ranges: [], appends: [], removed: [], full: false }); }
+    get timestampOffset() { return this.offset; }
+    set timestampOffset(value) { this.offset = value; this.log.push(['offset', value]); }
+    get buffered() { const r = this.ranges; return { length: r.length, start: i => r[i][0], end: i => r[i][1] }; }
+    appendBuffer(bytes) {
+        if (this.full) { const error = new Error('full'); error.name = 'QuotaExceededError'; throw error; }
+        this.updating = true; this.appends.push(Buffer.from(bytes).toString()); this.log.push(['append', Buffer.from(bytes).toString()]);
+    }
+    remove(start, end) { this.updating = true; this.removed.push([start, end]); }
+    done(range) {
+        if (range) this.ranges = [...this.ranges, range].sort((a, b) => a[0] - b[0]).reduce((all, r) => {
+            const last = all.at(-1); if (last && r[0] <= last[1] + 0.01) last[1] = Math.max(last[1], r[1]); else all.push([...r]); return all; }, []);
+        this.updating = false; this.dispatchEvent(new Event('updateend'));
+    }
+}
+function fakeMediaSource(supported) {
+    const sources = [], urls = { made: [], revoked: [] };
+    class MediaSource extends EventTarget {
+        constructor() { super(); Object.assign(this, { readyState: 'closed', duration: NaN, log: [], buffer: null, ended: 0 }); sources.push(this); }
+        static isTypeSupported(mime) { return supported(mime); }
+        addSourceBuffer(mime) { return this.buffer = new FakeSourceBuffer(mime, this.log); }
+        endOfStream() { this.readyState = 'ended'; this.ended++; }
+        open() { this.readyState = 'open'; this.dispatchEvent(new Event('sourceopen')); }
+    }
+    const URL = { createObjectURL: () => { const url = 'blob:dash-' + (urls.made.length + 1); urls.made.push(url); return url; }, revokeObjectURL: url => urls.revoked.push(url) };
+    return { MediaSource, URL, sources, urls };
+}
+
+function harness({ answers = {}, engine = {}, remote = false, linkBusy = false, again = missing, probeStatus = 206, routes = () => undefined, platform = {}, supported = () => true } = {}) {
     const { window } = parseHTML('<!doctype html><html><head></head><body><div data-testid="now-playing-bar"><div class="playback-bar">'
         + '<div data-testid="playback-position">0:00</div><div data-testid="progress-bar"></div><div data-testid="playback-duration">3:20</div></div>'
         + '<div class="right"><button data-testid="control-button-playpause"><svg></svg></button><div data-testid="volume-bar"></div></div></div></body></html>');
@@ -271,15 +335,20 @@ function harness({ answers = {}, engine = {}, remote = false, linkBusy = false, 
         addEventListener(name, fn) { (events[name] ||= []).push(fn); }, removeEventListener() {},
     };
     window.Spicetify = { Player, Locale: { getLocale: () => 'ko' }, showNotification() {},
-        Platform: { ConnectAPI: { state: { activeDevice: { isLocal: !remote } } } },
+        Platform: { ConnectAPI: { state: { activeDevice: { isLocal: !remote } } }, ...platform },
         Queue: { nextTracks: [{ contextTrack: item(B, 'Song B') }] },
         PopupModal: { display: value => { modals.push(value); window.document.body.append(value.content); }, hide() {} }, Menu: { Item: class { register() {} deregister() {} } } };
     window.confirm = () => true;
+    const media = fakeMediaSource(supported);
+    Object.defineProperty(window, 'MediaSource', { value: media.MediaSource, configurable: true });
+    Object.defineProperty(window, 'URL', { value: media.URL, configurable: true });
     window.fetch = async (url, init = {}) => {
         const route = url.replace('http://127.0.0.1:19643', ''), body = init.body ? JSON.parse(init.body) : null;
         requests.push({ route, method: init.method || 'GET', body, headers: init.headers });
-        const reply = (status, value, headers = {}) => ({ status, json: async () => value, headers: { get: name => headers[name] ?? null } });
-        const custom = routes(route, body);
+        const reply = (status, value, headers = {}) => ({ status, json: async () => value, headers: { get: name => headers[name] ?? null },
+            arrayBuffer: async () => value instanceof Uint8Array ? value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) : new ArrayBuffer(0) });
+        const custom = routes(route, body, init);
+        if (custom instanceof Promise) return custom.then(result => reply(...result));
         if (custom) return reply(...custom);
         if (route === '/ext/state') return reply(200, { available: true, installed: true, audio: true, running: true });
         if (route === '/ext/audio') return reply(200, answers[(body.ahead ? 'ahead:' : '') + body.track.uri] || missing);
@@ -295,6 +364,7 @@ function harness({ answers = {}, engine = {}, remote = false, linkBusy = false, 
     const runTimers = ms => { timers.filter(t => t.fn && (ms === undefined || t.ms === ms)).forEach(t => { const fn = t.fn; t.fn = null; fn(); }); };
     const changeSong = (uri, name) => { Player.data = { item: item(uri, name) }; (events.songchange || []).forEach(fn => fn()); };
     return { window, player, Player, state, calls, requests, clocks, modals, audio: () => audio, runTimers, changeSong, tick: () => intervals.forEach(fn => fn()),
+        sources: media.sources, urls: media.urls,
         notes: () => requests.filter(r => r.route === '/ext/attempts/note').map(r => r.body), cleanup: () => player.dispose() };
 }
 const found = (id, extra = {}) => ({ found: true, attempt: null, extension: 'x.flac', name: 'Source X', stream: { media: '/ext/media/' + id, mimeType: 'audio/flac',
@@ -387,6 +457,212 @@ test('a refused address asks the source again once, then Spotify plays on from t
     h.cleanup();
 });
 
+// A DASH answer as the helper gives it: 20 segments of 4 s (80 s), FLAC in MP4, and its one helper address.
+const DASH_MIME = 'audio/mp4; codecs="flac"';
+const dashPlanOf = (count = 20, d = 4) => ({ mime: DASH_MIME, durationMs: count * d * 1000, segments: Array.from({ length: count }, (_, i) => ({ t: i * d, d })) });
+const dashFound = id => found(id, { mimeType: 'audio/flac', bitDepth: 16, sampleRate: 44100, quality: 'FLAC · 16-bit · 44.1 kHz', durationMs: 80000, dash: dashPlanOf() });
+// Each part's bytes say which part it is; a segment is 1000 bytes, the init 100.
+const part = name => Buffer.from(name.padEnd(name === 'init' ? 100 : 1000, '.'));
+const dashRoutes = (statuses = {}) => route => {
+    const m = route.match(/^\/ext\/media\/([\w-]+)\/(init|\d+)$/);
+    if (!m) return undefined;
+    const status = typeof statuses[route] === 'function' ? statuses[route]() : statuses[route];
+    if (status instanceof Promise) return status;
+    return status ? [status, new Uint8Array(0)] : [200, new Uint8Array(part(m[2] === 'init' ? 'init' : 'seg' + m[2]))];
+};
+const parts = buffer => buffer.appends.map(text => text.replace(/\.+$/, ''));
+
+test('the DASH model: a plan the helper gives, the next segment from what is buffered, the end, and the bit rate from segment sizes', () => {
+    const plan = dashPlanOf();
+    assert.equal(Model.dashPlan({ dash: plan }), plan);
+    for (const bad of [{ ...plan, mime: 'audio/mp4; codecs="mp4a.40.2"' }, { ...plan, segments: [] }, { ...plan, durationMs: 0 },
+        { ...plan, segments: [{ t: 0, d: 0 }] }, { ...plan, segments: [{ t: -1, d: 4 }] }, null])
+        assert.equal(Model.dashPlan({ dash: bad }), null, JSON.stringify(bad));
+    assert.equal(Model.mediaPath({ stream: { media: '/ext/media/media-dash1', dash: { ...plan, mime: 'video/mp4' } } }), null, 'a plan that is not one is not played');
+    assert.equal(Model.mediaPath({ stream: { media: '/ext/media/media-dash1', dash: plan } }), '/ext/media/media-dash1');
+    const s = plan.segments;
+    assert.deepEqual(plain(Model.dashNext(s, [], 0)), { index: 0 });
+    assert.deepEqual(plain(Model.dashNext(s, [[0, 7.98]], 1)), { index: 2 }, 'a buffered end a frame short of its segment goes on with the next');
+    assert.deepEqual(plain(Model.dashNext(s, [[0, 8]], 1)), { index: 2 });
+    // A segment that went in shorter than the manifest says is not appended over itself again.
+    assert.deepEqual(plain(Model.dashNext(s, [[0, 7.5]], 1)), { index: 2 }, 'a buffered end past its segment\'s middle goes on with the next');
+    assert.deepEqual(plain(Model.dashNext(s, [[0, 5]], 1)), { index: 1 }, 'a buffered end early in a segment asks that segment');
+    assert.deepEqual(plain(Model.dashNext(s, [[60, 79.5]], 70)), { end: true }, 'a short last segment ends the stream');
+    assert.equal(Model.dashNext(s, [[0, 32]], 1), null, '30 s ahead is enough');
+    assert.deepEqual(plain(Model.dashNext(s, [[0, 32]], 50)), { index: 12 }, 'a seek outside the buffer starts from the segment holding it');
+    assert.deepEqual(plain(Model.dashNext(s, [[0, 32]], 31.9)), { index: 8 }, 'a seek inside the buffer goes on from its end');
+    assert.deepEqual(plain(Model.dashNext(s, [[60, 79.98]], 70)), { end: true });
+    assert.equal(Model.dashDetected(plan, 25000, 8), 'audio/mp4 · 1:20 · 25 kbit/s');
+});
+
+test('a DASH answer plays through a MediaSource: the init, then segments in order about 30 s ahead, a seek from the segment holding it, then the end', dom, async () => {
+    let releaseFourteen, abortedFourteen = null;
+    const routes = dashRoutes({ '/ext/media/media-dash1/14': () => new Promise(resolve => { releaseFourteen = () => resolve([200, new Uint8Array(part('seg14'))]); }) });
+    const h = harness({ answers: { [A]: dashFound('media-dash1') }, engine: { playing: false },
+        routes: (route, body, init) => { if (route.endsWith('/14')) abortedFourteen = init.signal; return routes(route); } });
+    await flush();
+    const audio = h.audio();
+    assert.equal(h.player.snapshot().mode, 'extension');
+    assert.equal(audio.src, 'blob:dash-1', 'the audio plays the MediaSource, never a source address');
+    const source = h.sources[0];
+    source.open();
+    const buffer = source.buffer;
+    assert.equal(buffer.mime, DASH_MIME); assert.equal(buffer.mode, 'sequence'); assert.equal(source.duration, 80);
+    assert.deepEqual(h.urls.revoked, ['blob:dash-1'], 'the object address is let go once the source is open');
+    await flush();
+    assert.deepEqual(parts(buffer), ['init']);
+    buffer.done();
+    for (let i = 0; i < 8; i++) { await flush(); buffer.done([i * 4, i * 4 + 4]); }
+    await flush();
+    assert.deepEqual(parts(buffer), ['init', ...Array.from({ length: 8 }, (_, i) => 'seg' + i)], 'appended in order up to 32 s');
+    assert.ok(!h.requests.some(r => r.route === '/ext/media/media-dash1/8'), 'nothing past 30 s ahead');
+    assert.ok(!source.log.some(([kind]) => kind === 'offset'), 'segments that follow each other keep their own times');
+    audio.duration = 80; audio.readyState = 4; audio.fire('canplay');
+    await flush();
+    const opened = h.notes().find(n => n.open?.ok);
+    assert.equal(opened.open.httpStatus, 200);
+    assert.equal(opened.detected, 'audio/mp4 · 1:20 · 2 kbit/s', 'the bit rate comes from the segments received');
+    assert.ok(!h.requests.some(r => r.route === '/ext/media/media-dash1' && r.headers?.Range), 'a DASH answer is not probed by range');
+    assert.equal(h.player.snapshot().line, 'Source X · FLAC · 16-bit · 44.1 kHz');
+
+    // A seek outside what is buffered: the segment holding the position, placed at its plan time.
+    audio.currentTime = 50; audio.fire('seeking');
+    await flush();
+    assert.equal(parts(buffer).at(-1), 'seg12');
+    assert.deepEqual(plain(source.log.filter(([kind]) => kind === 'offset')), [['offset', 48]]);
+    // Chromium's audio buffer is full: the played part goes, and the segment fetched is appended without asking it again.
+    buffer.full = true;
+    buffer.done([48, 52]);
+    await flush();
+    assert.deepEqual(buffer.removed, [[0, 40]]);
+    buffer.full = false; buffer.ranges = [[48, 52]]; buffer.done();
+    assert.equal(parts(buffer).at(-1), 'seg13');
+    assert.equal(h.requests.filter(r => r.route === '/ext/media/media-dash1/13').length, 1);
+    buffer.done([52, 56]);
+    await flush();
+    assert.ok(abortedFourteen, 'segment 15 is being fetched');
+    // A seek while a segment is fetched: that fetch is dropped for the segment the new position needs.
+    audio.currentTime = 70; audio.fire('seeking');
+    await flush();
+    assert.equal(abortedFourteen.aborted, true);
+    assert.equal(parts(buffer).at(-1), 'seg17');
+    releaseFourteen(); await flush();
+    assert.ok(!parts(buffer).includes('seg14'), 'the dropped fetch is not appended');
+    buffer.done([68, 72]);
+    // The last segment: the stream ends, and its end goes on to the next song.
+    audio.currentTime = 77; audio.fire('seeking');
+    await flush();
+    assert.equal(parts(buffer).at(-1), 'seg19');
+    buffer.done([76, 80]);
+    assert.equal(source.ended, 1);
+    assert.deepEqual(plain(h.player.snapshot().dash.buffered), [[48, 56], [68, 72], [76, 80]]);
+    audio.fire('ended');
+    assert.ok(h.calls.includes('engine-next'));
+    h.cleanup();
+    assert.equal(h.player.snapshot().dash, null, 'disposing closes the feed');
+});
+
+test('a DASH answer while Spotify plays is handed over in step like a plain one, from the segment holding Spotify\'s position', dom, async () => {
+    const h = harness({ answers: { [A]: dashFound('media-dash1') }, engine: { position: 9000 }, routes: dashRoutes() });
+    await flush();
+    const audio = h.audio();
+    assert.equal(h.player.snapshot().mode, 'pending'); assert.equal(audio.muted, true); assert.equal(audio.src, 'blob:dash-1');
+    h.sources[0].open();
+    const buffer = h.sources[0].buffer;
+    await flush(); buffer.done();
+    await flush();
+    assert.deepEqual(parts(buffer), ['init', 'seg2'], 'loaded ahead of Spotify (9.8 s) from its segment');
+    audio.duration = 80; audio.fire('loadedmetadata');
+    assert.equal(audio.currentTime, 9 + Model.POLICY.handoverLeadSec);
+    buffer.done([8, 12]);
+    h.state.position = 9800; audio.readyState = 4; audio.fire('canplay');
+    assert.equal(h.player.snapshot().mode, 'extension');
+    assert.ok(h.calls.includes('engine-pause')); assert.equal(audio.muted, false);
+    h.cleanup();
+});
+
+test('a refused DASH segment asks the source again from the same point; a segment that fails otherwise twice gives the song back to Spotify', dom, async () => {
+    const h = harness({ answers: { [A]: dashFound('media-dash1') }, engine: { playing: false }, again: dashFound('media-dash2'),
+        routes: dashRoutes({ '/ext/media/media-dash1/3': 403, '/ext/media/media-dash2/3': 500 }) });
+    await flush();
+    const audio = h.audio();
+    h.Player.play();
+    h.sources[0].open();
+    const first = h.sources[0].buffer;
+    await flush(); first.done();
+    for (let i = 0; i < 3; i++) { await flush(); first.done([i * 4, i * 4 + 4]); }
+    audio.currentTime = 9;
+    await flush();
+    assert.ok(h.requests.some(r => r.route === '/ext/audio/again'));
+    const refusedNote = h.notes().find(n => n.open && !n.open.ok);
+    assert.equal(refusedNote.open.httpStatus, 403); assert.equal(refusedNote.open.error, 'segment 4/20 HTTP 403');
+    assert.equal(audio.src, 'blob:dash-2');
+    assert.ok(h.urls.revoked.includes('blob:dash-1'));
+    h.sources[1].open();
+    const second = h.sources[1].buffer;
+    await flush(); second.done();
+    await flush();
+    assert.ok(h.requests.some(r => r.route === '/ext/media/media-dash2/2'), 'the new answer starts at the segment holding 9 s');
+    assert.deepEqual(plain(h.sources[1].log.filter(([kind]) => kind === 'offset')), [['offset', 8]]);
+    assert.ok(!h.requests.some(r => r.route.startsWith('/ext/media/media-dash1/') && Number(r.route.split('/').pop()) > 3), 'the old feed asks nothing more');
+    second.done([8, 12]);
+    await flush();
+    assert.equal(h.requests.filter(r => r.route === '/ext/media/media-dash2/3').length, 1);
+    assert.equal(h.player.snapshot().mode, 'extension', 'a server error is tried once more first');
+    audio.currentTime = 10;
+    h.runTimers(Model.POLICY.segmentRetryMs);
+    await flush();
+    assert.equal(h.requests.filter(r => r.route === '/ext/media/media-dash2/3').length, 2);
+    assert.equal(h.player.snapshot().mode, 'spotify');
+    assert.equal(h.requests.filter(r => r.route === '/ext/audio/again').length, 1, 'asked again only once');
+    assert.ok(h.calls.some(c => Array.isArray(c) && c[0] === 'engine-seek' && c[1] === 10000)); assert.equal(h.calls.at(-1), 'engine-play');
+    assert.equal(h.notes().at(-1).fallback, 'Spotify');
+    assert.equal(h.notes().find(n => n.open?.httpStatus === 500).open.error, 'segment 4/20 HTTP 500');
+    h.cleanup();
+});
+
+test('a DASH answer of a type this player does not take leaves the song to Spotify and says why', dom, async () => {
+    const h = harness({ answers: { [A]: dashFound('media-dash1') }, supported: () => false });
+    await flush();
+    assert.equal(h.player.snapshot().mode, 'spotify');
+    assert.equal(h.sources.length, 0);
+    assert.deepEqual(plain(h.notes().at(-1)), { trackId: '4uLU6hMCjMI75M1A2tKUQC', fallback: 'Spotify', error: 'this player does not play ' + DASH_MIME });
+    h.cleanup();
+});
+
+test('a song no extension can play shows why on the playbar line, and the next song clears it', dom, async () => {
+    const encrypted = { found: false, reason: 'not-found', attempt: { asked: [{ extension: 'x.flac', outcome: 'skipped', ms: 0,
+        skippedReason: 'not playable here: its audio is encrypted (transform), which the PC does not decrypt' }], chosen: null, fallback: 'Spotify: no extension had it' } };
+    const h = harness({ answers: { [A]: encrypted, [B]: found('media-next1') } });
+    try {
+        await flush();
+        assert.equal(h.player.snapshot().line, 'Spotify · 암호화된 음원만 있음(PC에서 재생 안 함)');
+        h.changeSong(B, 'Song B'); await flush();
+        assert.notEqual(h.player.snapshot().line?.startsWith('Spotify · '), true, 'the reason belongs to its song only');
+    } finally { h.cleanup(); }
+});
+
+test('"Search again" in playback details asks every source anew for the song and plays what it finds', dom, async () => {
+    let refreshed = null;
+    const h = harness({ routes: (route, body) => {
+        if (route === '/ext/audio/again') { refreshed = body; return [200, found('media-again1')]; }
+        if (route === '/ext/extensions') return [200, { extensions: [] }];
+        if (route === '/ext/session') return [200, { source: null, choices: ['x.flac', 'spotify'] }];
+        if (route.startsWith('/ext/attempts/latest')) return [200, { attempt: null }];
+    } });
+    try {
+        await flush();
+        assert.equal(h.player.snapshot().mode, 'spotify');
+        await h.player.openDetails(); await flush();
+        const box = h.modals.at(-1).content;
+        click(h.window, exact(box, '다시 찾기')); await flush();
+        assert.equal(refreshed?.refresh, true, 'the runner is told to forget its recent miss');
+        assert.equal(refreshed?.track?.uri, A);
+        h.runTimers(); await flush();
+        assert.ok(h.calls.some(c => Array.isArray(c) && c[0] === 'audio-src' && String(c[1]).includes('media-again1')), 'the source found plays');
+    } finally { h.cleanup(); }
+});
+
 test('no answer, another device or link playback leave Spotify alone', dom, async () => {
     const plain = harness();
     await flush();
@@ -453,6 +729,212 @@ test('a Player object Spicetify replaces after the page started is followed: its
         assert.ok(events.songchange?.length, 'its songchange is listened to');
         assert.ok(!String(old.next).includes('owning'), 'the old object gets its own controls back');
     } finally { h.cleanup(); }
+});
+
+const SPCLIENT = 'https://spclient.wg.spotify.com/metadata/4/track/';
+const signedIn = { AuthorizationAPI: { getState: () => ({ token: { accessToken: 'secret-token-1' } }) } };
+test('each song is asked with its ISRC from Spotify\'s catalog, read once per song; the sign-in token goes only to the catalog', dom, async () => {
+    const codes = { [Model.trackHex('4uLU6hMCjMI75M1A2tKUQC')]: 'USUM71703861', [Model.trackHex('6x7SB38tuekpu4xpH9OIPY')]: null };
+    const h = harness({ answers: { [A]: found('media-isrc1') }, engine: { playing: false }, platform: signedIn,
+        routes: route => route.startsWith(SPCLIENT) ? [200, catalog(codes[route.slice(SPCLIENT.length, SPCLIENT.length + 32)])] : undefined });
+    try {
+        await flush();
+        const asked = uri => h.requests.filter(r => r.route === '/ext/audio' && r.body.track.uri === uri);
+        const read = () => h.requests.filter(r => r.route.startsWith(SPCLIENT));
+        assert.equal(asked(A)[0].body.track.isrc, 'USUM71703861');
+        assert.equal(read()[0].route, SPCLIENT + '93bc414a606747b2b612491ef83d5a3e?market=from_token');
+        assert.equal(read()[0].headers.Authorization, 'Bearer secret-token-1');
+        h.audio().currentTime = 12; h.Player.play(); h.tick(); await flush();
+        const ahead = h.requests.find(r => r.route === '/ext/audio' && r.body.ahead);
+        assert.equal(ahead.body.track.uri, B); assert.equal(ahead.body.track.isrc, undefined, 'a song the catalog has no ISRC for is asked without one');
+        h.changeSong(B, 'Song B'); await flush();
+        h.changeSong(A, 'Song A'); await flush();
+        assert.equal(asked(B).filter(r => !r.body.ahead).length, 1); assert.equal(asked(A).length, 2);
+        assert.equal(asked(A)[1].body.track.isrc, 'USUM71703861');
+        assert.equal(read().length, 2, 'one catalog read per song, a miss included');
+        const elsewhere = JSON.stringify(h.requests.filter(r => !r.route.startsWith(SPCLIENT))) + JSON.stringify(h.notes());
+        assert.ok(!elsewhere.includes('secret-token'), 'the token is in no other request or note');
+    } finally { h.cleanup(); }
+});
+
+test('a catalog that fails, or answers after 3 s, leaves the song asked without an ISRC and is tried again later', dom, async () => {
+    let mode = 'fail';
+    const h = harness({ answers: { [A]: found('media-isrc2') }, engine: { playing: false }, platform: signedIn, routes: (route, _body, init) => {
+        if (!route.startsWith(SPCLIENT)) return undefined;
+        if (mode === 'fail') return Promise.reject(new TypeError('Failed to fetch'));
+        return new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))));
+    } });
+    try {
+        await flush();
+        const asked = () => h.requests.filter(r => r.route === '/ext/audio' && r.body.track.uri === A);
+        assert.equal(asked().length, 1); assert.equal(asked()[0].body.track.isrc, undefined, 'a failed read still asks');
+        mode = 'slow';
+        h.changeSong(A, 'Song A'); await flush();
+        assert.equal(asked().length, 1, 'waiting for the catalog');
+        h.runTimers(Model.POLICY.isrcTimeoutMs); await flush();
+        assert.equal(asked().length, 2, 'given up after the timeout'); assert.equal(asked()[1].body.track.isrc, undefined);
+        assert.equal(h.requests.filter(r => r.route.startsWith(SPCLIENT)).length, 2, 'a failure is not kept: read again');
+    } finally { h.cleanup(); }
+});
+
+// youtube-links.js and this player together, as Spotify loads them: the link layer first, then the extension player
+// it creates. A mixed list holds the Spotify song A, then a YouTube video.
+const VIDEO = 'dQw4w9WgXcQ';
+function mixedHarness({ answers = {} } = {}) {
+    const { window } = parseHTML('<!doctype html><html><head></head><body><main></main><div data-testid="now-playing-bar"><div class="playback-bar">'
+        + '<div data-testid="playback-position">0:00</div><div data-testid="progress-bar"></div><div data-testid="playback-duration">3:20</div></div>'
+        + '<div class="right"><button data-testid="control-button-playpause"><svg></svg></button><div data-testid="volume-bar"></div></div></div></body></html>');
+    const calls = [], requests = [], timers = [], intervals = [], audios = [], clocks = [];
+    // linkedom's <select> value has no setter, and the link layer sets it in strict mode: one is lent for this harness.
+    const Select = Object.getPrototypeOf(window.document.createElement('select')), selectValue = Object.getOwnPropertyDescriptor(Select, 'value');
+    Object.defineProperty(Select, 'value', { configurable: true, get() { return this.chosenValue ?? selectValue.get.call(this); }, set(value) { this.chosenValue = String(value); } });
+    class FakeAudio extends EventTarget {
+        constructor() { super(); Object.assign(this, { paused: true, currentTime: 0, duration: NaN, readyState: 0, muted: false, volume: 1, error: null, attributes: {} }); audios.push(this); }
+        set src(value) { this.attributes.src = value; }
+        get src() { return this.attributes.src || ''; }
+        getAttribute(name) { return this.attributes[name] ?? null; }
+        removeAttribute(name) { delete this.attributes[name]; }
+        load() {}
+        play() { this.paused = false; this.dispatchEvent(new Event('play')); return Promise.resolve(); }
+        pause() { if (!this.paused) { this.paused = true; this.dispatchEvent(new Event('pause')); } }
+        fire(name) { this.dispatchEvent(new Event(name)); }
+    }
+    /** A Spicetify.Player object; [tag] names its calls, so a replaced object's calls are told apart. */
+    const makePlayer = tag => {
+        const events = {}, state = { playing: false, position: 0 };
+        const fire = name => (events[name] || []).forEach(fn => fn());
+        const player = {
+            data: { item: null, get isPaused() { return !state.playing; } },
+            isPlaying: () => state.playing, getProgress: () => state.position, getDuration: () => 200000,
+            pause() { calls.push(tag + '-pause'); state.playing = false; fire('onplaypause'); }, play() { calls.push(tag + '-play'); state.playing = true; fire('onplaypause'); },
+            togglePlay() { calls.push(tag + '-toggle'); state.playing = !state.playing; },
+            seek(ms) { calls.push([tag + '-seek', ms]); state.position = ms; }, next() { calls.push(tag + '-next'); }, back() { calls.push(tag + '-back'); },
+            playUri(uri, _context, options = {}) {
+                calls.push([tag + '-playUri', uri]);
+                player.data = { item: item(uri, 'Song ' + uri.slice(-4)), get isPaused() { return !state.playing; } };
+                state.playing = options.initiallyPaused !== true; state.position = 0; fire('songchange');
+                return Promise.resolve();
+            },
+            getVolume: () => 0.5, getMute: () => false, getRepeat: () => 0, setVolume() {}, toggleMute() {}, setMute() {}, increaseVolume() {}, decreaseVolume() {},
+            setHeart() {}, toggleHeart() {},
+            addEventListener(name, fn) { (events[name] ||= []).push(fn); }, removeEventListener(name, fn) { events[name] = (events[name] || []).filter(f => f !== fn); },
+        };
+        return { player, state, events, raw: { ...player } };
+    };
+    const engine = makePlayer('engine');
+    const store = new Map([['spotify-hangul:link-playlists:v1', JSON.stringify({ schema: 1, playlists: [{ id: 'mixed', name: 'Mixed', tracks: [
+        { kind: 'spotify', uri: A, title: 'Song A', artist: 'Artist', duration: 200 }, { kind: 'youtube', videoId: VIDEO, title: 'Video', artist: 'Someone' }] }] })]]);
+    const localStorage = { getItem: key => store.has(key) ? store.get(key) : null, setItem: (key, value) => store.set(key, String(value)) };
+    const Menu = { Item: class { register() {} deregister() {} } };
+    const Spicetify = { Player: engine.player, Locale: { getLocale: () => 'ko' }, showNotification() {}, Menu, Topbar: { Button: class { constructor() { this.element = null; } } },
+        Queue: { nextTracks: [] }, PopupModal: { display() {}, hide() {} },
+        Platform: { ConnectAPI: { state: { activeDevice: { isLocal: true } } }, History: { location: { pathname: '/' }, listen: () => () => {}, push() {} } } };
+    const fetch = async (url, init = {}) => {
+        const route = url.replace('http://127.0.0.1:19643', ''), body = init.body ? JSON.parse(init.body) : null;
+        requests.push({ route, body });
+        const reply = (status, value, headers = {}) => ({ status, ok: status < 400, json: async () => value, headers: { get: name => headers[name] ?? null } });
+        if (route === '/ext/state') return reply(200, { available: true, installed: true, audio: true, running: true });
+        if (route === '/ext/audio') return reply(200, answers[(body.ahead ? 'ahead:' : '') + body.track.uri] || missing);
+        if (route.startsWith('/ext/media/')) return reply(206, {}, { 'Content-Type': 'audio/flac', 'Content-Range': 'bytes 0-0/40000000' });
+        return reply(200, {});
+    };
+    const stub = { dispose() {} };
+    Object.assign(window, { Spicetify, fetch, Audio: FakeAudio, localStorage,
+        SpotifyHangulIvLyrics: { create: () => ({ update() {}, deactivate() {}, dispose() {}, open() {}, reload: async () => {}, currentTrack: () => null, setExternalClock: value => clocks.push(value) }) },
+        SpotifyHangulLibrary: { create: () => ({ ...stub, exportCurrent() {}, openPicker() {}, importFile() {} }) },
+        SpotifyHangulOverlayControls: { create: () => stub }, SpotifyHangulDesktopBridge: { create: () => stub },
+        SpotifyHangulNowPlaying: { create: () => ({ element: window.document.createElement('div'), mediaAnchor: window.document.createElement('div'), update() {}, dispose() {} }) } });
+    const context = vm.createContext({ window, document: window.document, Spicetify, fetch, Audio: FakeAudio, localStorage, crypto: globalThis.crypto,
+        MutationObserver: window.MutationObserver, console, performance, AbortController, URL, DOMException, Event: window.Event,
+        setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout: id => { if (timers[id - 1]) timers[id - 1].fn = null; },
+        setInterval: (fn, ms) => { intervals.push({ fn, ms }); return intervals.length; }, clearInterval() {} });
+    vm.runInContext(fs.readFileSync(path.join(__dirname, 'extension-player.js'), 'utf8'), context);
+    try { vm.runInContext(fs.readFileSync(path.join(__dirname, 'youtube-links.js'), 'utf8'), context); }
+    catch (error) { Object.defineProperty(Select, 'value', selectValue); throw error; }
+    const links = window.SpotifyHangulLinks;
+    assert.ok(links?.extensionSnapshot, 'the link layer created the extension player');
+    const runTimers = ms => { timers.filter(t => t.fn && t.ms === ms).forEach(t => { const fn = t.fn; t.fn = null; fn(); }); };
+    // The extension player ticks every 250 ms, the link layer every 500 ms.
+    const tick = ms => intervals.filter(i => i.ms === ms).forEach(i => i.fn());
+    return { window, Spicetify, engine, makePlayer, calls, requests, clocks, links, ext: () => links.extensionSnapshot(), audio: () => audios[1], runTimers, tick,
+        line: () => window.document.querySelector('[data-testid="hangul-extension-quality"]'),
+        cleanup: () => { links.dispose(); Object.defineProperty(Select, 'value', selectValue); } };
+}
+/** Plays the mixed list's Spotify song and lets the extension's answer take it over in step, as in the first test. */
+async function handOver(h) {
+    h.links.start(0); await flush();
+    assert.equal(h.links.snapshot().kind, 'spotify'); assert.equal(h.links.snapshot().active, false);
+    assert.equal(h.ext().mode, 'pending', 'a mixed list\'s Spotify song is asked like any other');
+    const audio = h.audio();
+    audio.duration = 200; audio.fire('loadedmetadata');
+    h.engine.state.position = 300; audio.readyState = 4; audio.fire('canplay');
+    h.engine.state.position = 800; h.runTimers(500);
+    assert.equal(h.ext().mode, 'extension');
+    return audio;
+}
+
+test('a mixed list\'s Spotify song plays from the extension with its line, and the end of that audio plays the list\'s next item, a YouTube video', dom, async () => {
+    const h = mixedHarness({ answers: { [A]: found('media-mix1') } });
+    try {
+        await flush();
+        const audio = await handOver(h);
+        assert.equal(h.ext().line, 'Source X · FLAC · 24-bit · 96 kHz', 'the quality line shows the extension');
+        assert.equal(h.line().hidden, false);
+        assert.equal(h.engine.state.playing, false, 'the engine is paused under the extension audio');
+        // The paused engine near its own end is not the song's end: the extension audio still plays.
+        audio.currentTime = 199.6; audio.fire('timeupdate');
+        h.tick(500);
+        assert.equal(h.links.snapshot().queueIndex, 0, 'the list waits for the extension audio to end');
+        assert.equal(h.links.snapshot().kind, 'spotify'); assert.equal(h.links.snapshot().playing, true, 'the list reports the extension audio');
+        audio.paused = true; audio.fire('ended');
+        const after = h.links.snapshot();
+        assert.equal(after.queueIndex, 1); assert.equal(after.kind, 'youtube'); assert.equal(after.active, true);
+        assert.ok(!h.calls.includes('engine-next'), 'Spotify\'s own queue is not moved');
+        assert.equal(h.ext().mode, 'spotify', 'the extension gave the song up in the same task');
+        assert.equal(h.audio().getAttribute('src'), null);
+        assert.equal(h.line().hidden, true, 'no quality line while the video plays');
+        assert.equal(h.clocks.at(-1), null, 'the lyrics clock is given back');
+        h.tick(250); h.tick(500); await flush();
+        assert.ok(!h.requests.some(r => r.route === '/ext/audio' && r.body.track.uri !== A), 'nothing is asked while the video plays');
+        assert.equal(h.links.snapshot().kind, 'youtube', 'the paused engine does not end the video');
+    } finally { h.cleanup(); }
+});
+
+test('next and previous on a mixed list\'s Spotify song under the extension go by the list, not Spotify\'s queue', dom, async () => {
+    const h = mixedHarness({ answers: { [A]: found('media-mix2') } });
+    try {
+        await flush();
+        await handOver(h);
+        h.Spicetify.Player.next();
+        assert.equal(h.links.snapshot().queueIndex, 1); assert.equal(h.links.snapshot().kind, 'youtube');
+        assert.ok(!h.calls.includes('engine-next'));
+        assert.equal(h.ext().mode, 'spotify');
+        h.links.previous(); await flush();
+        assert.equal(h.links.snapshot().queueIndex, 0); assert.equal(h.links.snapshot().kind, 'spotify');
+        assert.equal(h.ext().mode, 'pending', 'back on the Spotify song, it is asked again');
+    } finally { h.cleanup(); }
+});
+
+test('a Player object Spicetify replaces is followed by both layers: the mixed list keeps next, the extension stays outside', dom, async () => {
+    for (const first of [250, 500]) {
+        const h = mixedHarness({ answers: { [A]: found('media-mix3') } });
+        try {
+            await flush();
+            const old = h.engine.player, fresh = h.makePlayer('fresh');
+            h.Spicetify.Player = fresh.player;
+            h.tick(first); h.tick(first === 250 ? 500 : 250);
+            assert.ok(String(fresh.player.next).includes('owning'), 'the extension wrapping is the outer one (' + first + ')');
+            assert.equal(old.next, h.engine.raw.next, 'the old object gets its own next back');
+            h.links.start(0); await flush();
+            assert.ok(h.calls.some(c => Array.isArray(c) && c[0] === 'fresh-playUri'), 'the list plays on the new object');
+            assert.equal(h.ext().mode, 'pending', 'the new object\'s song change reaches the extension');
+            h.Spicetify.Player.next();
+            assert.ok(!h.calls.includes('fresh-next'), 'next does not reach Spotify\'s queue');
+            assert.equal(h.links.snapshot().queueIndex, 1); assert.equal(h.links.snapshot().kind, 'youtube');
+            h.cleanup();
+            for (const name of ['next', 'back', 'togglePlay', 'pause', 'seek']) assert.equal(fresh.player[name], fresh.raw[name], name + ' is given back on dispose');
+        } finally { h.cleanup(); }
+    }
 });
 
 test('removing asks in the page, without window.confirm: the first press arms it, the second removes', dom, async () => {
@@ -817,4 +1299,39 @@ test('a store install the runner refuses says why and stays on the store', dom, 
     assert.ok(box.querySelector('[data-id="o.one"]'), 'no prompt: the list stays');
     assert.ok(!h.requests.some(r => r.route === '/ext/install/confirm'));
     h.cleanup();
+});
+
+test('pressing a manager tab or a details control keeps Spotify\'s modal open; a link click still reaches the page', dom, async () => {
+    const h = harness({ routes: route => {
+        if (route === '/ext/extensions') return [200, { extensions: [extension()] }];
+        if (route === '/ext/order') return [200, { order: ['x.flac', 'spotify'], asked: ['x.flac', 'spotify'], session: null }];
+        if (route === '/ext/store') return [200, storeAnswer()];
+        if (route === '/ext/session') return [200, { source: null, choices: ['x.flac', 'spotify'] }];
+    } });
+    try {
+        await flush();
+        // As Spotify's modal: a click reaching the page whose target is no longer inside the content, once the
+        // press has been handled, is taken for one outside and closes the modal.
+        let closed = 0, reached = 0;
+        h.window.document.addEventListener('click', event => {
+            reached++;
+            const content = h.modals.at(-1)?.content;
+            Promise.resolve().then(() => { if (content && !content.contains(event.target)) closed++; });
+        });
+        await h.player.openManager(); await flush();
+        const box = h.modals.at(-1).content;
+        click(h.window, exact(box, '스토어')); await flush();
+        assert.equal(exact(box, '스토어').getAttribute('aria-pressed'), 'true', 'the Store tab opened');
+        click(h.window, [...box.querySelectorAll('button.hl-ext-tab')].at(-1)); await flush();
+        assert.equal([...box.querySelectorAll('button.hl-ext-tab')].at(-1).getAttribute('aria-pressed'), 'true', 'the Installed tab opened');
+        assert.equal(closed, 0, 'the modal stays open'); assert.equal(reached, 0, 'clicks inside stop at the box');
+        await h.player.openDetails(); await flush();
+        const details = h.modals.at(-1).content;
+        click(h.window, details.querySelector('button.hl-ext-choice')); await flush();
+        assert.equal(reached, 0, 'a details click stops at its box');
+        const link = h.window.document.createElement('a');
+        details.lastChild.append(link);
+        click(h.window, link);
+        assert.equal(reached, 1, 'a link click goes on to Spotify\'s link handling');
+    } finally { h.cleanup(); }
 });

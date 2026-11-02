@@ -39,7 +39,7 @@ _kana_converter = None
 _kana_lock = threading.Lock()
 _request_context = threading.local()
 
-VERSION = "0.7.12"
+VERSION = "0.8.0"
 PROTOCOL = 1
 CAPABILITIES = ('youtube-links-v1', 'mixed-playlists-v1', 'playback-control-v1', 'lyric-sync-v1', 'overlay-launch-v1',
                 'update-check-v1', 'extensions-v1')
@@ -969,9 +969,14 @@ def serve(port=PORT, lifetime=True):
             except RunnerUnavailable as error:
                 return self.send_json(503, {'error': str(error)})
 
-        def extension_media(self, media):
+        def extension_media(self, address):
+            # /ext/media/<id>, or a DASH address's part: /ext/media/<id>/init, /ext/media/<id>/<segment index>.
+            media, _, part = address.partition('/')
+            if part and not re.fullmatch(r'init|\d{1,5}', part):
+                return self.send_json(404, {'error': 'media-unknown'})
             try:
-                upstream = extensions.open_media(media, self.headers.get('Range'))
+                upstream = extensions.open_media(media, self.headers.get('Range'),
+                                                 part=None if not part else part if part == 'init' else int(part))
             except LookupError:
                 return self.send_json(404, {'error': 'media-unknown'})
             except OSError:

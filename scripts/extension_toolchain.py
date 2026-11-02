@@ -1,5 +1,5 @@
 # @file extension_toolchain.py
-# @brief Build the minimal Java runtime from the pinned JDK and place the Myspoti extension runner with its notices.
+# @brief Build the minimal Java runtime from the pinned JDK and place the Myspoti extension runner, its sign-in window parts and their notices.
 import hashlib
 import json
 import os
@@ -31,6 +31,38 @@ def _ready_line(command, cwd, data, timeout=30):
     process.wait(10)
     process.stdout.close()
     return (line[0] if line else '').strip()
+
+
+def prepare_sign_in_window(root, cache, manifest):
+    """The WebView2 parts of the runner's sign-in window (webview-auth.ps1) under extensions/webview2: the SDK's two .NET
+    Framework assemblies and its loaders (x64, arm64 in arm64/) from the pinned NuGet package, and the SDK's notices in
+    licenses/. Microsoft's runtime bootstrapper is not shipped: webview-auth.ps1 fetches it from Microsoft where needed."""
+    root, cache = Path(root), Path(cache)
+    webview, artifacts = manifest['components']['webview2'], manifest['artifacts']
+    verify(cache / webview['artifact'], artifacts[webview['artifact']])
+    target = root / 'extensions' / 'webview2'
+    if target.exists() or target.is_symlink():
+        raise ValueError('Refusing an existing sign-in window destination: ' + target.name)
+    target.mkdir(parents=True)
+    with zipfile.ZipFile(cache / webview['artifact']) as package:
+        for member, part in webview['files'].items():
+            body = package.read(member)
+            if hashlib.sha256(body).hexdigest() != part['sha256']:
+                raise ValueError('WebView2 part differs from components.json: ' + member)
+            destination = (target / part['to']).resolve()
+            if not destination.is_relative_to(target.resolve()):
+                raise ValueError('WebView2 part escapes its folder: ' + part['to'])
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(body)
+        notices = {name: package.read(member) for name, member in webview['notices'].items()}
+    if not all(body.strip() for body in notices.values()) or b'Redistribution and use' not in notices['WebView2-SDK-LICENSE.txt']:
+        raise ValueError('WebView2 notices could not be verified')
+    (root / 'licenses').mkdir(exist_ok=True)
+    for name, body in notices.items():
+        (root / 'licenses' / name).write_bytes(body)
+    return {'version': webview['version'],
+            'files': sorted(p.relative_to(target).as_posix() for p in target.rglob('*') if p.is_file()),
+            'notices': {name: hashlib.sha256(body).hexdigest() for name, body in notices.items()}}
 
 
 def prepare_extension_runner(payload_root, jdk, cache, manifest):
@@ -74,6 +106,7 @@ def prepare_extension_runner(payload_root, jdk, cache, manifest):
     receipt = {'schema': 1, 'runner': runner['version'], 'revision': runner['revision'], 'java': java['version'],
                'modules': java['modules'], 'jar_sha256': hashlib.sha256(jar.read_bytes()).hexdigest(),
                'notices': {name: hashlib.sha256(body).hexdigest() for name, body in notices.items()},
-               'source_artifact': runner['source_artifact'], 'extensions_bundled': False}
+               'source_artifact': runner['source_artifact'], 'extensions_bundled': False,
+               'sign_in_window': prepare_sign_in_window(root, cache, manifest)}
     (extensions / 'extension-runner.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
     return receipt
