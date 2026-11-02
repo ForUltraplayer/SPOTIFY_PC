@@ -59,6 +59,8 @@ PC판과 안드로이드판을 고치면서 실제 환경에서만 드러난 함
 | 시험판을 내면 README의 공개 버전이 `release.json`보다 뒤처짐 | 자동 초안이 README 문장을 찾지 못해 실패함 | 자동 초안은 README에 적힌 공개 버전을 읽는다 |
 | 버전을 올리기 전에 빌드한 시험 설치본은 옛 버전 번호를 가짐 | "같은 버전이 깔려 있다"고 잘못 판단함 | 시험 설치본의 `release.json`을 직접 확인한다 |
 | Edge는 유럽경제지역에서 공식으로 지울 수 있음 | Edge를 쓰는 기능이 일부 PC에서 동작하지 않음 | 웹 창은 Windows 11의 일부인 WebView2 런타임을 쓴다. 런타임이 없는 일부 Windows 10에서는 Microsoft 공식 주소에서 설치 도우미를 받아 서명을 확인한 뒤 실행한다(사용권 2(b)항 때문에 동봉하지 않음) |
+| 안드로이드 저장소에서 `gh`의 기본 저장소가 원본(kota-zo/myspoti)임 | `gh release list`가 원본의 릴리스를 보여 주고, 그대로 만들면 원본에 릴리스를 만들려 함 | 두 저장소 모두 `gh ... -R ForUltraplayer/<저장소>`로 대상을 적는다 |
+| 페이지 안의 Spotify 검색 API 호출이 실패함(2026-11-02) | `CosmosAsync`의 `api.spotify.com/v1/search`가 빈 답을, GraphQL `searchModalResults`가 `HttpResponseError`를 냄 | 진단 스크립트는 `/search/<검색어>` 화면으로 이동해 `tracklist-row`의 `/track/` 링크를 읽는다 |
 
 ## 진단 절차
 
