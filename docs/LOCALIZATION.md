@@ -21,7 +21,9 @@
 
 한글 발음 표시는 한국어를 읽는 사람을 위한 기능이므로 현지화 대상이 아니다. 외국어 지원의 주 대상은 외국어 Windows나 영어 Spotify를 쓰는 한국어 사용자와, YouTube 링크 음악과 확장 음원만 쓰는 비한국어 사용자다.
 
-## 현재 상태
+## 검토 시작 시점의 상태
+
+아래 표와 문구 수는 현지화를 시작하기 전의 상태다. 지금 상태는 아래 단계별 결과를 따른다.
 
 | 영역 | 상태 | 근거 |
 | --- | --- | --- |
@@ -106,20 +108,64 @@ Spotify 버튼을 한국어 이름으로 찾던 나머지 부분(셔플, 좋아�
 
 알아 둘 점:
 
-- 기본 목록 이름(`Linked music`, `Imported mixed list`)은 처음 저장할 때의 언어로 저장된다. 나중에 언어를 바꿔도 이미 저장한 이름은 그대로다.
+- 기본 목록 이름(`YouTube links`, `Imported mixed list`)은 처음 저장할 때의 언어로 저장된다. 나중에 언어를 바꿔도 이미 저장한 이름은 그대로다.
 - 영어 복수형은 처리하지 않는다. 1곡이어도 `songs`, `items`로 나온다.
 
-영어 용어 검수가 필요한 항목:
+1단계 때 검수 대상으로 남긴 영어 용어는 아래 용어집으로 정했다.
 
-| 한국어 | 지금 영어 | 비고 |
+## 2~4단계 결과 (2026-11-03)
+
+| 영역 | 파일 | 처리 |
 | --- | --- | --- |
-| 링크 음악 | Linked music | README.en은 기능을 "YouTube links"로 부름 |
-| 음원 재생 / 영상 재생 | Audio / Video (지금 재생 중 화면), Audio / YouTube video (링크 음악 화면) | 두 화면의 이름이 다름 |
-| 재생목록 보기 | Show queue | Spotify의 재생 대기열 버튼과 같은 동작 |
-| Spotify 한글 (파일 형식 이름) | Spotify Hangul | 제품명의 영어 이름을 정하지 않음 |
+| 한글 가사 설정 | `hangul-lyrics.js` | 문구 표 35 개 키. 도우미 요청에 화면 언어를 보냄 |
+| 가사 싱크 화면 | `ivlyrics-sync.js`, `ivlyrics-sync-ui.js`, `youtube-ivlyrics.js`, `scripts/patch_ivlyrics_sync.py` | 문구 표 22, 38, 5 개 키. ivLyrics에 넣던 한국어 2 곳은 우리 모듈의 번역 함수 호출로 바꿈 |
+| 도우미 | `messages.py`(새 파일), `bridge.py`, `playlist_files.py`, `playback_control.py`, `youtube_stream.py` | 메시지 74 개를 한 표로 모음. 오류 응답에 `error`(번역문)와 `code`(키)를 함께 보냄 |
+| 설치·실행 스크립트 | `installer/bootstrap.ps1`, `installer/integrate.ps1`, `installer/payload-transaction.ps1`, `start.ps1`, `stop.ps1`, `installer/setup.nsi`, `installer/update-launcher.nsi` | `Get-Text` 방식. 설치 프로그램이 고른 언어를 `SPOTIFYHANGUL_LANGUAGE`로 넘김 |
+| WPF 오버레이 시제품 | `overlay/` | 배포하지 않는 시제품이라 제외. 실제 데스크톱 가사창은 별도 ivLyrics-overlay 포크라 이 저장소 밖 |
+
+도우미의 언어는 요청 헤더 `X-Hangul-Language`(`ko` 또는 `en`)를 따르고, 헤더가 없으면 Windows 표시 언어를 따른다(`GetUserDefaultUILanguage`, 처음 한 번만 읽음). 링크 음악 화면, 목록 내보내기, 한글 가사 설정이 이 헤더를 보낸다.
+
+그대로 둔 한국어:
+
+| 문구 | 이유 |
+| --- | --- |
+| `(발음 자료 없음)` | 도우미가 발음 없는 줄에 넣고 한글 가사 설정이 같은 바이트로 비교하는 표식. 캐시에도 저장됨 |
+| 가사 묶음 라벨 `〔문장 전체〕`, 제목 판별 정규식의 한글 범위, 도우미의 가수 이름·검색 데이터 | 화면 문구가 아니라 들어오는 데이터와 비교하는 값. JS에서는 검사기를 위해 `\uXXXX`로 적음 |
+| `payload-transaction.ps1`의 무결성·복구 내부 오류 약 30 개 | 원래 영어만 있던 유지보수자용 진단. 사용자가 조치할 수 있는 12 개에만 한국어를 새로 씀 |
+| `start.ps1`이 `start-error.txt`에만 쓰는 자동 시작 전환 실패 문구 | 로그 전용 |
+| 바로가기 이름 `Spotify 한글 가사.lnk` | 기존 설치의 바로가기와 자동 시작 값이 이 이름을 가리킴 |
+
+영어 용어집(주요 항목):
+
+| 한국어 | 영어 |
+| --- | --- |
+| Spotify 한글 가사 | Spotify Hangul Lyrics |
+| 링크 음악 | YouTube links |
+| 혼합 플레이리스트 / 목록 | mixed playlist / mixed list |
+| 음원 재생 / 영상 재생 | Audio / Video |
+| 대체 재생 / 대체 스트림 | Audio mode / audio stream |
+| 한글 발음 / 발음 자료 / 자동 발음 | Hangul pronunciation / pronunciation data / automatic pronunciation |
+| 도우미 | helper (the Hangul lyrics helper) |
+| 재생목록(대기열 뜻) / 곡 | queue / song |
+| 가사창 | desktop lyrics overlay |
+| 연결 폴더(reparse point) | linked folder |
+
+Spotify 화면의 문장은 "Couldn't ..."처럼 줄임형과 명령문을 쓰고 "Please"는 쓰지 않는다. 설치 스크립트는 "Could not ..."을 쓴다.
+
+| 확인 | 결과 |
+| --- | --- |
+| 번역 검사 | JS 10 개 파일 모두 통과 |
+| 테스트 | JS 288 개(ivLyrics 원본 없이 건너뛰는 10 개 제외), Python 169 개, PowerShell 6 개 묶음 통과. ivLyrics 패치 테스트는 새로 푼 ivLyrics 7.0.18 원본으로 13 개 모두 통과 |
+| 0.8.3 로컬 후보 설치 | 이 PC에 덮어 설치(종료 코드 0), `messages.py` 설치됨, 도우미 0.8.3 |
+| 도우미 언어 | 같은 오류에 헤더 `en`은 영어, `ko`와 헤더 없음(이 PC는 한국어 Windows)은 한국어. `code`는 `youtube_id_invalid`로 같음 |
+| 영어 Spotify | 가사 제공자 이름, 싱크 표시, 지금 재생 중 화면이 영어. 우리 화면에 한글 없음 |
+| 한국어 Spotify | 같은 화면이 원래 한국어. 셔플·기기 연결 가로채기와 좋아요 숨김 정상 |
 
 ## 확인하지 않은 것
 
 - Spicetify 확장의 로드 순서를 정할 수 있는지(방안 다에 필요)
 - ivLyrics 자체의 언어 설정과 Spotify 화면 언어가 다를 때 어느 쪽을 따르는 것이 자연스러운지
-- 비한국어 Windows에서 NSIS 설치 세부 정보 창에 한글이 `?`로 보이는지
+- 비한국어 Windows에서의 실제 설치. NSIS 설치 세부 정보 창의 `?`는 영어 출력으로 사라지는 것을 미국 OEM 코드 페이지(437)를 흉내 낸 시험으로만 확인함
+- 영어 설치 프로그램 화면에서 스크립트 문구가 실제로 영어로 나오는지(언어 전달은 작은 시험 설치 파일로만 확인함)
+- 한글 가사 설정 창과 싱크 대화상자를 열었을 때의 실제 화면(모듈 테스트와 화면 밖 API로만 확인함)
+- `test_auto_update.ps1`(필요한 0.7.3 설치 파일이 없어 실행하지 못함)

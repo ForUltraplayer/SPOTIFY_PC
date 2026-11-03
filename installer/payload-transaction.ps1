@@ -2,6 +2,12 @@
 # @brief Stage verified application files and recover a complete installation after failure or interruption.
 param([ValidateSet('Apply','Commit','Recover','Rollback','Cleanup')][string]$Mode,
       [string]$InstallRoot,[string]$PayloadRoot,[int]$OwnerProcessId=$PID)
+# Messages a person acts on follow the installer's language: Korean on Korean Windows, English elsewhere, and
+# SPOTIFYHANGUL_LANGUAGE (ko or en, set by the installer and by tests) overrides it. Integrity and recovery-record
+# failures stay English; they are diagnostics for the maintainer.
+$useKorean=if ($env:SPOTIFYHANGUL_LANGUAGE) { $env:SPOTIFYHANGUL_LANGUAGE -eq 'ko' } else { (Get-UICulture).TwoLetterISOLanguageName -eq 'ko' }
+
+function Get-Text([string]$Korean,[string]$English) { if ($useKorean) { return $Korean }; return $English }
 
 function Get-PayloadHash([string]$Path) {
     $stream=[IO.File]::OpenRead($Path)
@@ -14,11 +20,11 @@ function Assert-PayloadTree([string]$Path) {
     $full=[IO.Path]::GetFullPath($Path).TrimEnd('\')
     $check=$full
     while ($check) {
-        if ((Test-Path -LiteralPath $check) -and ((Get-Item -LiteralPath $check -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Update path contains a reparse point.' }
+        if ((Test-Path -LiteralPath $check) -and ((Get-Item -LiteralPath $check -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw (Get-Text '업데이트 경로에 연결 폴더가 들어 있습니다.' 'The update path contains a linked folder.') }
         $check=Split-Path -Parent $check
     }
     if (Test-Path -LiteralPath $full) {
-        if (@(Get-ChildItem -LiteralPath $full -Recurse -Force | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw 'Update tree contains a reparse point.' }
+        if (@(Get-ChildItem -LiteralPath $full -Recurse -Force | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) { throw (Get-Text '업데이트 대상 폴더 안에 연결 파일이나 연결 폴더가 있습니다.' 'The update folder contains a linked file or folder.') }
     }
     return $full
 }
@@ -26,7 +32,7 @@ function Assert-PayloadTree([string]$Path) {
 function Get-PayloadTransactionPath([string]$Root) {
     $rootFull=Assert-PayloadTree $Root
     $forbidden=@([IO.Path]::GetPathRoot($rootFull).TrimEnd('\'),$env:USERPROFILE,$env:APPDATA,$env:LOCALAPPDATA,$env:ProgramFiles,${env:ProgramFiles(x86)},$env:SystemRoot)
-    if (-not [IO.Path]::IsPathRooted($Root) -or $forbidden -contains $rootFull) { throw 'Select a dedicated application subdirectory.' }
+    if (-not [IO.Path]::IsPathRooted($Root) -or $forbidden -contains $rootFull) { throw (Get-Text '설치할 전용 하위 폴더를 선택해 주세요.' 'Choose a dedicated subfolder to install into.') }
     $hash=[Security.Cryptography.SHA256]::Create()
     try { $id=[BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($rootFull.ToLowerInvariant()))).Replace('-','').Substring(0,12) }
     finally { $hash.Dispose() }
@@ -101,7 +107,7 @@ function Stop-PayloadProcesses([string]$Root) {
     }
     # An exited process can stay listed for a moment while another process holds it.
     $left=@($targets | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue | Where-Object { try { -not $_.HasExited } catch { $false } } })
-    if ($left.Count) { throw ('Could not stop the running application processes: '+($left -join ', ')) }
+    if ($left.Count) { throw ((Get-Text '실행 중인 앱 프로세스를 종료하지 못했습니다: ' 'Could not stop the running application processes: ')+($left -join ', ')) }
 }
 
 function Test-PayloadManifest([string]$Directory) {
@@ -320,7 +326,7 @@ function Undo-PayloadTransaction($Transaction) {
 function Assert-PayloadOwner($Transaction,[int]$OwnerId) {
     if (-not $Transaction -or $Transaction.Status -in @('committed','restored')) { return }
     $owner=Get-Process -Id $Transaction.OwnerProcessId -ErrorAction SilentlyContinue
-    if ($Transaction.OwnerProcessId -ne $OwnerId -and $owner -and $owner.StartTime.ToUniversalTime().Ticks.ToString() -eq $Transaction.OwnerStartedTicks) { throw 'Another installer is still using this installation.' }
+    if ($Transaction.OwnerProcessId -ne $OwnerId -and $owner -and $owner.StartTime.ToUniversalTime().Ticks.ToString() -eq $Transaction.OwnerStartedTicks) { throw (Get-Text '다른 설치 프로그램이 아직 이 설치본을 사용하고 있습니다.' 'Another installer is still using this installation.') }
 }
 
 function Repair-PayloadTransaction([string]$Root,[int]$OwnerId=$PID) {
@@ -340,14 +346,14 @@ function Start-PayloadTransaction([string]$Root,[string]$Payload,[int]$OwnerId=$
     Repair-PayloadTransaction $rootFull $OwnerId
     if (Test-Path -LiteralPath $directory) {
         $old=Read-PayloadTransaction $rootFull
-        if ($old.Status -notin @('committed','restored')) { throw 'The previous update has not recovered.' }
+        if ($old.Status -notin @('committed','restored')) { throw (Get-Text '이전 업데이트가 아직 복구되지 않았습니다.' 'The previous update has not been recovered yet.') }
         [void](Assert-PayloadTree $directory)
         Remove-Item -LiteralPath $directory -Recurse -Force
     }
     $existed=Test-Path -LiteralPath $rootFull
     if ($existed -and @(Get-ChildItem -LiteralPath $rootFull -Force).Count) {
         $marker=Join-Path $rootFull 'install-marker.json'
-        if (-not (Test-Path -LiteralPath $marker) -or (Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json).app -ne 'SpotifyHangul') { throw 'The selected folder is not a SpotifyHangul installation.' }
+        if (-not (Test-Path -LiteralPath $marker) -or (Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json).app -ne 'SpotifyHangul') { throw (Get-Text '선택한 폴더는 SpotifyHangul 설치 폴더가 아닙니다.' 'The selected folder is not a SpotifyHangul installation folder.') }
     }
     [void](New-Item -ItemType Directory -Path $directory -Force)
     $owner=Get-Process -Id $OwnerId -ErrorAction Stop
@@ -405,9 +411,9 @@ function Invoke-PayloadTransaction($Transaction,[string]$Payload,[scriptblock]$I
         else {
             $powershell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
             & $powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Transaction.Root 'installer\bootstrap.ps1') -Mode Prepare -InstallRoot $Transaction.Root
-            if ($LASTEXITCODE -ne 0) { throw 'Installation preparation failed.' }
+            if ($LASTEXITCODE -ne 0) { throw (Get-Text '설치 준비에 실패했습니다.' 'Installation preparation failed.') }
             & $powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Transaction.Root 'installer\bootstrap.ps1') -Mode Install -InstallRoot $Transaction.Root
-            if ($LASTEXITCODE -ne 0) { throw 'Spotify integration failed. See the update recovery directory and install.log.' }
+            if ($LASTEXITCODE -ne 0) { throw (Get-Text 'Spotify 연결에 실패했습니다. 업데이트 복구 폴더와 install.log를 확인해 주세요.' 'Connecting Spotify failed. Check the update recovery folder and install.log.') }
         }
         $Transaction.Status='pending-commit'; Save-PayloadJournal $Transaction
     } catch {
@@ -426,7 +432,7 @@ function Invoke-PayloadTransaction($Transaction,[string]$Payload,[scriptblock]$I
             }
             [IO.File]::WriteAllText((Join-Path $Transaction.Directory 'failure.txt'),$details,[Text.UTF8Encoding]::new($true))
         }
-        catch { Write-Warning ('Failed to save installation diagnostics: '+$_.Exception.Message) }
+        catch { Write-Warning ((Get-Text '설치 진단 기록을 저장하지 못했습니다: ' 'Could not save the installation diagnostics: ')+$_.Exception.Message) }
         Undo-PayloadTransaction $Transaction
         throw $failure
     }
@@ -443,7 +449,7 @@ function Remove-PayloadTransaction([string]$Root,[int]$OwnerId=$PID) {
     $transaction=Read-PayloadTransaction $Root
     if (-not $transaction) { return }
     Assert-PayloadOwner $transaction $OwnerId
-    if ($transaction.Status -notin @('committed','restored')) { throw 'Recover the interrupted update before removing its snapshot.' }
+    if ($transaction.Status -notin @('committed','restored')) { throw (Get-Text '중단된 업데이트를 먼저 복구한 뒤 스냅샷을 제거해 주세요.' 'Recover the interrupted update before removing its snapshot.') }
     [void](Assert-PayloadTree $transaction.Directory)
     Remove-Item -LiteralPath $transaction.Directory -Recurse -Force
 }
@@ -459,10 +465,10 @@ if ($Mode) {
         $directory=Get-PayloadTransactionPath $InstallRoot
         $mutex=[Threading.Mutex]::new($false,('Local\SpotifyHangulUpdate-'+(Split-Path -Leaf $directory)))
         try { $locked=$mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $locked=$true }
-        if (-not $locked) { throw 'Another installer is updating this folder.' }
+        if (-not $locked) { throw (Get-Text '다른 설치 프로그램이 이 폴더를 업데이트하고 있습니다.' 'Another installer is updating this folder.') }
         $metadataMutex=[Threading.Mutex]::new($false,'Local\SpotifyHangulMetadata')
         try { $metadataLocked=$metadataMutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $metadataLocked=$true }
-        if (-not $metadataLocked) { throw 'Another installer is changing application registration.' }
+        if (-not $metadataLocked) { throw (Get-Text '다른 설치 프로그램이 앱 등록 정보를 바꾸고 있습니다.' 'Another installer is changing the app registration.') }
         if ($Mode -eq 'Apply') {
             $transaction=Start-PayloadTransaction $InstallRoot $PayloadRoot $OwnerProcessId
             Invoke-PayloadTransaction $transaction $PayloadRoot

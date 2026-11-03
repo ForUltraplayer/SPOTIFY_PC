@@ -32,7 +32,7 @@ test('link queue has bounded end, repeat-one, repeat-all and nonrepeating shuffl
     assert.equal(linkModel.nextIndex(0, 0, 1, 'all', true), -1);
 });
 test('malformed persisted link lists recover without activating playback', () => {
-    for (const value of [null, {}, { schema: 2, playlists: [] }, { schema: 1, playlists: [null] }]) assert.deepEqual(linkModel.library(value), { schema: 1, playlists: [{ id: 'default', name: 'Linked music', tracks: [] }] });
+    for (const value of [null, {}, { schema: 2, playlists: [] }, { schema: 1, playlists: [null] }]) assert.deepEqual(linkModel.library(value), { schema: 1, playlists: [{ id: 'default', name: 'YouTube links', tracks: [] }] });
 });
 
 const nativeItems = [
@@ -134,7 +134,7 @@ test('standard player reports embed errors and video quality events for the fall
 });
 test('the player page shows its errors in the language the link screen passes in its hash', () => {
     const english = loadYouTubeFrame(); english.config.events.onError({ data: 100 });
-    assert.equal(english.document.documentElement.lang, 'en'); assert.equal(english.document.title, 'YouTube linked music');
+    assert.equal(english.document.documentElement.lang, 'en'); assert.equal(english.document.title, 'YouTube links');
     assert.equal(english.messages.at(-1).error, 'This video was removed or is private.'); assert.equal(english.errorBox.textContent, 'This video was removed or is private.');
     english.config.events.onError({ data: 5 }); assert.equal(english.messages.at(-1).error, 'YouTube playback error: 5');
     const korean = loadYouTubeFrame('#session=trusted-session&lang=ko'); korean.config.events.onError({ data: 150 });
@@ -164,7 +164,7 @@ test('trusted link player commands reject invalid media identities and bound see
     assert.deepEqual(frame.calls, [['cue', 'rKQptWhAvO0'], ['seek', 194], ['volume', 0]]);
 });
 
-function loadExtension(record, response) {
+function loadExtension(record, response, { locale } = {}) {
     let saved = record;
     const values = new Map();
     const notices = [];
@@ -174,6 +174,7 @@ function loadExtension(record, response) {
         async setTranslation(track, lang, phonetic, data) { assert.equal(this, cache); saved = data; return true; } };
     const api = { LocalStorage: { get: key => values.get(key), set: (key, value) => values.set(key, value) },
         Player: { data: { item: { uri: 'spotify:track:test' } } }, showNotification: value => notices.push(value) };
+    if (locale) api.Locale = { getLocale: () => locale };
     api.Player.addEventListener = (event, fn) => listeners.set(event, fn);
     api.Player.removeEventListener = (event, fn) => { if (listeners.get(event) === fn) listeners.delete(event); };
     const window = { Spicetify: api, LyricsService: { cache, getTranslationCacheId: uri => uri?.replace(/^spotify:track:/, '') }, AIAddonManager: { register() {} } };
@@ -277,7 +278,7 @@ test('installed extension stops after three extra script failures and does not r
 
 test('installed extension rejects incompatible helper capabilities without injecting a script', async () => {
     const h = linkLoaderHarness({ health: (_count, value) => ({ ...value, capabilities: value.capabilities.join(',') }) });
-    const task = h.load(); const failure = assert.rejects(task, /도우미 버전/);
+    const task = h.load(); const failure = assert.rejects(task, /helper version is different/);
     for (let i = 0; i < 3; i++) await h.retry(); await failure;
     assert.equal(h.requests.length, 4); assert.equal(h.scripts.length, 0);
 });
@@ -775,17 +776,40 @@ test('the profile menu shows the installed version and asks the helper to check 
     let reply = { ok: true, status: 202, json: async () => ({ status: 'started' }) };
     h.context.fetch = async (url, options) => {
         if (url.endsWith('/health')) throw new TypeError('offline');
-        requests.push({ url, method: options.method, client: options.headers['X-Hangul-Lyrics-Client'] });
+        requests.push({ url, method: options.method, client: options.headers['X-Hangul-Lyrics-Client'], language: options.headers['X-Hangul-Language'] });
         return reply;
     };
     const addon = h.context.window.HangulLyricsProvider.addon;
     await addon.init();
-    const item = items.find(entry => entry.name.includes('업데이트 확인'));
-    assert.equal(item.name, 'Spotify 한글 가사 ' + addon.version + ' · 업데이트 확인');
+    const item = items.find(entry => entry.name.includes('Check for updates'));
+    assert.equal(item.name, 'Spotify Hangul Lyrics ' + addon.version + ' · Check for updates');
     await item.onClick();
-    assert.deepEqual(requests, [{ url: 'http://127.0.0.1:19643/update/check', method: 'POST', client: 'ivlyrics' }]);
-    assert.match(h.notices.at(-1), /업데이트를 확인하고 있습니다/);
-    reply = { ok: false, status: 404, json: async () => ({ error: '경로가 없습니다.' }) };
+    assert.deepEqual(requests, [{ url: 'http://127.0.0.1:19643/update/check', method: 'POST', client: 'ivlyrics', language: 'en' }]);
+    assert.match(h.notices.at(-1), /Checking for updates/);
+    reply = { ok: false, status: 404, json: async () => ({ error: 'No such route.' }) };
     await item.onClick();
-    assert.match(h.notices.at(-1), /업데이트 확인을 시작하지 못했습니다/);
+    assert.match(h.notices.at(-1), /Couldn't start the update check/);
+});
+
+test('a Korean Spotify shows the Hangul-lyrics menus, notifications and errors in Korean and tells the helper', async () => {
+    const h = loadExtension(null, authored, { locale: 'ko' }).harness, items = [], requests = [];
+    h.values.set('ivLyrics:hangul-web:configured', 'true');
+    h.values.set('ivLyrics:hangul-web:display-config-version', '1');
+    h.context.Spicetify.Menu = { Item: class { constructor(name, active, onClick) { Object.assign(this, { name, onClick }); } register() { items.push(this); } } };
+    h.context.fetch = async (url, options) => {
+        if (url.endsWith('/health')) throw new TypeError('offline');
+        requests.push({ url, language: options.headers['X-Hangul-Language'] });
+        return { ok: true, status: 202, json: async () => ({ status: 'started' }) };
+    };
+    const addon = h.context.window.HangulLyricsProvider.addon;
+    assert.equal(addon.name, '기존 한글 발음 가사');
+    await addon.init();
+    assert.deepEqual(items.map(entry => entry.name), ['한글 발음 자료', '현재 곡 제목 복사', 'Spotify 한글 가사 ' + addon.version + ' · 업데이트 확인']);
+    await items[2].onClick();
+    assert.deepEqual(requests, [{ url: 'http://127.0.0.1:19643/update/check', language: 'ko' }]);
+    assert.equal(h.notices.at(-1), '업데이트를 확인하고 있습니다.');
+    await assert.rejects(addon.translateLyrics({ ...params, lang: 'en' }), /이 제공자는 일본어 곡의 기존 한글 발음만 지원합니다\./);
+    // The same module answers in English once Spotify's UI is not Korean: the language is read on each call.
+    h.context.Spicetify.Locale.getLocale = () => 'en-US';
+    await assert.rejects(addon.translateLyrics({ ...params, lang: 'en' }), /only supports existing Hangul pronunciation for Japanese songs/);
 });

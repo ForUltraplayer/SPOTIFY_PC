@@ -6,6 +6,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const sync = require('./ivlyrics-sync.js');
+// Node reports this machine's language: the messages are English unless a test sets a Korean Spotify.
+Object.defineProperty(globalThis, 'navigator', { value: { language: 'en-US' }, configurable: true });
 const NATIVE = { uri: 'spotify:track:6x7SB38tuekpu4xpH9OIPY', name: 'Spotify song', artists: [{ name: 'Native singer' }] };
 const COVER = { uri: 'youtube:video:UWa_OiXDiQA', name: 'Cover upload', metadata: { title: 'Cover upload', artist_name: 'Cover singer' } };
 const OTHER = { uri: 'youtube:video:rKQptWhAvO0', name: 'Another cover' };
@@ -33,9 +35,11 @@ function harness() {
 test('five point three seconds is 5300 ms and positive offsets advance the lyric clock', () => {
     assert.equal(sync.alignOffset(23440, 18140), 5300);
     assert.equal(sync.alignOffset(18140, 23440), -5300);
-    assert.equal(sync.formatOffset(5300), '가사를 5.3 초 먼저 표시');
-    assert.equal(sync.formatOffset(-5300), '가사를 5.3 초 나중에 표시');
-    assert.equal(sync.formatOffset(0), '보정 없음');
+    assert.equal(sync.formatOffset(5300), 'Lyrics shown 5.3 s earlier');
+    assert.equal(sync.formatOffset(-5300), 'Lyrics shown 5.3 s later');
+    assert.equal(sync.formatOffset(0), 'No adjustment');
+    assert.equal(sync.formatStep(1000), '1 s earlier');
+    assert.equal(sync.formatStep(-100), '0.1 s later');
 });
 
 test('alignment accounts for existing display delay and global offset, never existing track offset twice', () => {
@@ -107,9 +111,9 @@ test('edits persist against the exact video key without seeking, changing titles
 
 test('changing songs rejects a stale open editor before any persistence', async () => {
     const h = harness(), captured = h.controller.captureTrack(); h.switchTrack(OTHER);
-    await assert.rejects(h.controller.setOffset(captured.uri, 5300), /곡이 바뀌/);
+    await assert.rejects(h.controller.setOffset(captured.uri, 5300), /song changed/);
     assert.equal(h.calls.length, 0);
-    await assert.rejects(h.controller.setOffset('spotify:playlist:other', 0), /곡이 바뀌/);
+    await assert.rejects(h.controller.setOffset('spotify:playlist:other', 0), /song changed/);
 });
 
 test('rapid edits serialize and leave the latest adjustment in storage', async () => {
@@ -130,7 +134,7 @@ test('an edit queued before a song change does not overwrite the next recording'
     const h = harness(), wait = deferred(), entered = deferred();
     h.host.Utils.setTrackSyncOffset = async (uri, value) => { entered.resolve(); await wait.promise; h.stored.set(uri, value); return true; };
     const first = h.controller.setOffset(COVER.uri, 100), second = h.controller.setOffset(COVER.uri, 200);
-    const rejected = assert.rejects(second, /곡이 바뀌/);
+    const rejected = assert.rejects(second, /song changed/);
     await entered.promise; h.switchTrack(OTHER); wait.resolve();
     await first; await rejected;
     assert.equal(h.stored.get(COVER.uri), 100); assert.equal(h.stored.has(OTHER.uri), false);
@@ -139,7 +143,7 @@ test('an edit queued before a song change does not overwrite the next recording'
 test('failed persistence is reported and does not poison later retry or reset', async () => {
     const h = harness(); let first = true;
     h.host.Utils.setTrackSyncOffset = async (uri, value) => { if (first) { first = false; return false; } h.stored.set(uri, value); return true; };
-    await assert.rejects(h.controller.setOffset(COVER.uri, 100), /저장하지 못/);
+    await assert.rejects(h.controller.setOffset(COVER.uri, 100), /Couldn't save/);
     assert.equal(await h.controller.setOffset(COVER.uri, 0), 0);
     h.host.Utils.setTrackSyncOffset = async () => { throw Error('storage unavailable'); };
     await assert.rejects(h.controller.setOffset(COVER.uri, 10), /storage unavailable/);
@@ -172,7 +176,7 @@ test('failed public DB write never emits a successful offset change and a Utils 
     h.host.TrackSyncDB = { getOffset: async () => 0, setOffset: async () => false };
     const utilsSave = h.host.Utils.setTrackSyncOffset;
     delete h.host.Utils.setTrackSyncOffset;
-    await assert.rejects(h.controller.setOffset(COVER.uri, 5300), /저장하지 못/);
+    await assert.rejects(h.controller.setOffset(COVER.uri, 5300), /Couldn't save/);
     assert.equal(events.length, 0);
     h.host.TrackSyncDB.setOffset = async () => { throw Error('db unavailable'); };
     await assert.rejects(h.controller.setOffset(COVER.uri, 5300), /db unavailable/);
@@ -190,9 +194,9 @@ test('missing store and invalid clock values fail visibly instead of inventing a
     const h = harness(); h.setProgress(NaN);
     assert.throws(() => h.controller.getPosition(), TypeError);
     delete h.host.Utils.getTrackSyncOffset;
-    await assert.rejects(h.controller.getOffset(COVER.uri), /준비되지/);
+    await assert.rejects(h.controller.getOffset(COVER.uri), /not ready/);
     delete h.host.Utils.setTrackSyncOffset;
-    await assert.rejects(h.controller.setOffset(COVER.uri, 0), /준비되지/);
+    await assert.rejects(h.controller.setOffset(COVER.uri, 0), /not ready/);
     await assert.rejects(h.controller.getOffset('http://wrong'), TypeError);
 });
 
@@ -202,4 +206,21 @@ test('browser injection exposes the same core without requiring a module loader'
     assert.equal(window.SpotifyHangulSync.MAX_OFFSET, 60000);
     assert.equal(typeof window.SpotifyHangulSyncController.resolveTrack, 'function');
     assert.equal(window.SpotifyHangulSync.alignOffset(23440, 18140), 5300);
+});
+
+test('a Korean Spotify gets the Korean directions and errors', async () => {
+    const saved = globalThis.Spicetify; globalThis.Spicetify = { Locale: { getLocale: () => 'ko' } };
+    try {
+        assert.equal(sync.formatOffset(5300), '가사를 5.3 초 먼저 표시');
+        assert.equal(sync.formatOffset(-5300), '가사를 5.3 초 나중에 표시');
+        assert.equal(sync.formatOffset(0), '보정 없음');
+        assert.equal(sync.formatStep(-1000), '1 초 나중에');
+        assert.throws(() => sync.normalizeOffset(60001), { message: '보정 시간은 앞뒤 60 초 이내로 지정해 주세요.' });
+        assert.throws(() => sync.alignOffset('x', 0), { message: '가사 시작 시간 값을 확인해 주세요.' });
+        const h = harness(); h.switchTrack(OTHER);
+        await assert.rejects(h.controller.setOffset(COVER.uri, 0), { message: '재생 곡이 바뀌었습니다. 현재 곡에서 다시 맞춰 주세요.' });
+    } finally { globalThis.Spicetify = saved; }
+    const window = {};
+    vm.runInNewContext(fs.readFileSync('ivlyrics-sync.js', 'utf8'), { window, Spicetify: { Locale: { getLocale: () => 'ko-KR' } } });
+    assert.equal(window.SpotifyHangulSync.formatOffset(0), '보정 없음');
 });

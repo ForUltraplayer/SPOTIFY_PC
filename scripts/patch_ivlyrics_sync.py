@@ -115,8 +115,8 @@ def patched_sources(sources, core, ui):
         ('(showsVideo ? VIDEO_SYNC_STEPS_MS : [-100, -50, -10, "current", 10, 50, 100])',
          '(showsVideo ? VIDEO_SYNC_STEPS_MS : [-1000, -100, "current", 100, 1000])', 'coarse and fine lyric steps'),
         (': `${step > 0 ? "+" : "−"}${absoluteStep}ms`;',
-         ': `${Number((absoluteStep / 1000).toFixed(3))} 초 ${step > 0 ? "먼저" : "나중에"}`;', 'step direction wording'),
-        ('showsVideo ? "✓ 0s" : "✓ 0ms"', 'showsVideo ? "✓ 0s" : "✓ 보정 없음"', 'reset wording'),
+         ': window.SpotifyHangulSync.formatStep(step);', 'step direction wording'),
+        ('showsVideo ? "✓ 0s" : "✓ 0ms"', 'showsVideo ? "✓ 0s" : "✓ " + window.SpotifyHangulSync.formatOffset(0)', 'reset wording'),
         ('    modeSwitch,\n    react.createElement(\n      "div",\n      { className: "lyrics-track-sync-controls" },',
          '    !showsVideo && lyricsAdjustable ? react.createElement(HangulTrackSyncEditor, { trackUri }) : null,\n    modeSwitch,\n    react.createElement(\n      "div",\n      { className: "lyrics-track-sync-controls" },', 'existing quick sync editor mount'),
     ):

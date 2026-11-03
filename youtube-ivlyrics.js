@@ -3,6 +3,29 @@
  */
 (() => {
     'use strict';
+    // Every text the YouTube lyrics bridge shows. English is the default; Korean when Spotify's UI is Korean.
+    const STRINGS = {
+        en: {
+            lrclib_credit: 'LRCLIB · Lyrics follow the original song and their timing can differ from a cover.',
+            server_status: 'Lyrics server answered: %1',
+            not_found: 'Check the lyrics search info. No lyrics were found for that title.',
+            empty_lyrics: 'The lyrics source has no lines to show.',
+            play_first: 'Play a YouTube song first.',
+        },
+        ko: {
+            lrclib_credit: 'LRCLIB · 원곡 기준 가사이며 커버의 시간과 다를 수 있습니다.',
+            server_status: '가사 서버 응답: %1',
+            not_found: '가사 검색 정보를 확인해 주세요. 해당 제목으로 가사를 찾지 못했습니다.',
+            empty_lyrics: '가사 제공 자료에 표시할 문장이 없습니다.',
+            play_first: 'YouTube 곡을 먼저 재생해 주세요.',
+        },
+    };
+    // The language is read on each call, from Spotify's locale and then the browser's.
+    function translate(host, key, ...args) {
+        const lang = /^ko(?:[-_]|$)/i.test(String(host.Spicetify?.Locale?.getLocale?.() || host.navigator?.language || '')) ? 'ko' : 'en';
+        const text = STRINGS[lang]?.[key] ?? STRINGS.en[key] ?? key;
+        return text.replace(/%(\d)/g, (mark, n) => args[n - 1] === undefined ? mark : String(args[n - 1]));
+    }
     const videoId = uri => String(uri || '').match(/^youtube:video:([\w-]{11})$/)?.[1] || null;
     const normalize = value => String(value || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
     const finiteSeconds = value => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
@@ -16,12 +39,12 @@
         }
         // A Hangul title followed by a Japanese alias is common in cover
         // uploads. Parenthesized credits and version labels are not aliases.
-        const alias = String(item.title || '').match(/^[^()（）]*[가-힣][^()（）]*[（(]([^()（）]+)[）)]/);
+        const alias = String(item.title || '').match(/^[^()（）]*[\uac00-\ud7a3][^()（）]*[（(]([^()（）]+)[）)]/);
         if (alias) {
             const text = alias[1].trim();
             const japaneseLetters = text.match(/[\u3040-\u30ff\u3400-\u9fff]/g) || [];
             const metadata = /(?:^|\W)(?:cover(?:ed)?|feat(?:uring)?\.?|ver(?:sion)?\.?|live|remix|karaoke|instrumental)(?:$|\W)|歌ってみた|カバー|バージョン|ライブ|オフボーカル|インスト|日本語版|韓国語版|英語版|原曲[:：]|本家[:：]/i;
-            if (japaneseLetters.length >= 2 && !/[가-힣]/.test(text) && !metadata.test(text))
+            if (japaneseLetters.length >= 2 && !/[\uac00-\ud7a3]/.test(text) && !metadata.test(text))
                 return { title: text, artist: '' };
         }
         const title = String(item.title || '').replace(/\s*\/.*(?:cover|歌ってみた).*$/i, '')
@@ -41,7 +64,7 @@
         synced.sort((a, b) => a.startTime - b.startTime);
         const unsynced = String(result.plainLyrics || '').split('\n').map(text => ({ text: text.trim() })).filter(line => line.text);
         return { uri, provider: 'youtube-lrclib', synced, unsynced, karaoke: null,
-            copyright: 'LRCLIB · 원곡 기준 가사이며 커버의 시간과 다를 수 있습니다.' };
+            copyright: translate(globalThis, 'lrclib_credit') };
     }
     function chooseResult(results, info, duration) {
         const title = normalize(info.title), artist = normalize(info.artist);
@@ -65,6 +88,7 @@
         const now = () => host.performance?.now?.() ?? Date.now();
         const scheduleTimeout = options.setTimeout || setTimeout, cancelTimeout = options.clearTimeout || clearTimeout;
         const service = () => host.LyricsService;
+        const t = (key, ...args) => translate(host, key, ...args);
         const item = () => {
             if (!current) return null;
             const duration = Math.round((clock.duration || current.duration || 0) * 1000);
@@ -277,7 +301,7 @@
                         assertCurrent();
                         const transient = networkError || response?.status === 429 || (response?.status >= 500 && response?.status <= 599);
                         if (!transient) return response;
-                        if (retriesLeft <= 0) throw networkError || Error('가사 서버 응답: ' + response.status);
+                        if (retriesLeft <= 0) throw networkError || Error(t('server_status', response.status));
                         retriesLeft -= 1;
                         await retryDelay(controller.signal);
                     }
@@ -291,14 +315,14 @@
                 let selected;
                 for (const query of queries) {
                     const response = await fetchSearch(query);
-                    if (!response.ok) throw Error('가사 서버 응답: ' + response.status);
+                    if (!response.ok) throw Error(t('server_status', response.status));
                     selected = chooseResult(await response.json(), profile, clock.duration || current?.duration || 0);
                     if (selected) break;
                 }
                 if (controller.signal.aborted || generation !== requestGeneration || videoId(info.uri) !== current?.videoId) throw new DOMException('Track changed', 'AbortError');
-                if (!selected) return { uri: info.uri, error: '가사 검색 정보를 확인해 주세요. 해당 제목으로 가사를 찾지 못했습니다.' };
+                if (!selected) return { uri: info.uri, error: t('not_found') };
                 const result = parseLyrics(selected, info.uri);
-                if (!result.synced.length && !result.unsynced.length) return { uri: info.uri, error: '가사 제공 자료에 표시할 문장이 없습니다.' };
+                if (!result.synced.length && !result.unsynced.length) return { uri: info.uri, error: t('empty_lyrics') };
                 cache.set(cacheKey, result);
                 while (cache.size > 40) cache.delete(cache.keys().next().value);
                 const display = item();
@@ -355,7 +379,7 @@
                     if (current?.videoId === videoId(track.uri) && generation === reloadGeneration) syncOverlay(true);
                 }
             },
-            open() { if (!current) throw Error('YouTube 곡을 먼저 재생해 주세요.'); install();
+            open() { if (!current) throw Error(t('play_first')); install();
                 if (String(host.Spicetify.Platform.History.location?.pathname || '').toLowerCase() !== '/ivlyrics')
                     host.Spicetify.Platform.History.push('/ivLyrics'); },
             dispose() {

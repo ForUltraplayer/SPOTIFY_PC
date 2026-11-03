@@ -163,7 +163,7 @@ class PublicStreamTests(unittest.TestCase):
             (root / 'tools').mkdir()
             (root / 'tools/yt-dlp.exe').write_bytes(b'external standalone fixture')
             with patch('youtube_stream.shutil.which', return_value='external.exe') as which:
-                with self.assertRaisesRegex(LookupError, '누락'):
+                with self.assertRaisesRegex(LookupError, 'stream_tools_missing'):
                     streams.resolve_engine(root)
             which.assert_not_called()
 
@@ -181,7 +181,7 @@ class PublicStreamTests(unittest.TestCase):
         with patch('youtube_stream.Path.is_file', return_value=False), \
                 patch('youtube_stream.shutil.which', side_effect=lambda name: '/tools/' + name), \
                 patch('youtube_stream.run_extractor', side_effect=subprocess.TimeoutExpired('extractor', 45)):
-            with self.assertRaisesRegex(LookupError, '시간이 초과'):
+            with self.assertRaisesRegex(LookupError, 'stream_lookup_timed_out'):
                 streams.youtube_stream(VIDEO)
         self.assertTrue(streams._jobs.acquire(blocking=False))
         streams._jobs.release()

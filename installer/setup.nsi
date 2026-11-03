@@ -67,6 +67,18 @@ LangString UnlinkFailed ${LANG_KOREAN} "연결 해제에 실패해 파일 제거
 LangString UnlinkFailed ${LANG_ENGLISH} "Disconnecting the integration failed, so no files were removed. Check the details."
 LangString CleanupFailed ${LANG_KOREAN} "업데이트 복구 기록을 정리하지 못했습니다.$\r$\n$\r$\n기록 폴더는 그대로 두고 제거를 계속할까요? '아니요'를 누르면 제거를 중단합니다."
 LangString CleanupFailed ${LANG_ENGLISH} "The update recovery record could not be cleaned up.$\r$\n$\r$\nKeep the record folder and continue removing the app? Choose No to stop."
+LangString RollbackNeedsRecovery ${LANG_KOREAN} "복구를 마치지 못했습니다. 이 설치 파일을 다시 실행하면 복구를 이어서 합니다. 이전 파일 스냅샷은 설치 폴더 옆에 남아 있습니다."
+LangString RollbackNeedsRecovery ${LANG_ENGLISH} "The restore did not finish. Run this installer again to continue it. The snapshot of the previous files is kept next to the installation folder."
+
+; The PowerShell scripts this installer runs (and the launcher started from the finish page) pick their
+; message language from SPOTIFYHANGUL_LANGUAGE, so they follow the installer language ($LANGUAGE 1042 = Korean).
+!macro HandOffLanguage
+  ${If} $LANGUAGE == ${LANG_KOREAN}
+    System::Call 'kernel32::SetEnvironmentVariable(t "SPOTIFYHANGUL_LANGUAGE", t "ko")'
+  ${Else}
+    System::Call 'kernel32::SetEnvironmentVariable(t "SPOTIFYHANGUL_LANGUAGE", t "en")'
+  ${EndIf}
+!macroend
 
 !macro AcquireInstallationMutex
   ; Keep the handle in the NSIS parent across Apply, metadata writes and Commit.
@@ -120,7 +132,7 @@ Function RollbackInstall
     nsExec::ExecToLog /TIMEOUT=600000 '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\payload-transaction.ps1" -Mode Rollback -InstallRoot "$INSTDIR" -OwnerProcessId $InstallerPid'
     Pop $0
     ${If} $0 != 0
-      DetailPrint "Rollback needs recovery on the next installer run. The previous snapshot is retained beside the installation folder."
+      DetailPrint "$(RollbackNeedsRecovery)"
     ${EndIf}
   ${EndIf}
 FunctionEnd
@@ -177,6 +189,7 @@ Section "Spotify 한글 가사" SEC_MAIN
     SetErrorLevel 1
     Abort
   ${EndIf}
+  !insertmacro HandOffLanguage
   InitPluginsDir
   SetOutPath "$PLUGINSDIR"
   File /oname=payload-transaction.ps1 "${PAYLOAD_DIR}\installer\payload-transaction.ps1"
@@ -225,6 +238,7 @@ Section "Spotify 한글 가사" SEC_MAIN
 SectionEnd
 
 Section "Uninstall"
+  !insertmacro HandOffLanguage
   ; A shortcut may start here with INSTDIR as cwd; release it before removal.
   SetOutPath "$TEMP"
   nsExec::ExecToLog /TIMEOUT=120000 '"$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\installer\bootstrap.ps1" -Mode Uninstall -InstallRoot "$INSTDIR"'

@@ -29,6 +29,7 @@ from youtube_stream import youtube_stream
 from playlist_files import save_export
 from playback_control import PlaybackControlSession
 from extension_host import ExtensionHost, RunnerUnavailable, CHUNK
+from messages import HEADER as LANGUAGE_HEADER, error_body, set_request_language, text as message
 
 sys.path.insert(0, str(Path(__file__).parent / 'vendor'))
 try:
@@ -39,7 +40,7 @@ _kana_converter = None
 _kana_lock = threading.Lock()
 _request_context = threading.local()
 
-VERSION = "0.8.2"
+VERSION = "0.8.3"
 PROTOCOL = 1
 CAPABILITIES = ('youtube-links-v1', 'mixed-playlists-v1', 'playback-control-v1', 'lyric-sync-v1', 'overlay-launch-v1',
                 'update-check-v1', 'extensions-v1')
@@ -155,7 +156,7 @@ def allowed_url(url):
             or parsed.port not in (None, 443)
             or not (host in ("namu.wiki", "haneum.site") or host.endswith(".tistory.com"))
             or (host == "haneum.site" and not re.fullmatch(r'/songs(?:/[^/]+)?', parsed.path))):
-        raise ValueError("한음, 나무위키 또는 티스토리의 HTTPS 가사 주소만 사용할 수 있습니다.")
+        raise ValueError('lyric_source_not_allowed')
     return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, ""))
 
 
@@ -172,13 +173,13 @@ OPENER = urllib.request.build_opener(CheckedRedirect)
 def youtube_metadata(video_id):
     """Resolve public metadata only; never fetch or persist media files."""
     if not isinstance(video_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{11}', video_id):
-        raise ValueError('YouTube 영상 ID가 올바르지 않습니다.')
+        raise ValueError('youtube_id_invalid')
     url = 'https://www.youtube.com/oembed?' + urllib.parse.urlencode({
         'url': 'https://www.youtube.com/watch?v=' + video_id, 'format': 'json'})
 
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *_args, **_kwargs):
-            raise ValueError('YouTube 메타데이터 주소가 변경되었습니다.')
+            raise ValueError('youtube_metadata_moved')
 
     request = urllib.request.Request(url, headers={'User-Agent': 'SpotifyHangulLyrics', 'Accept': 'application/json'})
     try:
@@ -187,10 +188,10 @@ def youtube_metadata(video_id):
     except urllib.error.HTTPError as error:
         # oEmbed answers 401/403/404 for private, removed or embed-disabled videos.
         if 400 <= error.code < 500:
-            raise LookupError('비공개이거나 삭제된 영상, 또는 외부 재생이 막힌 영상입니다.') from error
+            raise LookupError('youtube_video_unavailable') from error
         raise
     if len(raw) > 65536:
-        raise ValueError('YouTube 메타데이터 크기를 초과했습니다.')
+        raise ValueError('youtube_metadata_too_large')
     data = json.loads(raw)
     return {'video_id': video_id, 'title': str(data.get('title') or video_id)[:300],
             'author': str(data.get('author_name') or 'YouTube')[:200]}
@@ -198,7 +199,7 @@ def youtube_metadata(video_id):
 
 def fetch_page(url):
     if getattr(_request_context, 'cancelled', lambda: False)():
-        raise SupersededLookup('새 곡의 발음 조회로 전환했습니다.')
+        raise SupersededLookup('lookup_superseded')
     url = allowed_url(url)
     req = urllib.request.Request(url, headers={
         "User-Agent": "SpotifyHangulLyrics/0.3 (lyric reader)",
@@ -206,14 +207,14 @@ def fetch_page(url):
     })
     remaining = getattr(_request_context, 'deadline', time.monotonic() + 6) - time.monotonic()
     if remaining <= 0:
-        raise TimeoutError("자료 조회 시간이 지났습니다.")
+        raise TimeoutError('lookup_timed_out')
     with OPENER.open(req, timeout=min(6, remaining)) as response:
         content_type = response.headers.get_content_type()
         if content_type not in ("text/html", "application/xhtml+xml"):
-            raise ValueError("가사 HTML 문서가 아닙니다.")
+            raise ValueError('source_not_html')
         data = response.read(MAX_HTML + 1)
         if len(data) > MAX_HTML:
-            raise ValueError("가사 문서의 크기 제한을 초과했습니다.")
+            raise ValueError('source_too_large')
         return data.decode(response.headers.get_content_charset() or "utf-8", errors="replace"), response.url
 
 
@@ -584,18 +585,18 @@ class Reader:
         title, artist = (str(params.get(key, "")).strip() for key in ("title", "artist"))
         text = str(params.get("text", "")).replace("\r\n", "\n")
         if not title or not text.strip() or len(text) > 40000 or len(title) > 300 or len(artist) > 500:
-            raise ValueError("곡명과 원문 가사를 확인해 주세요.")
+            raise ValueError('resolve_input_invalid')
         source_url = allowed_url(params["source_url"]) if params.get("source_url") else ""
         automatic = params.get('automatic_fallback', False)
         if not isinstance(automatic, bool):
-            raise ValueError('자동 발음 설정이 올바르지 않습니다.')
+            raise ValueError('automatic_setting_invalid')
         track_id = params.get('track_id', '')
         foreground = params.get('foreground', False)
         if not isinstance(track_id, str) or len(track_id) > 200 or not isinstance(foreground, bool):
-            raise ValueError('곡 식별 정보가 올바르지 않습니다.')
+            raise ValueError('track_identity_invalid')
         retry_attempt = params.get('retry_attempt', 0)
         if type(retry_attempt) is not int or not 0 <= retry_attempt <= 3:
-            raise ValueError('자동 재조회 횟수가 올바르지 않습니다.')
+            raise ValueError('retry_count_invalid')
         key = hashlib.sha256(json.dumps([title, artist, text, source_url], ensure_ascii=False).encode()).hexdigest()
         cached_result, refresh_cached, negative = None, None, False
         with self.lock:
@@ -618,16 +619,16 @@ class Reader:
             self.last = with_offline_fallback(cached_result, text, automatic)
             return self.last
         if negative and not automatic:
-            raise LookupError("이 곡과 일치하는 한글 발음 자료를 찾지 못했습니다. 자료 주소를 직접 지정할 수 있습니다.")
+            raise LookupError('pronunciation_not_found')
         if not self.jobs.acquire(blocking=False):
-            raise RuntimeError("다른 곡의 발음 자료를 확인하고 있습니다. 잠시 후 다시 시도해 주세요.")
+            raise RuntimeError('pronunciation_busy')
         try:
             # Busy responses do not spend a source retry. Repeated UI mounts
             # cannot turn the three extra attempts into unlimited cache bypasses.
             with self.lock:
                 if retry_allowed:
                     if retry_attempt <= self.retry_counts.get(key, 0):
-                        raise LookupError('이 곡의 자동 재조회 횟수를 모두 사용했습니다.')
+                        raise LookupError('retries_exhausted')
                     self.retry_counts[key] = retry_attempt
                     if len(self.retry_counts) > 500:
                         self.retry_counts.pop(next(iter(self.retry_counts)))
@@ -635,7 +636,7 @@ class Reader:
                 return bool(track_id) and epoch != self.lookup_epoch and self.foreground_track != track_id
             def check_current():
                 if superseded():
-                    raise SupersededLookup('새 곡의 발음 조회로 전환했습니다.')
+                    raise SupersededLookup('lookup_superseded')
             visited, failures, best = set(), [], {}
             selected = None
             deadline = time.monotonic() + 32
@@ -716,11 +717,11 @@ class Reader:
                 return self.last
             result = with_offline_fallback({'title': title, 'artist': artist, 'matched': 0,
                 'total': sum(bool(JAPANESE.search(line)) for line in text.split('\n')), 'coverage': 0,
-                'source_url': '', 'source_title': '기기 내부 자동 발음', 'cache': False, 'valid': False}, text, automatic)
+                'source_url': '', 'source_title': message('automatic_source_title'), 'cache': False, 'valid': False}, text, automatic)
             if result['valid']:
                 self.last = result
                 return result
-            raise LookupError("원문과 85% 이상 일치하는 한글 발음 자료를 찾지 못했습니다. 자료 주소를 직접 지정해 주세요.")
+            raise LookupError('pronunciation_below_threshold')
         finally:
             if hasattr(_request_context, 'deadline'):
                 del _request_context.deadline
@@ -850,7 +851,10 @@ def serve(port=PORT, lifetime=True):
 
         def parse_request(self):
             self.body_read = False
-            return super().parse_request()
+            parsed = super().parse_request()
+            # The answer's language, per request: the client's header, else the Windows display language.
+            set_request_language(self.headers.get(LANGUAGE_HEADER) if parsed else None)
+            return parsed
 
         def read_body(self, length):
             self.body_read = True
@@ -897,12 +901,12 @@ def serve(port=PORT, lifetime=True):
 
         def control_request(self, method):
             if not self.valid_control_origin():
-                return self.send_json(403, {'error': '허용되지 않은 재생 제어 요청입니다.'})
+                return self.send_json(403, error_body('control_request_forbidden'))
             token = self.headers.get('X-Hangul-Overlay-Token')
             try:
                 if self.path == '/playback-session' and method == 'POST':
                     if self.headers.get('X-Hangul-Lyrics-Client') != 'ivlyrics':
-                        raise PermissionError('재생 연결 클라이언트가 올바르지 않습니다.')
+                        raise PermissionError('control_client_invalid')
                 else:
                     playback.authorize(token)
                 if method == 'GET':
@@ -910,13 +914,13 @@ def serve(port=PORT, lifetime=True):
                         return self.send_json(200, {'state': playback.state(token)})
                     if self.path == '/playback-commands':
                         return self.send_json(200, playback.drain(token))
-                    return self.send_json(405, {'error': '지원하지 않는 요청 방식입니다.'})
+                    return self.send_json(405, error_body('method_not_supported'))
                 length = int(self.headers.get('Content-Length', '0'))
                 if not 0 < length <= 4096:
-                    raise ValueError('재생 제어 요청 크기가 올바르지 않습니다.')
+                    raise ValueError('control_request_size_invalid')
                 params = json.loads(self.read_body(length))
                 if not isinstance(params, dict):
-                    raise ValueError('재생 제어 형식이 올바르지 않습니다.')
+                    raise ValueError('control_request_format_invalid')
                 if self.path == '/playback-session':
                     result = playback.register(params.get('instance'))
                 elif self.path == '/playback-state' and self.headers.get('Origin') == ORIGIN:
@@ -924,16 +928,16 @@ def serve(port=PORT, lifetime=True):
                 elif self.path == '/playback-command':
                     result = playback.enqueue(token, params.get('action'), params.get('trackUri'))
                 else:
-                    return self.send_json(405, {'error': '지원하지 않는 요청 방식입니다.'})
+                    return self.send_json(405, error_body('method_not_supported'))
                 return self.send_json(200, result)
             except PermissionError as error:
-                return self.send_json(403, {'error': str(error)})
+                return self.send_json(403, error_body(error, 'forbidden'))
             except LookupError as error:
-                return self.send_json(409, {'error': str(error)})
+                return self.send_json(409, error_body(error, 'conflict'))
             except (ValueError, TypeError) as error:
-                return self.send_json(400, {'error': str(error)})
+                return self.send_json(400, error_body(error, 'invalid_request'))
             except RuntimeError as error:
-                return self.send_json(429, {'error': str(error)})
+                return self.send_json(429, error_body(error, 'busy'))
 
         def extension_get(self):
             if self.path == '/ext/state':
@@ -1012,11 +1016,12 @@ def serve(port=PORT, lifetime=True):
         def do_OPTIONS(self):
             control = self.path.startswith('/playback-')
             if not (self.valid_control_origin() if control else self.valid_origin()):
-                return self.send_json(403, {"error": "허용되지 않은 요청입니다."})
+                return self.send_json(403, error_body('request_forbidden'))
             self.send_response(204)
             self.send_header("Access-Control-Allow-Origin", self.headers.get('Origin') or ORIGIN)
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Hangul-Lyrics-Client, X-Hangul-Overlay-Token" if control else "Content-Type, X-Hangul-Lyrics-Client, Range")
+            self.send_header("Access-Control-Allow-Headers", ("Content-Type, X-Hangul-Lyrics-Client, X-Hangul-Overlay-Token, "
+                             if control else "Content-Type, X-Hangul-Lyrics-Client, Range, ") + LANGUAGE_HEADER)
             self.send_header("Access-Control-Allow-Private-Network", "true")
             # Let the browser reuse the answer instead of a preflight before every poll.
             self.send_header("Access-Control-Max-Age", "600")
@@ -1026,7 +1031,7 @@ def serve(port=PORT, lifetime=True):
             if self.path in ('/playback-state', '/playback-commands'):
                 return self.control_request('GET')
             if not self.valid_origin():
-                return self.send_json(403, {"error": "허용되지 않은 요청입니다."})
+                return self.send_json(403, error_body('request_forbidden'))
             static = {'/youtube/player': ('youtube-player.html', 'text/html; charset=utf-8'),
                       '/youtube/extension.js': ('youtube-links.js', 'text/javascript; charset=utf-8'),
                       '/youtube/ivlyrics.js': ('youtube-ivlyrics.js', 'text/javascript; charset=utf-8'),
@@ -1043,7 +1048,7 @@ def serve(port=PORT, lifetime=True):
                 try:
                     data = (Path(__file__).parent / asset[0]).read_bytes()
                 except FileNotFoundError:
-                    return self.send_json(404, {'error': '링크 음악 파일이 설치되지 않았습니다.'})
+                    return self.send_json(404, error_body('youtube_files_missing'))
                 self.send_response(200)
                 self.send_header('Content-Type', asset[1])
                 self.send_header('Content-Length', str(len(data)))
@@ -1054,7 +1059,7 @@ def serve(port=PORT, lifetime=True):
                 self.end_headers()
                 return self.wfile.write(data)
             if self.path != "/health":
-                return self.send_json(404, {"error": "경로가 없습니다."})
+                return self.send_json(404, error_body('path_not_found'))
             last = reader.last or {}
             return self.send_json(200, {"app": "ivLyricsHangul", "version": VERSION, "pid": os.getpid(),
                                        "protocol": PROTOCOL, "capabilities": CAPABILITIES, "installation_id": INSTALLATION_ID,
@@ -1066,33 +1071,33 @@ def serve(port=PORT, lifetime=True):
             if self.path in ('/playback-session', '/playback-state', '/playback-command'):
                 return self.control_request('POST')
             if not self.valid_origin() or self.headers.get("X-Hangul-Lyrics-Client") != "ivlyrics":
-                return self.send_json(403, {"error": "허용되지 않은 요청입니다."})
+                return self.send_json(403, error_body('request_forbidden'))
             if self.path in ("/overlay/launch", "/update/check"):
                 # Callers send no body or a small JSON one. It is ignored: what runs is fixed here.
                 length = self.headers.get("Content-Length", "0")
                 if not re.fullmatch("[0-9]{1,4}", length) or int(length) > 4096:
-                    return self.send_json(400, {"error": "요청 크기가 올바르지 않습니다."})
+                    return self.send_json(400, error_body('request_size_invalid'))
                 self.read_body(int(length))
                 try:
                     if self.path == "/overlay/launch":
                         status = launch_overlay()
                         return self.send_json(404 if status == "missing" else 200, {"status": status})
                     if not launch_update_check():
-                        return self.send_json(404, {"status": "missing", "error": "업데이트 프로그램이 설치되지 않았습니다."})
+                        return self.send_json(404, error_body('updater_missing', status='missing'))
                     return self.send_json(202, {"status": "started"})
                 except OSError:
-                    return self.send_json(500, {"error": "프로그램을 실행하지 못했습니다."})
+                    return self.send_json(500, error_body('launch_failed'))
             if self.path.startswith('/ext/'):
                 return self.extension_post()
             if self.path not in ("/resolve", "/youtube/metadata", "/youtube/stream", "/youtube/export"):
-                return self.send_json(404, {"error": "경로가 없습니다."})
+                return self.send_json(404, error_body('path_not_found'))
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 if not 0 < length <= (3_000_000 if self.path == '/youtube/export' else 100000):
-                    raise ValueError("요청 크기가 올바르지 않습니다.")
+                    raise ValueError('request_size_invalid')
                 params = json.loads(self.read_body(length))
                 if not isinstance(params, dict):
-                    raise ValueError("요청 형식이 올바르지 않습니다.")
+                    raise ValueError('request_format_invalid')
                 if self.path == '/youtube/metadata':
                     result = youtube_metadata(params.get('video_id'))
                 elif self.path == '/youtube/stream':
@@ -1103,15 +1108,15 @@ def serve(port=PORT, lifetime=True):
                     result = reader.resolve(params)
                 self.send_json(200, result)
             except SupersededLookup as error:
-                self.send_json(409, {"error": str(error), 'superseded': True})
+                self.send_json(409, error_body(error, 'conflict', superseded=True))
             except LookupError as error:
-                self.send_json(404, {"error": str(error)})
+                self.send_json(404, error_body(error, 'not_found'))
             except (ValueError, TypeError) as error:
-                self.send_json(400, {"error": str(error)})
+                self.send_json(400, error_body(error, 'invalid_request'))
             except RuntimeError as error:
-                self.send_json(429, {"error": str(error)})
+                self.send_json(429, error_body(error, 'busy'))
             except Exception:
-                self.send_json(500, {"error": "발음 자료를 읽는 중 오류가 발생했습니다."})
+                self.send_json(500, error_body('pronunciation_read_failed'))
     server = HelperServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
     if lifetime:

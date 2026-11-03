@@ -32,14 +32,14 @@ def resolve_engine(app_root=None):
         required = (python, node, root / 'vendor/yt_dlp/__init__.py', root / 'vendor/yt_dlp_ejs/__init__.py',
                     root / 'vendor/yt_dlp_ejs/yt/solver/core.min.js', root / 'vendor/yt_dlp_ejs/yt/solver/lib.min.js')
         if not all(path.is_file() for path in required):
-            raise LookupError('설치된 YouTube 재생 도구가 누락됐습니다. 설치 파일로 복구해 주세요.')
+            raise LookupError('stream_tools_missing')
         return [str(python), '-I', '-B', '-m', 'yt_dlp'], ['--no-js-runtimes', '--js-runtimes', 'node:' + str(node)]
     # Source development retains the pre-existing installed-tool path; managed
     # releases above never substitute an arbitrary executable from PATH.
     executable = tools / 'yt-dlp.exe'
     executable = str(executable) if executable.is_file() else shutil.which('yt-dlp')
     if not executable:
-        raise LookupError('개발용 대체 스트림 엔진 yt-dlp를 찾지 못했습니다.')
+        raise LookupError('development_engine_missing')
     runtime_args = []
     for runtime in ('deno', 'node'):
         candidate = tools / (runtime + '.exe')
@@ -79,7 +79,7 @@ def run_extractor(command, timeout=60):
 def select_stream(data, video_id, now=None):
     now = time.time() if now is None else now
     if data.get('id') != video_id or data.get('availability') not in ('public', 'unlisted', None) or data.get('age_limit', 0):
-        raise LookupError('로그인이나 연령 확인이 없는 공개 영상만 대체 재생할 수 있습니다.')
+        raise LookupError('video_not_public')
     candidates = []
     for fmt in data.get('formats', []):
         url = urlsplit(fmt.get('url') or '')
@@ -91,14 +91,14 @@ def select_stream(data, video_id, now=None):
         if math.isfinite(bitrate) and 0 <= bitrate <= 2000:
             candidates.append(fmt)
     if not candidates:
-        raise LookupError('Spotify에서 지원하는 공개 Opus 스트림을 찾지 못했습니다.')
+        raise LookupError('opus_stream_not_found')
     best = max(candidates, key=lambda f: float(f.get('abr') or 0))
     expiry = float(parse_qs(urlsplit(best['url']).query).get('expire', [now + 180])[0])
     duration = float(data.get('duration') or 0)
     if not math.isfinite(expiry) or not math.isfinite(duration) or not 0 < duration <= 31_536_000:
-        raise LookupError('영상의 재생 정보가 올바르지 않습니다.')
+        raise LookupError('video_info_invalid')
     if expiry <= now + 20:
-        raise LookupError('영상 스트림 주소가 만료되었습니다. 다시 재생해 주세요.')
+        raise LookupError('stream_url_expired')
     return {'video_id': video_id, 'url': best['url'], 'codec': 'opus',
             'bitrate_kbps': float(best.get('abr') or 0), 'duration': duration,
             'expires_at': expiry, 'title': str(data.get('title') or video_id)[:300], 'itag': str(best.get('format_id') or '')}
@@ -160,14 +160,14 @@ def wait_until_served(url, deadline=None, opener=urllib.request.urlopen, sleep=t
 
 def youtube_stream(video_id):
     if not isinstance(video_id, str) or not re.fullmatch(r'[\w-]{11}', video_id, flags=re.ASCII):
-        raise ValueError('올바른 YouTube 영상 ID가 필요합니다.')
+        raise ValueError('youtube_id_required')
     now = time.time()
     with _lock:
         cached = _cache.get(video_id)
         if cached and cached['expires_at'] > now + 60 and cached['_cached_until'] > now:
             return {k: v for k, v in cached.items() if not k.startswith('_')}
     if not _jobs.acquire(timeout=BUSY_WAIT):
-        raise RuntimeError('다른 영상의 대체 스트림을 확인 중입니다. 잠시 후 다시 시도해 주세요.')
+        raise RuntimeError('stream_busy')
     try:
         # Read the watch page alongside the extractor so the lookup takes no longer.
         page = {}
@@ -180,7 +180,7 @@ def youtube_stream(video_id):
                    'https://www.youtube.com/watch?v=' + video_id]
         code, output = run_extractor(command)
         if code or len(output) > 8_000_000:
-            raise LookupError('공개 영상의 스트림을 확인하지 못했습니다. 로그인 제한이나 엔진 상태를 확인해 주세요.')
+            raise LookupError('stream_lookup_failed')
         result = select_stream(json.loads(output), video_id)
         wait_until_served(result['url'])
         reader.join(timeout=5)
@@ -191,6 +191,6 @@ def youtube_stream(video_id):
                 _cache.pop(next(iter(_cache)))
         return result
     except subprocess.TimeoutExpired as error:
-        raise LookupError('대체 스트림 조회 시간이 초과됐습니다. 다시 재생해 주세요.') from error
+        raise LookupError('stream_lookup_timed_out') from error
     finally:
         _jobs.release()

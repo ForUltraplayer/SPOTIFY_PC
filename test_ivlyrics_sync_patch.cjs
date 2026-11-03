@@ -51,6 +51,16 @@ test('actual quick controls preserve the global ten-second bound separately from
  assert.equal(context.track,53000);assert.equal(context.global,10000);
  assert.match(options,/react\.createElement\(HangulTrackSyncEditor, \{ trackUri \}\)/);
  assert.match(options,/\[-1000, -100, "current", 100, 1000\]/);
+ assert.match(options,/: window\.SpotifyHangulSync\.formatStep\(step\);/);
+ assert.ok(options.includes('showsVideo ? "✓ 0s" : "✓ " + window.SpotifyHangulSync.formatOffset(0)'));
+ const core=extract(options,'/* SpotifyHangul accessible track sync v1 */','/** @file ivlyrics-sync-ui.js');
+ const english={},korean={};
+ vm.runInNewContext(core,{window:english});
+ vm.runInNewContext(core,{window:korean,Spicetify:{Locale:{getLocale:()=>'ko'}}});
+ assert.equal(english.SpotifyHangulSync.formatStep(1000),'1 s earlier');
+ assert.equal(english.SpotifyHangulSync.formatOffset(0),'No adjustment');
+ assert.equal(korean.SpotifyHangulSync.formatStep(-100),'0.1 초 나중에');
+ assert.equal(korean.SpotifyHangulSync.formatOffset(0),'보정 없음');
 });
 const FORK_OVERLAY_URL='https://github.com/ForUltraplayer/ivLyrics-overlay/releases/latest';
 test('actual overlay download button and wizard fallback open the fork release page', {skip:!root},()=>{

@@ -35,6 +35,16 @@ LangString NoInstallation ${LANG_ENGLISH} "No existing installation was found. I
 LangString UpdateFailed ${LANG_KOREAN} "업데이트에 실패했습니다. 설치 창의 세부 정보를 확인해 주세요. 오류 코드: $0"
 LangString UpdateFailed ${LANG_ENGLISH} "The update failed. Check the installer's details. Error code: $0"
 
+; auto-update.ps1 and the launcher it starts pick their message language from SPOTIFYHANGUL_LANGUAGE,
+; so they follow the updater language ($LANGUAGE 1042 = Korean).
+!macro HandOffLanguage
+  ${If} $LANGUAGE == ${LANG_KOREAN}
+    System::Call 'kernel32::SetEnvironmentVariable(t "SPOTIFYHANGUL_LANGUAGE", t "ko")'
+  ${Else}
+    System::Call 'kernel32::SetEnvironmentVariable(t "SPOTIFYHANGUL_LANGUAGE", t "en")'
+  ${EndIf}
+!macroend
+
 Function .onInit
   ${IfNot} ${RunningX64}
     SetErrorLevel 1
@@ -59,6 +69,7 @@ Function ShowUpdateError
 FunctionEnd
 
 Section
+  !insertmacro HandOffLanguage
   InitPluginsDir
   SetOutPath "$PLUGINSDIR"
   File /oname=auto-update.ps1 "${PAYLOAD_DIR}\auto-update.ps1"

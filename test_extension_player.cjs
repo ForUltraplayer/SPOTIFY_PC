@@ -196,7 +196,7 @@ test('the consent list shows critical actions first, keeps the manifest order ot
     assert.equal(Model.updateMessage('ko', 'up-to-date'), '최신 상태');
     assert.equal(Model.updateMessage('en', 'applied'), 'Updated: it asks nothing new');
     assert.equal(Model.updateMessage('ko', 'not-from-a-repository'), '패키지 주소로 설치해 확인할 저장소가 없습니다');
-    assert.equal(Model.updateMessage('en', 'something-new'), 'Could not check: something-new');
+    assert.equal(Model.updateMessage('en', 'something-new'), "Couldn't check: something-new");
 });
 
 const extension = (extra = {}) => ({ id: 'x.flac', name: 'Source X', version: '1.0', versionCode: 1, author: 'Someone', description: '', icon: null,

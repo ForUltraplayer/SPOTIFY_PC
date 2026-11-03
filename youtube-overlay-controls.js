@@ -15,7 +15,7 @@
     // Every string the module shows. English is the default; Korean follows Spotify's UI language.
     const STRINGS = {
         en: { play: 'Play', pause: 'Pause', previous: 'Previous song', next: 'Next song',
-            toolbar: 'Lyrics playback controls', action_failed: 'Could not complete the playback action.' },
+            toolbar: 'Lyrics playback controls', action_failed: "Couldn't complete the playback action." },
         ko: { play: '재생', pause: '일시정지', previous: '이전 곡', next: '다음 곡',
             toolbar: '가사 재생 컨트롤', action_failed: '재생 조작을 완료하지 못했습니다.' }
     };

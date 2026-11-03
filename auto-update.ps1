@@ -144,7 +144,7 @@ try {
     finally { $algorithm.Dispose() }
     $cache=Join-Path $env:LOCALAPPDATA ('ivLyricsHangul\updates\'+$identity)
     [void](New-Item -ItemType Directory -Path $cache -Force)
-    if ((Get-Item -LiteralPath $cache).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw (Get-Text '업데이트 저장 폴더가 연결 경로입니다.' 'The update cache folder is a link.') }
+    if ((Get-Item -LiteralPath $cache).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw (Get-Text '업데이트 저장 폴더가 연결 경로입니다.' 'The update cache folder is a linked folder.') }
     if ($Mode -eq 'ApplyPending') {
         try { $applyLock=[IO.File]::Open((Join-Path $cache 'apply.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None) }
         catch [IO.IOException] { Report-UpdateError (Get-Text '다른 업데이트 적용 작업이 실행 중입니다. 해당 작업이 끝난 뒤 다시 실행해 주세요.' 'Another update is being applied. Run this again after it finishes.'); exit 10 }
@@ -174,7 +174,7 @@ try {
             # A reboot can leave an installing record without a process. The
             # interactive retry may recover it after validating the installer.
         }
-        if (-not (Test-QueuedInstaller $pending $current)) { throw (Get-Text '예약된 업데이트의 버전 또는 해시가 올바르지 않습니다.' 'The queued update has an invalid version or hash.') }
+        if (-not (Test-QueuedInstaller $pending $current)) { throw (Get-Text '예약된 업데이트의 버전 또는 해시가 올바르지 않습니다.' "The queued update's version or hash is not valid.") }
         if (Get-Process -Name Spotify -ErrorAction SilentlyContinue) { Report-UpdateError (Get-Text 'Spotify 프로세스가 실행 중입니다. 작업 관리자에서 Spotify를 완전히 종료한 뒤 다시 실행해 주세요.' 'Spotify is still running. Close it completely in Task Manager, then run this again.'); exit 20 }
         $process=Start-QueuedInstaller $pending
         if (-not $process.WaitForExit(600000)) { Report-UpdateError (Get-Text '설치 프로그램이 제한 시간 안에 끝나지 않았습니다. 설치 창과 install.log를 확인해 주세요.' 'The installer did not finish in time. Check the installer window and install.log.'); exit 11 }
@@ -277,7 +277,7 @@ try {
     }
     # Queue the verified installer first so an interrupted install leaves the pending/installing records ApplyPending already handles.
     $asset | ConvertTo-Json | Set-Content -LiteralPath $pendingPath -Encoding UTF8
-    Set-UpdateWindow $window (Get-Text "업데이트를 설치하고 있습니다.`r`n창이 닫힐 때까지 기다려 주세요." "Installing the update.`r`nPlease wait until this window closes.")
+    Set-UpdateWindow $window (Get-Text "업데이트를 설치하고 있습니다.`r`n창이 닫힐 때까지 기다려 주세요." "Installing the update.`r`nWait until this window closes.")
     $process=Start-QueuedInstaller $asset
     $deadline=(Get-Date).AddMinutes(10)
     while (-not $process.WaitForExit(100)) {

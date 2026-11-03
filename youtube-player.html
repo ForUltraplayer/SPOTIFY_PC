@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- @file youtube-player.html
      @brief Isolate the standard streaming YouTube player and its controls from Spotify extensions. -->
-<html lang="en"><head><meta charset="utf-8"><meta name="referrer" content="strict-origin-when-cross-origin"><title>YouTube linked music</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="referrer" content="strict-origin-when-cross-origin"><title>YouTube links</title>
 <style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font:14px system-ui}#player{width:100%;height:100%;min-height:200px;border:0;display:block;box-sizing:border-box}#error{position:absolute;top:0;left:0;padding:12px;background:#222;display:none}</style></head>
 <body><div id="player"></div><div id="error" role="alert"></div><script>
 (() => {
@@ -10,7 +10,7 @@
  const hash=new URLSearchParams(location.hash.slice(1)),session=hash.get('session'),lang=hash.get('lang')==='ko'?'ko':'en';
  // Every text this page shows. The parent passes Spotify's UI language in the hash (lang=ko|en).
  const STRINGS={
-   en:{title:'YouTube linked music',removed:'This video was removed or is private.',embed_blocked:"This video doesn't allow playback in other players.",
+   en:{title:'YouTube links',removed:'This video was removed or is private.',embed_blocked:"This video doesn't allow playback in other players.",
      origin:"YouTube couldn't verify the player's origin.",error:'YouTube playback error: %1',connect_failed:"Couldn't connect to the YouTube player.",
      slow:'The YouTube player is slow to answer. Check your network connection.'},
    ko:{title:'YouTube 링크 음악',removed:'삭제되거나 비공개인 영상입니다.',embed_blocked:'이 영상은 외부 플레이어 재생이 허용되지 않습니다.',

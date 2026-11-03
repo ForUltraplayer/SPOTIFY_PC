@@ -8,10 +8,12 @@ $source=Join-Path $project 'installer\bootstrap.ps1'
 $errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile($source,[ref]$null,[ref]$errors)
 if ($errors.Count) { throw 'Bootstrap parsing failed.' }
-foreach ($name in @('Assert-AppDirectory','Assert-OwnedChild','Test-SpotifyInstaller','Get-Sha256','Get-ManagedApplyArguments','Invoke-SpotXPatch')) {
+foreach ($name in @('Get-Text','Assert-AppDirectory','Assert-OwnedChild','Test-SpotifyInstaller','Get-Sha256','Get-ManagedApplyArguments','Invoke-SpotXPatch')) {
     $node=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name},$true)
     Invoke-Expression $node.Extent.Text
 }
+# The extracted functions read the language from this variable; the assertions below match the English messages, whatever language this PC uses.
+$useKorean=$false
 $area=Join-Path $project ('work\bootstrap-unit-'+[Guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $area)
 $root=Join-Path $area 'empty app'
@@ -38,13 +40,20 @@ foreach ($path in @($root,(Split-Path -Parent $root),(Join-Path $root '..\siblin
 $file=Join-Path $area 'truncated.exe'
 [IO.File]::WriteAllBytes($file,[byte[]]::new(1024))
 $rejected=$false
-try { Test-SpotifyInstaller $file } catch { $rejected=$_.Exception.Message -match '크기' }
+try { Test-SpotifyInstaller $file } catch { $rejected=$_.Exception.Message -match 'unexpected file size' }
 if (-not $rejected) { throw 'Truncated installer accepted.' }
+$count++
+# The same failure is reported in Korean when the installer or Windows language is Korean.
+$useKorean=$true
+$rejected=$false
+try { Test-SpotifyInstaller $file } catch { $rejected=$_.Exception.Message -match '크기가 다릅니다' -and $_.Exception.Message -notmatch 'file size' }
+$useKorean=$false
+if (-not $rejected) { throw 'The Korean installer size message was not used.' }
 $count++
 $stream=[IO.File]::OpenWrite($file)
 try { $stream.SetLength($components.spotify.bytes) } finally { $stream.Dispose() }
 $rejected=$false
-try { Test-SpotifyInstaller $file } catch { $rejected=$_.Exception.Message -match 'SHA-256' }
+try { Test-SpotifyInstaller $file } catch { $rejected=$_.Exception.Message -match 'SHA-256 of the Spotify installer differs' }
 if (-not $rejected) { throw 'Wrong installer digest accepted.' }
 $count++
 if ($VerifiedInstaller) { Test-SpotifyInstaller $VerifiedInstaller; $count++ }
@@ -66,6 +75,20 @@ if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $prepared 'i
     throw 'NSIS Prepare entry point must run with bootstrap.ps1 alone before payload extraction.'
 }
 $count++
+# The installer hands its language to this child process through SPOTIFYHANGUL_LANGUAGE; the refused profile root changes nothing on disk.
+$savedLanguage=$env:SPOTIFYHANGUL_LANGUAGE
+try {
+    foreach ($case in @(@('en','Choose a dedicated subfolder'),@('ko','설치할 전용 하위 폴더'))) {
+        $env:SPOTIFYHANGUL_LANGUAGE=$case[0]
+        $languageLog=Join-Path $area ('prepare-language-'+$case[0]+'.log')
+        # The child reports the refusal on its error stream, which must not stop this test before the exit code is read.
+        $ErrorActionPreference='Continue'
+        & $nativePowerShell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $entry 'bootstrap.ps1') -Mode Prepare -InstallRoot $env:USERPROFILE *> $languageLog
+        $ErrorActionPreference='Stop'
+        if ($LASTEXITCODE -ne 1 -or (Get-Content -LiteralPath $languageLog -Raw) -notmatch [regex]::Escape($case[1])) { throw ('SPOTIFYHANGUL_LANGUAGE='+$case[0]+' did not select its message: '+(Get-Content -LiteralPath $languageLog -Raw)) }
+        $count++
+    }
+} finally { $env:SPOTIFYHANGUL_LANGUAGE=$savedLanguage }
 $applyClient=Join-Path $area 'cli client'
 [void](New-Item -ItemType Directory -Path (Join-Path $applyClient 'Apps'))
 $applyIni=Join-Path $area 'cli-config.ini'

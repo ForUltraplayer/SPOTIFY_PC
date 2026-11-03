@@ -22,6 +22,18 @@ def example():
 
 
 class PlaylistFilesTests(unittest.TestCase):
+    def test_errors_carry_message_keys_and_the_default_name_follows_the_language(self):
+        import messages
+        with self.assertRaises(ValueError) as raised:
+            validate_document({'format': 'other'})
+        self.assertEqual(str(raised.exception), 'playlist_file_unsupported')
+        unnamed = example()
+        del unnamed['playlist']['name']
+        self.addCleanup(messages.set_request_language, None)
+        for language, expected in (('ko', '가져온 혼합 목록'), ('en', 'Imported mixed list')):
+            messages.set_request_language(language)
+            self.assertEqual(validate_document(unnamed)['playlist']['name'], expected)
+
     def test_export_preserves_both_sources_order_and_lyric_search(self):
         with tempfile.TemporaryDirectory() as area:
             result = save_export(example(), Path(area))

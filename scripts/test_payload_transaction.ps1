@@ -1,6 +1,8 @@
 ﻿# @file test_payload_transaction.ps1
 # @brief Exercise full application snapshots, stale-file ownership and interrupted update recovery in isolated folders.
 $ErrorActionPreference='Stop'
+# The assertions below match the English messages, whatever language this PC uses; the script reads this when it is loaded.
+$env:SPOTIFYHANGUL_LANGUAGE='en'
 $project=Split-Path -Parent $PSScriptRoot
 . (Join-Path $project 'installer\payload-transaction.ps1')
 # Fixtures contain no executable applications and must not inspect or stop live processes.
@@ -154,11 +156,11 @@ try {
         param($app)
         # Long output checks that nothing from the attempt is cut.
         @('FIRST-LINE-OF-ATTEMPT')+@(1..500 | ForEach-Object { "spinner line $_" })+@('[bootstrap Install] SpotX 적용에 실패했습니다. En la línea 34 el archivo no existe') | Out-File -LiteralPath (Join-Path $app 'install.log') -Encoding UTF8 -Append
-        throw 'Spotify integration failed. See the update recovery directory and install.log.'
+        throw 'Connecting Spotify failed. Check the update recovery folder and install.log.'
     }
 } catch {}
 $report=[IO.File]::ReadAllText((Join-Path $reportTransaction.Directory 'failure.txt'))
-Assert ($report -match 'Spotify integration failed' -and $report -match 'FIRST-LINE-OF-ATTEMPT' -and $report -match 'spinner line 250' -and $report -match 'En la línea 34 el archivo no existe') ('failure.txt lost part of the attempt''s install.log: '+$report)
+Assert ($report -match 'Connecting Spotify failed' -and $report -match 'FIRST-LINE-OF-ATTEMPT' -and $report -match 'spinner line 250' -and $report -match 'En la línea 34 el archivo no existe') ('failure.txt lost part of the attempt''s install.log: '+$report)
 Assert ($report -notmatch 'stale failure' -and $report -notmatch 'stale spotx output') ('failure.txt carried logs from an earlier attempt: '+$report)
 # A SpotX run in this attempt rewrites spotx-install.log, and failure.txt carries all of it.
 $spotxRoot=Join-Path $area 'report spotx app'
@@ -169,7 +171,7 @@ try {
     Invoke-PayloadTransaction $spotxTransaction $payload -Integration {
         param($app)
         @('SPOTX-FIRST-LINE')+@(1..300 | ForEach-Object { "spotx line $_" })+@('No se encuentra la ruta de acceso') | Out-File -LiteralPath (Join-Path $app 'spotx-install.log') -Encoding UTF8
-        throw 'Spotify integration failed. See the update recovery directory and install.log.'
+        throw 'Connecting Spotify failed. Check the update recovery folder and install.log.'
     }
 } catch {}
 $report=[IO.File]::ReadAllText((Join-Path $spotxTransaction.Directory 'failure.txt'))
@@ -342,8 +344,14 @@ foreach ($forbidden in @($env:USERPROFILE,[IO.Path]::GetPathRoot($root),$env:LOC
 $bad=Join-Path $area 'unowned'
 Put $bad 'keep.txt' 'untouched'
 $rejected=$false
-try { $null=Start-PayloadTransaction $bad $payload -NoMetadata } catch { $rejected=$true }
+try { $null=Start-PayloadTransaction $bad $payload -NoMetadata } catch { $rejected=$_.Exception.Message -match 'not a SpotifyHangul installation' }
 Assert ($rejected -and (Get-Content -LiteralPath (Join-Path $bad 'keep.txt') -Raw) -eq 'untouched') 'An unowned directory was changed.'
+# The same refusal is reported in Korean when the installer or Windows language is Korean.
+$useKorean=$true
+$rejected=$false
+try { $null=Start-PayloadTransaction $bad $payload -NoMetadata } catch { $rejected=$_.Exception.Message -match 'SpotifyHangul 설치 폴더가 아닙니다' }
+$useKorean=$false
+Assert $rejected 'The Korean folder message was not used.'
 $rejected=$false
 try { $null=Start-PayloadTransaction $root $root -NoMetadata } catch { $rejected=$true }
 Assert $rejected 'The installation was accepted as its own staging area.'

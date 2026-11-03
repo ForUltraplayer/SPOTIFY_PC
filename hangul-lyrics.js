@@ -3,6 +3,76 @@
  */
 (() => {
     'use strict';
+    // Every text the Hangul-lyrics settings window, menus and notifications show. English is the default;
+    // Korean when Spotify's UI is Korean.
+    const STRINGS = {
+        en: {
+            provider_name: 'Existing Hangul pronunciation lyrics',
+            provider_description: 'Gets Hangul pronunciation written on the web and matches it to the original lyrics, with no AI, API key or paid calls.',
+            module_failed: "Couldn't load the YouTube feature module.",
+            module_timeout: 'The YouTube feature module took too long to answer.',
+            helper_version: 'The helper version is different. Quit Spotify Hangul Lyrics and start it again.',
+            lookup_superseded: 'Switched to the pronunciation lookup for the new song.',
+            readings_failed: "Couldn't get the pronunciation data.",
+            helper_unreachable: "Couldn't connect to the Hangul lyrics helper. Start it from the Spotify Hangul Lyrics shortcut.",
+            lines_mismatch: "Couldn't match the pronunciation data to the lines of the original lyrics.",
+            select_song_to_copy: 'Select a song to copy first.', copy_failed: "Couldn't copy the song title.",
+            update_checking: 'Checking for updates.',
+            update_check_failed: "Couldn't start the update check. Start it again from the Spotify Hangul Lyrics shortcut.",
+            checking_connection: 'Checking the connection.', connected: 'Existing Hangul pronunciation data is available.',
+            invalid_source_url: 'Enter an HTTPS lyrics address on Haneum, Namu Wiki or Tistory.', select_song_first: 'Select a song first.',
+            saved: "Saved. Reopen ivLyrics or reload the song's pronunciation.",
+            intro: 'Gets existing Hangul pronunciation from Haneum and Namu Wiki by matching the original Japanese. For Tistory you can give the page address.',
+            lyrics_server_error: 'The original lyrics server limited requests or had a temporary error. Try again in a moment.',
+            latest_source: 'Latest source: ', lyrics_page: 'Lyrics page', line_count: ' (%1/%2 lines)',
+            generated_lines: 'Automatic pronunciation on this PC: %1 lines. It is a dictionary-based conversion and can differ from the actual song.',
+            cover_note: "For a cover, the original song is looked up and its lyrics are matched. When the line breaks differ, the source's pronunciation sentences are shown as they are.",
+            source_url_label: 'Page address for the current song (optional)', source_url_placeholder: 'Haneum, Namu Wiki or Tistory lyrics page',
+            automatic_label: 'Use automatic pronunciation on this PC when there is no data',
+            automatic_note: 'Automatic pronunciation runs on this PC without a paid API. Song-specific kanji readings and names can be wrong. It is off by default.',
+            fast_label: 'Fast lyrics display: look up providers in order instead of waiting for character-level data',
+            save: 'Save settings',
+            footer_note: 'Leave the address empty to search Haneum and Namu Wiki. Existing data is used when at least 85% of the Japanese lines are matched.',
+            menu_settings: 'Hangul pronunciation data', menu_copy_title: 'Copy current song title',
+            menu_update: 'Spotify Hangul Lyrics %1 · Check for updates', copy_title: 'Copy song title',
+            japanese_only: 'This provider only supports existing Hangul pronunciation for Japanese songs.',
+        },
+        ko: {
+            provider_name: '기존 한글 발음 가사',
+            provider_description: '웹에 작성된 한글 발음을 가져옵니다. AI·API 키·유료 호출 없이 원문과 대조합니다.',
+            module_failed: 'YouTube 기능 모듈을 불러오지 못했습니다.',
+            module_timeout: 'YouTube 기능 모듈 응답 시간이 초과됐습니다.',
+            helper_version: '도우미 버전이 다릅니다. Spotify 한글 가사를 종료한 뒤 다시 실행해 주세요.',
+            lookup_superseded: '새 곡의 발음 조회로 전환했습니다.',
+            readings_failed: '발음 자료를 가져오지 못했습니다.',
+            helper_unreachable: '한글 발음 도우미에 연결하지 못했습니다. “Spotify 한글 가사” 바로가기로 실행해 주세요.',
+            lines_mismatch: '발음 자료와 원문 가사의 줄을 맞추지 못했습니다.',
+            select_song_to_copy: '먼저 복사할 곡을 선택해 주세요.', copy_failed: '곡 제목을 복사하지 못했습니다.',
+            update_checking: '업데이트를 확인하고 있습니다.',
+            update_check_failed: '업데이트 확인을 시작하지 못했습니다. “Spotify 한글 가사” 바로가기로 다시 실행해 주세요.',
+            checking_connection: '연결 상태를 확인하고 있습니다.', connected: '기존 한글 발음 자료를 사용할 수 있습니다.',
+            invalid_source_url: '한음, 나무위키 또는 티스토리의 HTTPS 가사 주소를 입력해 주세요.', select_song_first: '먼저 곡을 선택해 주세요.',
+            saved: '저장했습니다. ivLyrics를 다시 열거나 곡의 발음을 다시 불러와 주세요.',
+            intro: '한음과 나무위키에서 일본어 원문을 대조해 기존 한글 발음을 가져옵니다. 티스토리는 자료 주소를 지정할 수 있습니다.',
+            lyrics_server_error: '원문 가사 서버의 요청 제한 또는 일시 오류가 있었습니다. 잠시 뒤 다시 조회해 주세요.',
+            latest_source: '최근 출처: ', lyrics_page: '가사 문서', line_count: ' (%1/%2 줄)',
+            generated_lines: '기기 내부 자동 발음: %1줄. 사전 기반 변환이라 실제 노래와 다를 수 있습니다.',
+            cover_note: '커버곡은 원곡 후보를 찾아 가사를 대조합니다. 줄 구분이 다르면 출처의 발음 문장을 그대로 표시합니다.',
+            source_url_label: '현재 곡의 자료 주소 (선택)', source_url_placeholder: '한음, 나무위키 또는 티스토리 가사 페이지',
+            automatic_label: '자료가 없으면 기기 내부 자동 발음 사용',
+            automatic_note: '자동 발음은 유료 API 없이 PC에서 처리합니다. 노래 특유의 한자 읽기나 이름은 틀릴 수 있습니다. 기본값은 꺼짐입니다.',
+            fast_label: '빠른 가사 표시: 글자 단위 자료를 기다리기보다 제공자 순서대로 조회',
+            save: '설정 저장',
+            footer_note: '주소를 비우면 한음과 나무위키에서 찾습니다. 기존 자료는 일본어 줄의 85% 이상이 연결될 때 사용합니다.',
+            menu_settings: '한글 발음 자료', menu_copy_title: '현재 곡 제목 복사',
+            menu_update: 'Spotify 한글 가사 %1 · 업데이트 확인', copy_title: '곡 제목 복사',
+            japanese_only: '이 제공자는 일본어 곡의 기존 한글 발음만 지원합니다.',
+        },
+    };
+    // Spotify's UI language, read on each call: Korean for ko/ko-KR, English otherwise.
+    const language = () => /^ko(?:[-_]|$)/i.test(String(globalThis.Spicetify?.Locale?.getLocale?.() || globalThis.navigator?.language || '')) ? 'ko' : 'en';
+    const t = (key, ...args) => (STRINGS[language()]?.[key] ?? STRINGS.en[key] ?? key)
+        .replace(/%(\d)/g, (mark, n) => args[n - 1] === undefined ? mark : String(args[n - 1]));
     const ID = 'web-hangul';
     const BASE = 'http://127.0.0.1:19643';
     const PREFIX = 'ivLyrics:hangul-web:';
@@ -44,8 +114,8 @@
                 else { if (script.dataset) script.dataset.hangulLoaded = 'true'; resolve(); }
             };
             const loaded = () => finish();
-            const failed = () => finish(new Error('YouTube 기능 모듈을 불러오지 못했습니다.'));
-            const timer = setTimeout(() => finish(new Error('YouTube 기능 모듈 응답 시간이 초과됐습니다.')), 5000);
+            const failed = () => finish(new Error(t('module_failed')));
+            const timer = setTimeout(() => finish(new Error(t('module_timeout'))), 5000);
             if (existing) {
                 script.addEventListener?.('load', loaded, { once: true });
                 script.addEventListener?.('error', failed, { once: true });
@@ -62,7 +132,7 @@
                     const capabilities = ['youtube-links-v1', 'mixed-playlists-v1', 'playback-control-v1', 'lyric-sync-v1'];
                     if (health.app !== 'ivLyricsHangul' || health.version !== addon.version || health.protocol !== 1 || !Array.isArray(health.capabilities)
                         || !capabilities.every(value => health.capabilities?.includes(value)))
-                        throw new Error('도우미 버전이 다릅니다. Spotify 한글 가사를 종료한 뒤 다시 실행해 주세요.');
+                        throw new Error(t('helper_version'));
                     await loadScript(); loader.loaded = true; return;
                 } catch (error) {
                     if (attempt === 3) {
@@ -238,8 +308,11 @@
         }
         storage().set(PREFIX + 'fast-loading', String(enabled));
     }
+    // The "〔문장 전체〕" (whole-sentence) grouping label that older source rows carry, as data, not screen text.
     const hideGroupingLabel = line => typeof line === 'string'
-        ? line.replace(/^\s*(?:〔문장\s*전체〕|\[문장\s*전체\])\s*/u, '') : line;
+        ? line.replace(/^\s*(?:〔\uBB38\uC7A5\s*\uC804\uCCB4〕|\[\uBB38\uC7A5\s*\uC804\uCCB4\])\s*/u, '') : line;
+    // The helper's own marker for a line without pronunciation data, "(발음 자료 없음)" (see bridge.py).
+    const NO_READING = '(\uBC1C\uC74C \uC790\uB8CC \uC5C6\uC74C)';
     function cleanPronunciation(result) {
         return Array.isArray(result?.phonetic)
             ? { ...result, phonetic: result.phonetic.map(hideGroupingLabel) } : result;
@@ -258,8 +331,8 @@
             if (metadata?.generated_lines?.length && !automaticEnabled()) return null;
             // Rows generated by older offline kana rules are recomputed with the current rules.
             if (metadata?.generated_lines?.length && metadata.phonetics_version !== '2') return null;
-            if (ours && result?.phonetic?.includes('(발음 자료 없음)') && metadata?.matching_version !== '0.3.1') return null;
-            if (ours && automaticEnabled() && result?.phonetic?.includes('(발음 자료 없음)')) return null;
+            if (ours && result?.phonetic?.includes(NO_READING) && metadata?.matching_version !== '0.3.1') return null;
+            if (ours && automaticEnabled() && result?.phonetic?.includes(NO_READING)) return null;
             if (metadata) {
                 rememberResult(args[0], metadata);
             }
@@ -280,7 +353,7 @@
     }
 
     function supersededError() {
-        const error = new Error('새 곡의 발음 조회로 전환했습니다.');
+        const error = new Error(t('lookup_superseded'));
         error.name = 'AbortError'; error.superseded = true;
         return error;
     }
@@ -293,7 +366,8 @@
         try {
             const response = await fetch(BASE + path, {
                 method: body ? 'POST' : 'GET',
-                headers: body ? { 'Content-Type': 'application/json', 'X-Hangul-Lyrics-Client': 'ivlyrics' } : {},
+                headers: { 'X-Hangul-Language': language(),
+                    ...(body ? { 'Content-Type': 'application/json', 'X-Hangul-Lyrics-Client': 'ivlyrics' } : {}) },
                 body: body ? JSON.stringify(body) : undefined,
                 signal: controller.signal,
                 credentials: 'omit'
@@ -302,7 +376,7 @@
             if ((response.status === 409 && result.superseded) ||
                 (body?.foreground && body.track_id !== activeTrackId())) throw supersededError();
             if (!response.ok) {
-                const error = new Error(result.error || '발음 자료를 가져오지 못했습니다.');
+                const error = new Error(result.error || t('readings_failed'));
                 error.retryable = response.status === 404 || response.status === 429 || response.status >= 500;
                 throw error;
             }
@@ -311,7 +385,7 @@
             if (signal?.aborted || (body?.foreground && body.track_id !== activeTrackId())) throw supersededError();
             if (error.superseded) throw error;
             if (error instanceof TypeError || error.name === 'AbortError') {
-                const failure = new Error('한글 발음 도우미에 연결하지 못했습니다. “Spotify 한글 가사” 바로가기로 실행해 주세요.');
+                const failure = new Error(t('helper_unreachable'));
                 failure.retryable = true;
                 throw failure;
             }
@@ -355,7 +429,7 @@
                     });
                     checkTrack();
                     if (!result.valid || !Array.isArray(result.phonetic) || result.phonetic.length !== String(body.text).split('\n').length) {
-                        const error = new Error('발음 자료와 원문 가사의 줄을 맞추지 못했습니다.');
+                        const error = new Error(t('lines_mismatch'));
                         error.retryable = true;
                         throw error;
                     }
@@ -384,22 +458,22 @@
     async function copyCurrentTitle() {
         const title = currentTitle();
         if (!title) {
-            Spicetify.showNotification?.('먼저 복사할 곡을 선택해 주세요.', true);
+            Spicetify.showNotification?.(t('select_song_to_copy'), true);
             return;
         }
         try {
             await Spicetify.Platform.ClipboardAPI.copy(title);
         } catch {
-            Spicetify.showNotification?.('곡 제목을 복사하지 못했습니다.', true);
+            Spicetify.showNotification?.(t('copy_failed'), true);
         }
     }
     // The helper starts the updater, which reports the result in its own window.
     async function checkForUpdate() {
         try {
             await request('/update/check', {}, { timeoutMs: 5000 });
-            Spicetify.showNotification?.('업데이트를 확인하고 있습니다.', false, 1500);
+            Spicetify.showNotification?.(t('update_checking'), false, 1500);
         } catch {
-            Spicetify.showNotification?.('업데이트 확인을 시작하지 못했습니다. “Spotify 한글 가사” 바로가기로 다시 실행해 주세요.', true);
+            Spicetify.showNotification?.(t('update_check_failed'), true);
         }
     }
     let footerCopyInstalled = false;
@@ -423,7 +497,7 @@
         const React = Spicetify.React;
         const h = React.createElement;
         const [url, setUrl] = React.useState(() => sourceUrls()[currentKey()] || '');
-        const [message, setMessage] = React.useState('연결 상태를 확인하고 있습니다.');
+        const [message, setMessage] = React.useState(() => t('checking_connection'));
         const [source, setSource] = React.useState(currentResult);
         const lookup = lyricLookups.get(currentKey());
         const [automatic, setAutomatic] = React.useState(automaticEnabled);
@@ -432,7 +506,7 @@
             let active = true;
             request('/health').then(health => {
                 if (!active) return;
-                setMessage('기존 한글 발음 자료를 사용할 수 있습니다.');
+                setMessage(t('connected'));
                 // The helper's last request can belong to a prefetched track.
                 // Only current-track metadata is a source for this settings view.
                 if (!source) setSource(currentResult());
@@ -446,11 +520,11 @@
                     if (parsed.protocol !== 'https:' || parsed.username || parsed.password || (parsed.port && parsed.port !== '443') ||
                         !(parsed.hostname === 'namu.wiki' || parsed.hostname.endsWith('.tistory.com') ||
                             (parsed.hostname === 'haneum.site' && /^\/songs\/[^/]+$/.test(parsed.pathname)))) {
-                        throw new Error('한음, 나무위키 또는 티스토리의 HTTPS 가사 주소를 입력해 주세요.');
+                        throw new Error(t('invalid_source_url'));
                     }
                 }
                 const key = currentKey();
-                if (!key) throw new Error('먼저 곡을 선택해 주세요.');
+                if (!key) throw new Error(t('select_song_first'));
                 const urls = sourceUrls();
                 if (url.trim()) urls[key] = url.trim(); else delete urls[key];
                 storage().set(PREFIX + 'sources', JSON.stringify(urls));
@@ -458,32 +532,32 @@
                 setFastLoading(fast);
                 const trackId = window.LyricsService?.getTranslationCacheId?.(key);
                 if (trackId) await window.LyricsService.clearTranslationCache(trackId);
-                setMessage('저장했습니다. ivLyrics를 다시 열거나 곡의 발음을 다시 불러와 주세요.');
+                setMessage(t('saved'));
             } catch (error) { setMessage(error.message); }
         };
         return h('div', { style: { display: 'grid', gap: '12px', lineHeight: '1.6', padding: '12px' } },
-            h('strong', null, '기존 한글 발음 가사'),
-            h('p', null, '한음과 나무위키에서 일본어 원문을 대조해 기존 한글 발음을 가져옵니다. 티스토리는 자료 주소를 지정할 수 있습니다.'),
+            h('strong', null, t('provider_name')),
+            h('p', null, t('intro')),
             h('p', { role: 'status' }, message),
-            lookup?.status === 'temporary-error' && h('p', null, '원문 가사 서버의 요청 제한 또는 일시 오류가 있었습니다. 잠시 뒤 다시 조회해 주세요.'),
+            lookup?.status === 'temporary-error' && h('p', null, t('lyrics_server_error')),
             source?.source_url && h('p', null,
-                '최근 출처: ', h('a', { href: source.source_url, target: '_blank', rel: 'noopener noreferrer' }, source.source_title || source.title || '가사 문서'),
-                ` (${source.matched}/${source.total} 줄)`),
-            source?.generated_lines?.length > 0 && h('p', null, `기기 내부 자동 발음: ${source.generated_lines.length}줄. 사전 기반 변환이라 실제 노래와 다를 수 있습니다.`),
-            h('p', null, '커버곡은 원곡 후보를 찾아 가사를 대조합니다. 줄 구분이 다르면 출처의 발음 문장을 그대로 표시합니다.'),
-            h('label', null, '현재 곡의 자료 주소 (선택)',
+                t('latest_source'), h('a', { href: source.source_url, target: '_blank', rel: 'noopener noreferrer' }, source.source_title || source.title || t('lyrics_page')),
+                t('line_count', source.matched, source.total)),
+            source?.generated_lines?.length > 0 && h('p', null, t('generated_lines', source.generated_lines.length)),
+            h('p', null, t('cover_note')),
+            h('label', null, t('source_url_label'),
                 h('input', { value: url, onChange: event => setUrl(event.target.value),
-                    placeholder: '한음, 나무위키 또는 티스토리 가사 페이지',
+                    placeholder: t('source_url_placeholder'),
                     style: { width: '100%', color: 'inherit', background: '#242424', padding: '9px', border: '1px solid #777', borderRadius: '6px' } })),
             h('label', null,
                 h('input', { type: 'checkbox', checked: automatic, onChange: event => setAutomatic(event.target.checked) }),
-                ' 자료가 없으면 기기 내부 자동 발음 사용'),
-            h('small', null, '자동 발음은 유료 API 없이 PC에서 처리합니다. 노래 특유의 한자 읽기나 이름은 틀릴 수 있습니다. 기본값은 꺼짐입니다.'),
+                ' ' + t('automatic_label')),
+            h('small', null, t('automatic_note')),
             h('label', null,
                 h('input', { type: 'checkbox', checked: fast, onChange: event => setFast(event.target.checked) }),
-                ' 빠른 가사 표시: 글자 단위 자료를 기다리기보다 제공자 순서대로 조회'),
-            h('button', { onClick: save }, '설정 저장'),
-            h('small', null, '주소를 비우면 한음과 나무위키에서 찾습니다. 기존 자료는 일본어 줄의 85% 이상이 연결될 때 사용합니다.'));
+                ' ' + t('fast_label')),
+            h('button', { onClick: save }, t('save')),
+            h('small', null, t('footer_note')));
     }
 
     function setVisual(key, value) {
@@ -494,11 +568,10 @@
 
     const addon = {
         id: ID,
-        name: '기존 한글 발음 가사',
+        name: t('provider_name'),
         author: 'ForUltraplayer',
-        version: '0.8.2',
-        description: { ko: '웹에 작성된 한글 발음을 가져옵니다. AI·API 키·유료 호출 없이 원문과 대조합니다.',
-            en: 'Existing web-authored Hangul readings; no AI or paid API.' },
+        version: '0.8.3',
+        description: { ko: STRINGS.ko.provider_description, en: STRINGS.en.provider_description },
         supports: { pronunciation: true, translate: false, metadata: false, tmi: false,
             lyricsStudy: false, characterPronunciation: false, culturalAnnotations: false, wordSupplements: false },
         async init() {
@@ -540,12 +613,12 @@
                 setVisual('translation-mode-2:japanese', 'none');
                 storage().set(PREFIX + 'display-config-version', '1');
             }
-            if (Spicetify.Menu?.Item) new Spicetify.Menu.Item('한글 발음 자료', false, () => {
-                Spicetify.PopupModal.display({ title: '한글 발음 자료', content: Spicetify.React.createElement(Settings), isLarge: true });
+            if (Spicetify.Menu?.Item) new Spicetify.Menu.Item(t('menu_settings'), false, () => {
+                Spicetify.PopupModal.display({ title: t('menu_settings'), content: Spicetify.React.createElement(Settings), isLarge: true });
             }).register();
-            if (Spicetify.Menu?.Item) new Spicetify.Menu.Item('현재 곡 제목 복사', false, copyCurrentTitle).register();
-            if (Spicetify.Menu?.Item) new Spicetify.Menu.Item('Spotify 한글 가사 ' + addon.version + ' · 업데이트 확인', false, checkForUpdate).register();
-            if (Spicetify.ContextMenu?.Item) new Spicetify.ContextMenu.Item('곡 제목 복사',
+            if (Spicetify.Menu?.Item) new Spicetify.Menu.Item(t('menu_copy_title'), false, copyCurrentTitle).register();
+            if (Spicetify.Menu?.Item) new Spicetify.Menu.Item(t('menu_update', addon.version), false, checkForUpdate).register();
+            if (Spicetify.ContextMenu?.Item) new Spicetify.ContextMenu.Item(t('copy_title'),
                 ([uri]) => { if (uri === currentKey()) return copyCurrentTitle(); },
                 uris => uris.length === 1 && !!currentKey() && uris[0] === currentKey()
             ).register();
@@ -556,7 +629,7 @@
             if (!wantSmartPhonetic || !/^ko(?:-|$)/i.test(lang || '') ||
                 (pronunciationNotation && pronunciationNotation !== 'translation') ||
                 (sourceLang && sourceLang !== 'auto' && !/^ja(?:-|$)/i.test(sourceLang))) {
-                throw new Error('이 제공자는 일본어 곡의 기존 한글 발음만 지원합니다.');
+                throw new Error(t('japanese_only'));
             }
             const trackKey = currentKey();
             const urls = sourceUrls();
@@ -568,7 +641,7 @@
                 source_url: sourceUrl, automatic_fallback: automaticEnabled(),
                 track_id: trackId || '', foreground: !!trackId && trackId === activeTrackId() }));
             if (!result.valid || !Array.isArray(result.phonetic) || result.phonetic.length !== String(text).split('\n').length) {
-                throw new Error('발음 자료와 원문 가사의 줄을 맞추지 못했습니다.');
+                throw new Error(t('lines_mismatch'));
             }
             const { phonetic, ...metadata } = result;
             rememberResult(trackId, metadata);

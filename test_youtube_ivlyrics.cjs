@@ -7,6 +7,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { create, searchInfo, parseLyrics, chooseResult, videoId } = require('./youtube-ivlyrics.js');
+// Node reports this machine's language: the messages are English unless a test sets a Korean Spotify.
+Object.defineProperty(globalThis, 'navigator', { value: { language: 'en-US' }, configurable: true });
 
 const VIDEO = 'rKQptWhAvO0', OTHER = '_-uHa5KiR90';
 const URI = 'youtube:video:' + VIDEO;
@@ -139,6 +141,7 @@ test('LRC conversion keeps millisecond precision, repeated timestamps and stable
     assert.deepEqual(parsed.synced.map(line => line.startTime), [1250, 3000, 7500]);
     assert.deepEqual(parsed.unsynced, [{ text: '一番' }, { text: '二番' }]);
     assert.equal(parsed.uri, URI);
+    assert.equal(parsed.copyright, 'LRCLIB · Lyrics follow the original song and their timing can differ from a cover.');
 });
 test('candidate selection rejects different explicit artists and unrelated song titles', () => {
     assert.equal(chooseResult([{ ...RESULT, artistName: 'Unrelated Artist' }], INFO, 194), null);
@@ -195,7 +198,7 @@ test('a miss is not cached and the original artist remains required on title-onl
     const queries = [];
     const h = harness(async url => { queries.push(new URL(url)); return response([{ ...RESULT, artistName: 'Wrong Singer' }]); });
     h.adapter.update(TRACK, { duration: 194 });
-    assert.ok((await h.adapter.getLyrics(INFO)).error); assert.equal(queries.length, 2);
+    assert.equal((await h.adapter.getLyrics(INFO)).error, 'Check the lyrics search info. No lyrics were found for that title.'); assert.equal(queries.length, 2);
     assert.equal(queries[0].searchParams.get('artist_name'), 'Neru');
     assert.equal(queries[1].searchParams.has('artist_name'), false);
     assert.ok((await h.adapter.getLyrics(INFO)).error); assert.equal(queries.length, 4); h.adapter.dispose();
@@ -634,3 +637,16 @@ test('actual ivLyrics AnimationManager keeps selecting later lyric rows with the
         assert.equal(selected.at(-1), 1, 'Seeking wakes the real upstream line selector even while paused');
         assert.equal(h.calls.some(call => call[0] === 'native-seek'), false); manager.stop(); h.adapter.dispose();
     });
+test('lyric messages are English by default and Korean on a Korean Spotify', async () => {
+    assert.throws(() => harness().adapter.open(), { message: 'Play a YouTube song first.' });
+    const h = harness(async () => response([{ ...RESULT, artistName: 'Wrong Singer' }]));
+    h.host.Spicetify.Locale = { getLocale: () => 'ko' };
+    h.adapter.update(TRACK, { duration: 194 });
+    assert.equal((await h.adapter.getLyrics(INFO)).error, '가사 검색 정보를 확인해 주세요. 해당 제목으로 가사를 찾지 못했습니다.');
+    h.adapter.deactivate();
+    assert.throws(() => h.adapter.open(), { message: 'YouTube 곡을 먼저 재생해 주세요.' });
+    h.adapter.dispose();
+    const saved = globalThis.Spicetify; globalThis.Spicetify = { Locale: { getLocale: () => 'ko-KR' } };
+    try { assert.equal(parseLyrics(RESULT, URI).copyright, 'LRCLIB · 원곡 기준 가사이며 커버의 시간과 다를 수 있습니다.'); }
+    finally { globalThis.Spicetify = saved; }
+});

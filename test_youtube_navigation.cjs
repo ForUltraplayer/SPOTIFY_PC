@@ -51,12 +51,13 @@ test('a transient first-load failure retries once silently, then shows the error
 });
 
 test('a dropped helper connection is retried twice, an abort or third failure is reported', async () => {
-    let calls = 0;
-    const context = vm.createContext({ BASE: 'http://127.0.0.1:19643', setTimeout: fn => fn(),
-        fetch: async () => { calls++; if (calls < 3) throw new TypeError('Failed to fetch'); return { ok: true }; } });
+    let calls = 0, sent;
+    const context = vm.createContext({ BASE: 'http://127.0.0.1:19643', setTimeout: fn => fn(), language: () => 'ko',
+        fetch: async (url, options) => { calls++; sent = options.headers; if (calls < 3) throw new TypeError('Failed to fetch'); return { ok: true }; } });
     vm.runInContext('async ' + functionSource('postHelper'), context);
     assert.equal((await context.postHelper('/youtube/metadata', { video_id: 'abcdefghijk' })).ok, true);
     assert.equal(calls, 3);
+    assert.equal(sent['X-Hangul-Language'], 'ko', 'The helper is told which language to answer in');
     calls = -10; await assert.rejects(context.postHelper('/youtube/metadata', {}), /Failed to fetch/);
     context.fetch = async () => { const error = new Error('stop'); error.name = 'AbortError'; calls++; throw error; };
     calls = 0; await assert.rejects(context.postHelper('/x', {}), /stop/); assert.equal(calls, 1, 'an abort is not retried');
@@ -199,7 +200,7 @@ test('a Spotify in another language still routes shuffle, Connect and the playli
 test('a Korean Spotify gets the link messages in Korean, any other language in English', () => {
     const harness = clickHarness();
     harness.invoke(button({ inBar: true, leftControls: true, label: 'Shuffle' }));
-    assert.deepEqual(harness.calls, [['notify', 'Linked music shuffle on']]);
+    assert.deepEqual(harness.calls, [['notify', 'YouTube links shuffle on']]);
     harness.calls.length = 0; harness.context.Spicetify.Locale = { getLocale: () => 'ko' };
     harness.invoke(button({ inBar: true, leftControls: true, label: 'Shuffle' }));
     assert.deepEqual(harness.calls, [['notify', '링크 음악 셔플 꺼짐']]);
@@ -389,7 +390,7 @@ test('a late extraction response cannot replace a newer mode selection for the s
 test('audio extraction failure remains explicit and never silently starts ad-capable video', async () => {
     const h = modeHarness({ fetch: async () => ({ ok: false, status: 404, json: async () => ({ error: 'Unavailable' }) }) });
     h.context.setPlaybackMode('audio'); await h.settle();
-    assert.equal(h.context.mediaMode, 'direct'); assert.match(h.context.lastError, /choose YouTube video/);
+    assert.equal(h.context.mediaMode, 'direct'); assert.match(h.context.lastError, /choose Video/);
     assert.equal(h.calls.filter(c => Array.isArray(c) && c[0] === 'frame' && c[1] === 'load').length, 0);
     assert.equal(h.audio.src, '');
 });

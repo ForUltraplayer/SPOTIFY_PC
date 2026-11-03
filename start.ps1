@@ -3,22 +3,26 @@
 param([switch]$NoErrorDialog,[ValidateSet('Normal','Minimized')][string]$Autostart)
 $ErrorActionPreference = 'Stop'
 $env:PSModulePath=(Join-Path $PSHOME 'Modules')+[IO.Path]::PathSeparator+$env:PSModulePath
+# Korean on Korean Windows, English elsewhere; SPOTIFYHANGUL_LANGUAGE (ko or en) overrides it (the installer passes its language, tests pin it).
+$useKorean=if ($env:SPOTIFYHANGUL_LANGUAGE) { $env:SPOTIFYHANGUL_LANGUAGE -eq 'ko' } else { (Get-UICulture).TwoLetterISOLanguageName -eq 'ko' }
+
+function Get-Text([string]$Korean,[string]$English) { if ($useKorean) { return $Korean }; return $English }
 
 function Assert-HelperHealth($Health, [string]$BridgeScript, [string]$ExpectedVersion, [string]$PythonPath, [int]$ExpectedPid=0) {
     if ($Health.app -cne 'ivLyricsHangul' -or $Health.version -cne $ExpectedVersion -or $Health.protocol -ne 1) {
-        throw '한글 가사 도우미 버전이 다릅니다. 실행 중인 다른 설치본을 종료한 뒤 다시 실행해 주세요.'
+        throw (Get-Text '한글 가사 도우미 버전이 다릅니다. 실행 중인 다른 설치본을 종료한 뒤 다시 실행해 주세요.' 'The Hangul lyrics helper version is different. Close the other running installation, then start again.')
     }
     foreach ($capability in @('youtube-links-v1','mixed-playlists-v1','playback-control-v1','lyric-sync-v1')) {
-        if (@($Health.capabilities) -cnotcontains $capability) { throw '도우미 기능 구성이 다릅니다. 현재 설치본을 다시 실행해 주세요.' }
+        if (@($Health.capabilities) -cnotcontains $capability) { throw (Get-Text '도우미 기능 구성이 다릅니다. 현재 설치본을 다시 실행해 주세요.' 'The helper feature set is different. Start the current installation again.') }
     }
     $helperProcessId=0
     if (-not [int]::TryParse([string]$Health.pid,[ref]$helperProcessId) -or $helperProcessId -le 0 -or
-        ($ExpectedPid -and $helperProcessId -ne $ExpectedPid)) { throw '한글 가사 도우미 실행 정보를 확인하지 못했습니다.' }
+        ($ExpectedPid -and $helperProcessId -ne $ExpectedPid)) { throw (Get-Text '한글 가사 도우미 실행 정보를 확인하지 못했습니다.' 'Could not confirm the Hangul lyrics helper process information.') }
     $helperProcess=Get-CimInstance Win32_Process -Filter ('ProcessId='+$helperProcessId) -ErrorAction Stop
     if (-not $helperProcess -or -not $helperProcess.CommandLine -or -not $PythonPath -or
         -not $helperProcess.ExecutablePath -or
         [IO.Path]::GetFullPath($helperProcess.ExecutablePath) -ine [IO.Path]::GetFullPath($PythonPath)) {
-        throw '다른 위치의 도우미가 가사 포트를 사용하고 있습니다. 해당 설치본을 종료한 뒤 다시 실행해 주세요.'
+        throw (Get-Text '다른 위치의 도우미가 가사 포트를 사용하고 있습니다. 해당 설치본을 종료한 뒤 다시 실행해 주세요.' 'A helper from another location is using the lyrics helper port. Close that installation, then start again.')
     }
     $expectedBridge=[IO.Path]::GetFullPath($BridgeScript)
     $arguments=@([regex]::Matches($helperProcess.CommandLine,'"([^"]*)"|(\S+)') | ForEach-Object {
@@ -28,7 +32,7 @@ function Assert-HelperHealth($Health, [string]$BridgeScript, [string]$ExpectedVe
     while ($scriptIndex -lt $arguments.Count -and $arguments[$scriptIndex] -cin @('-u','-B','-I')) { $scriptIndex++ }
     if ($scriptIndex -ne $arguments.Count-1 -or
         -not [string]::Equals($arguments[$scriptIndex],$expectedBridge,[StringComparison]::OrdinalIgnoreCase)) {
-        throw '다른 설치 위치의 도우미가 실행 중입니다. 해당 설치본을 종료한 뒤 다시 실행해 주세요.'
+        throw (Get-Text '다른 설치 위치의 도우미가 실행 중입니다. 해당 설치본을 종료한 뒤 다시 실행해 주세요.' 'A helper from another installation location is running. Close that installation, then start again.')
     }
     return $true
 }
@@ -63,7 +67,7 @@ if ((Test-Path -LiteralPath $updater) -and (Test-Path -LiteralPath $pendingUpdat
 }
 $bridgeScript = Join-Path $PSScriptRoot 'bridge.py'
 $expectedHelperVersion=(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'release.json') -Raw -Encoding UTF8 | ConvertFrom-Json).helper_version
-if ($expectedHelperVersion -notmatch '^\d+\.\d+\.\d+$') { throw '설치된 도우미 버전 정보가 올바르지 않습니다.' }
+if ($expectedHelperVersion -notmatch '^\d+\.\d+\.\d+$') { throw (Get-Text '설치된 도우미 버전 정보가 올바르지 않습니다.' 'The installed helper version information is not valid.') }
 $pythonWindowless = $env:IVLYRICS_HANGUL_PYTHON
 if (-not $pythonWindowless) {
     $bundledPython = Join-Path $PSScriptRoot 'runtime\pythonw.exe'
@@ -90,7 +94,7 @@ if (Test-Path -LiteralPath $installationState) {
     $installedSpotify = (Get-Content -LiteralPath $installationState -Raw | ConvertFrom-Json).SpotifyExe
     if ($installedSpotify -and (Test-Path -LiteralPath $installedSpotify)) { $spotifyExe = $installedSpotify }
 }
-if (-not (Test-Path -LiteralPath $spotifyExe)) { throw 'Spotify 실행 파일을 찾지 못했습니다.' }
+if (-not (Test-Path -LiteralPath $spotifyExe)) { throw (Get-Text 'Spotify 실행 파일을 찾지 못했습니다.' 'The Spotify executable was not found.') }
 if (Test-Path -LiteralPath $installationState) {
     $installedState = Get-Content -LiteralPath $installationState -Raw | ConvertFrom-Json
     if ($installedState.ManagedClient) {
@@ -101,7 +105,7 @@ if (Test-Path -LiteralPath $installationState) {
             Where-Object { $_.ExecutablePath -and $_.ExecutablePath -ne $spotifyExe })
         foreach ($process in $other) {
             if ($knownPrevious -contains $process.ExecutablePath) { Stop-Process -Id $process.ProcessId -ErrorAction SilentlyContinue }
-            else { throw '다른 위치의 Spotify가 실행 중입니다. 해당 Spotify를 종료한 뒤 한글 가사 바로가기를 다시 실행해 주세요.' }
+            else { throw (Get-Text '다른 위치의 Spotify가 실행 중입니다. 해당 Spotify를 종료한 뒤 한글 가사 바로가기를 다시 실행해 주세요.' 'Spotify from another location is running. Close that Spotify, then start it again from the Spotify Hangul Lyrics shortcut.') }
         }
     }
 }
@@ -113,7 +117,7 @@ try {
     # The reader is not running yet.
 }
 if (-not $bridgeHealthy) {
-    if (-not $pythonWindowless -or -not (Test-Path -LiteralPath $pythonWindowless)) { throw 'Python 실행 파일을 찾지 못했습니다. 도우미 폴더의 python-path.txt에 설치된 pythonw.exe의 전체 경로를 지정해 주세요.' }
+    if (-not $pythonWindowless -or -not (Test-Path -LiteralPath $pythonWindowless)) { throw (Get-Text 'Python 실행 파일을 찾지 못했습니다. 도우미 폴더의 python-path.txt에 설치된 pythonw.exe의 전체 경로를 지정해 주세요.' 'The Python executable was not found. Put the full path of an installed pythonw.exe in python-path.txt in the helper folder.') }
     $startedHelper=Start-Process -FilePath $pythonWindowless -ArgumentList @('-u', ('"' + $bridgeScript + '"')) -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -PassThru
     for ($attempt = 0; $attempt -lt 20; $attempt++) {
         Start-Sleep -Milliseconds 250
@@ -129,7 +133,7 @@ if (-not $bridgeHealthy) {
             }
         } catch [System.Net.WebException] { }
     }
-    if (-not $bridgeHealthy) { throw '한글 발음 도우미를 시작하지 못했습니다.' }
+    if (-not $bridgeHealthy) { throw (Get-Text '한글 발음 도우미를 시작하지 못했습니다.' 'The Hangul lyrics helper could not be started.') }
 }
 # Spotify first: the optional overlay can take a few seconds to open its port.
 $spotifyArguments=@(if ($Autostart) { '--autostart' }; if ($Autostart -eq 'Minimized') { '--minimized' })
@@ -167,7 +171,7 @@ if ($installedState.ManagedClient -and (Test-Path -LiteralPath $autostartHelper)
     try { "$(Get-Date -Format o)`r`n$message" | Set-Content -LiteralPath $errorFile -Encoding UTF8 } catch { }
     if (-not $NoErrorDialog) {
         $dialog = New-Object -ComObject WScript.Shell
-        [void]$dialog.Popup("$message`r`n`r`n오류 기록: $errorFile", 0, 'Spotify 한글 가사 실행 오류', 16)
+        [void]$dialog.Popup($message+"`r`n`r`n"+(Get-Text '오류 기록: ' 'Error log: ')+$errorFile, 0, (Get-Text 'Spotify 한글 가사 실행 오류' 'Spotify Hangul Lyrics startup error'), 16)
     }
     throw $message
 } finally {

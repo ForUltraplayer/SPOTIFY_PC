@@ -22,7 +22,7 @@
             save_too_big: 'List files can be saved up to 3 MB.', bad_phone_items: "The phone list's song entries are not valid.",
             import_too_big: 'List files can be imported up to 3 MB.', bad_json: 'This is not a valid JSON list file.',
             unsupported: 'This is not a supported Spotify Hangul mixed list or phone list file.',
-            save_failed: 'Could not save the playlist.', bad_save_result: 'The save result is not valid.',
+            save_failed: "Couldn't save the playlist.", bad_save_result: 'The save result is not valid.',
             export_detail: 'Saved the Spotify songs, YouTube links, play order and lyrics search details together.',
             copy_path: 'Copy file path', export_title: 'Playlist exported', export_done: 'List saved: %1',
             pick_file: 'Choose a JSON file of 3 MB or less.', imported: 'Imported as a new local list: %1',
@@ -47,9 +47,9 @@
         },
     };
     // The language is read on each call, from Spotify's locale and then the browser's.
+    const languageOf = host => /^ko(?:[-_]|$)/i.test(String(host?.Spicetify?.Locale?.getLocale?.() || host?.navigator?.language || '')) ? 'ko' : 'en';
     function translate(host, key, ...args) {
-        const lang = /^ko(?:[-_]|$)/i.test(String(host?.Spicetify?.Locale?.getLocale?.() || host?.navigator?.language || '')) ? 'ko' : 'en';
-        const text = STRINGS[lang]?.[key] ?? STRINGS.en[key] ?? key;
+        const text = STRINGS[languageOf(host)]?.[key] ?? STRINGS.en[key] ?? key;
         return text.replace(/%(\d)/g, (mark, n) => args[n - 1] === undefined ? mark : String(args[n - 1]));
     }
     const t = (key, ...args) => translate(globalThis, key, ...args);
@@ -157,7 +157,8 @@
             const timeout = host.setTimeout(() => controller.abort(), 15000);
             try {
                 const response = await host.fetch('http://127.0.0.1:19643/youtube/export', { method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Hangul-Lyrics-Client': 'ivlyrics' },
+                    // The helper answers its errors in the language asked for.
+                    headers: { 'Content-Type': 'application/json', 'X-Hangul-Lyrics-Client': 'ivlyrics', 'X-Hangul-Language': languageOf(host) },
                     body: JSON.stringify(document), signal: controller.signal });
                 const result = await response.json(); check();
                 if (!response.ok) throw new Error(result.error || t('save_failed'));

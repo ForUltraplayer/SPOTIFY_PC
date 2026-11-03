@@ -6,11 +6,13 @@ $hook = Join-Path $project 'installer\integrate.ps1'
 $parseErrors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($hook, [ref]$null, [ref]$parseErrors)
 if ($parseErrors.Count) { throw 'Installer hook did not parse.' }
-foreach ($name in @('Assert-AppDirectory','Stop-OwnHelper','Get-ApplyArguments')) {
+foreach ($name in @('Get-Text','Assert-AppDirectory','Stop-OwnHelper','Get-ApplyArguments')) {
     $definition = $ast.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true)
     if (-not $definition) { throw ('Missing function: ' + $name) }
     Invoke-Expression $definition.Extent.Text
 }
+# The extracted functions read the language from this variable; the assertions below match the English messages, whatever language this PC uses.
+$useKorean = $false
 $testArea = Join-Path $project 'work\installer-unit-tests'
 New-Item -ItemType Directory -Path $testArea -Force | Out-Null
 $passed = 0
@@ -22,8 +24,15 @@ $passed++
 $sentinel = Join-Path $root 'user-data.txt'
 'preserve' | Set-Content -LiteralPath $sentinel -Encoding UTF8
 $rejected = $false
-try { Assert-AppDirectory } catch { $rejected = $true }
+try { Assert-AppDirectory } catch { $rejected = $_.Exception.Message -match 'Choose an empty folder' }
 if (-not $rejected -or (Get-Content -LiteralPath $sentinel -Raw).Trim() -ne 'preserve') { throw 'Unowned directory was not preserved.' }
+$passed++
+# The same refusal is reported in Korean when the installer or Windows language is Korean.
+$useKorean = $true
+$rejected = $false
+try { Assert-AppDirectory } catch { $rejected = $_.Exception.Message -match '비어 있는 폴더' -and $_.Exception.Message -notmatch 'empty folder' }
+$useKorean = $false
+if (-not $rejected) { throw 'The Korean folder message was not used.' }
 $passed++
 '{"app":"SpotifyHangul"}' | Set-Content -LiteralPath $marker -Encoding UTF8
 Assert-AppDirectory

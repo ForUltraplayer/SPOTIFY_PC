@@ -226,7 +226,9 @@ class LaunchEndpointTests(unittest.TestCase):
             self.assertEqual(post('/update/check')[1], {'status': 'started'})
         self.assertEqual(update.call_count, 2)
         with patch.object(bridge, 'launch_update_check', return_value=False):
-            self.assertEqual(post('/update/check'), (404, {'status': 'missing', 'error': '업데이트 프로그램이 설치되지 않았습니다.'}))
+            with patch('messages.detected_language', return_value='ko'):
+                self.assertEqual(post('/update/check'), (404, {'status': 'missing', 'code': 'updater_missing',
+                                                              'error': '업데이트 프로그램이 설치되지 않았습니다.'}))
         self.popen.side_effect = OSError('denied')
         self.running.return_value = False
         self.assertEqual(post('/overlay/launch')[0], 500)
@@ -786,6 +788,112 @@ class YouTubeMetadataTests(unittest.TestCase):
             opener.return_value.open.side_effect = urllib.error.HTTPError('u', 503, 'Unavailable', {}, None)
             with self.assertRaises(urllib.error.HTTPError):
                 youtube_metadata('rKQptWhAvO1')
+
+
+class LanguageTests(unittest.TestCase):
+    """Answers follow X-Hangul-Language, else the Windows display language; every error carries its key as code."""
+    def setUp(self):
+        import bridge, http.client, socket
+        servers = []
+        class Recorded(bridge.HelperServer):
+            def __init__(self, *args):
+                super().__init__(*args)
+                servers.append(self)
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1', 0))
+            port = probe.getsockname()[1]
+        with patch.object(bridge, 'HelperServer', Recorded):
+            threading.Thread(target=bridge.serve, kwargs={'port': port, 'lifetime': False}, daemon=True).start()
+            for _ in range(100):
+                if servers:
+                    break
+                threading.Event().wait(0.05)
+        self.addCleanup(lambda: servers[0].shutdown())
+        self.client = {'Origin': bridge.ORIGIN, 'X-Hangul-Lyrics-Client': 'ivlyrics', 'Content-Type': 'application/json'}
+        self.connection = http.client.HTTPConnection('127.0.0.1', port, timeout=5)
+        self.addCleanup(self.connection.close)
+
+    def call(self, method, path, body=None, language=None, **headers):
+        sent = {**self.client, **headers}
+        if language is not None:
+            sent['X-Hangul-Language'] = language
+        self.connection.request(method, path, body=body, headers=sent)
+        response = self.connection.getresponse()
+        raw = response.read()
+        return response.status, dict(response.headers), json.loads(raw) if raw else None
+
+    def test_header_selects_the_language_and_the_key_is_the_code(self):
+        body = json.dumps({'video_id': 'not a video id'})
+        for detected in ('ko', 'en'):
+            with patch('messages.detected_language', return_value=detected):
+                self.assertEqual(self.call('POST', '/youtube/metadata', body, language='ko')[::2],
+                                 (400, {'error': 'YouTube 영상 ID가 올바르지 않습니다.', 'code': 'youtube_id_invalid'}))
+                self.assertEqual(self.call('POST', '/youtube/metadata', body, language='en')[::2],
+                                 (400, {'error': 'The YouTube video ID is not valid.', 'code': 'youtube_id_invalid'}))
+
+    def test_without_a_header_the_detected_language_answers_and_unknown_values_are_ignored(self):
+        body = json.dumps({'video_id': 'not a video id'})
+        for detected, expected in (('ko', 'YouTube 영상 ID가 올바르지 않습니다.'), ('en', 'The YouTube video ID is not valid.')):
+            with patch('messages.detected_language', return_value=detected):
+                for language in (None, 'fr', 'KO', 'ko-KR', ''):
+                    with self.subTest(detected=detected, header=language):
+                        status, _, payload = self.call('POST', '/youtube/metadata', body, language=language)
+                        self.assertEqual((status, payload), (400, {'error': expected, 'code': 'youtube_id_invalid'}))
+
+    def test_every_error_answer_carries_a_code(self):
+        import bridge, messages
+        with patch('messages.detected_language', return_value='en'):
+            self.assertEqual(self.call('GET', '/no-such-path')[::2], (404, {'error': 'There is no such path.', 'code': 'path_not_found'}))
+            self.assertEqual(self.call('POST', '/resolve', '{}', Origin='https://evil.example')[::2],
+                             (403, {'error': 'This request is not allowed.', 'code': 'request_forbidden'}))
+            status, _, payload = self.call('POST', '/playback-command', '{}', **{'X-Hangul-Overlay-Token': 'stale'})
+            self.assertEqual((status, payload), (403, {'error': 'The playback control session is not valid or has expired.',
+                                                       'code': 'control_session_invalid'}))
+            # A message that is not a key (here the JSON parser's) keeps its text and gets the handler's fallback code.
+            status, _, payload = self.call('POST', '/youtube/metadata', 'not json')
+            self.assertEqual(status, 400)
+            self.assertEqual(payload['code'], 'invalid_request')
+            self.assertNotIn(payload['error'], messages.MESSAGES)
+            with patch.object(bridge, 'youtube_metadata', side_effect=ZeroDivisionError('boom')):
+                self.assertEqual(self.call('POST', '/youtube/metadata', json.dumps({'video_id': 'rKQptWhAvO0'}))[::2],
+                                 (500, {'error': "Couldn't read the pronunciation data.",
+                                        'code': 'pronunciation_read_failed'}))
+
+    def test_preflight_allows_the_language_header_on_every_route(self):
+        import bridge
+        for path, origin in (('/youtube/metadata', bridge.ORIGIN), ('/playback-command', 'http://tauri.localhost'),
+                             ('/ext/media/x', bridge.ORIGIN)):
+            status, headers, _ = self.call('OPTIONS', path, Origin=origin)
+            self.assertEqual(status, 204, path)
+            self.assertIn('X-Hangul-Language', [name.strip() for name in headers['Access-Control-Allow-Headers'].split(',')], path)
+
+    def test_message_table_is_complete_and_the_windows_language_is_read_once(self):
+        import messages
+        for key, value in messages.MESSAGES.items():
+            self.assertEqual(set(value), {'ko', 'en'}, key)
+            self.assertTrue(value['ko'].strip() and value['en'].strip(), key)
+            self.assertRegex(key, r'^[a-z][a-z0-9_]*$')
+        self.assertIn(messages.detected_language(), ('ko', 'en'))
+        kernel = Mock()
+        kernel.GetUserDefaultUILanguage.side_effect = [0x0412, 0x0409, 0x0C12]
+        with patch.object(messages.os, 'name', 'nt'), patch.object(messages.ctypes, 'windll', Mock(kernel32=kernel), create=True):
+            messages.detected_language.cache_clear()
+            self.assertEqual(messages.detected_language(), 'ko')
+            self.assertEqual(messages.detected_language(), 'ko')  # Cached: the second value is not read.
+            messages.detected_language.cache_clear()
+            self.assertEqual(messages.detected_language(), 'en')
+            messages.detected_language.cache_clear()
+            self.assertEqual(messages.detected_language(), 'ko')  # Korean with another sort id above the primary language.
+        messages.detected_language.cache_clear()
+        with patch.object(messages.os, 'name', 'posix'):
+            self.assertEqual(messages.detected_language(), 'en')
+        messages.detected_language.cache_clear()
+
+    def test_the_missing_reading_marker_is_unchanged_data(self):
+        # hangul-lyrics.js compares lines with this marker byte for byte; it is never localized.
+        import messages
+        self.assertEqual(align_lines(TEXT + '\n知らない言葉を探す', PAIRS)['phonetic'][-1], '(발음 자료 없음)')
+        self.assertNotIn('(발음 자료 없음)', [value['ko'] for value in messages.MESSAGES.values()])
 
 
 if __name__ == '__main__':

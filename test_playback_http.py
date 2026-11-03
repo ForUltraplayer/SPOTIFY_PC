@@ -38,12 +38,14 @@ class PlaybackHTTPTests(unittest.TestCase):
         cls.process.wait(timeout=5)
 
     @classmethod
-    def request(cls, method, path, body=None, origin='https://xpui.app.spotify.com', token=None, client=True):
+    def request(cls, method, path, body=None, origin='https://xpui.app.spotify.com', token=None, client=True, language=None):
         headers = {'Content-Type': 'application/json'}
         if origin is not None:
             headers['Origin'] = origin
         if token:
             headers['X-Hangul-Overlay-Token'] = token
+        if language:
+            headers['X-Hangul-Language'] = language
         if client:
             headers['X-Hangul-Lyrics-Client'] = 'ivlyrics'
         connection = http.client.HTTPConnection('127.0.0.1', cls.port, timeout=3)
@@ -144,6 +146,16 @@ class PlaybackHTTPTests(unittest.TestCase):
         code, headers, _ = self.request('OPTIONS', '/playback-command', origin='http://tauri.localhost')
         self.assertEqual(code, 204)
         self.assertIn('X-Hangul-Overlay-Token', headers['Access-Control-Allow-Headers'])
+        self.assertIn('X-Hangul-Language', headers['Access-Control-Allow-Headers'])
+
+    def test_control_errors_answer_in_the_requested_language_with_a_code(self):
+        # The real helper process: the header decides, whatever this PC's Windows display language is.
+        for language, expected in (('ko', '재생 제어 세션이 올바르지 않거나 만료됐습니다.'),
+                                   ('en', 'The playback control session is not valid or has expired.')):
+            code, _, body = self.request('GET', '/playback-state', origin='http://tauri.localhost', token='stale', language=language)
+            self.assertEqual((code, body), (403, {'error': expected, 'code': 'control_session_invalid'}), language)
+        code, _, body = self.request('POST', '/playback-session', {'instance': 'not-a-uuid'}, language='en')
+        self.assertEqual((code, body), (400, {'error': 'A valid playback instance UUID is required.', 'code': 'instance_uuid_invalid'}))
         self.assertEqual(self.request('OPTIONS', '/resolve', origin='http://tauri.localhost')[0], 403)
 
 

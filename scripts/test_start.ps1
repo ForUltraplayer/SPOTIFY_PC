@@ -5,9 +5,13 @@ $project=Split-Path -Parent $PSScriptRoot
 $errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $project 'start.ps1'),[ref]$null,[ref]$errors)
 if ($errors.Count) { throw 'Starter parsing failed.' }
-$node=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Assert-HelperHealth'},$true)
-if (-not $node) { throw 'Helper ownership guard missing.' }
-Invoke-Expression $node.Extent.Text
+foreach ($name in @('Get-Text','Assert-HelperHealth')) {
+    $node=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name},$true)
+    if (-not $node) { throw ('Helper ownership guard missing: '+$name) }
+    Invoke-Expression $node.Extent.Text
+}
+# The extracted functions read the language from this variable; English first, whatever language this PC uses.
+$useKorean=$false
 $testRoot=Join-Path $project 'work\start-unit\한글 공백'
 $bridge=Join-Path $testRoot 'bridge.py'
 $python=Join-Path $testRoot 'runtime\pythonw.exe'
@@ -49,4 +53,14 @@ $script:mockProcess=[PSCustomObject]@{ExecutablePath=(Join-Path $testRoot 'other
 $script:mockProcess=$null; Expect-Rejection $valid
 $script:mockProcess=[PSCustomObject]@{ExecutablePath=$python;CommandLine=('"'+$python+'" -I -B -u "'+$bridge+'"')}
 if (-not (Assert-HelperHealth $valid $bridge '0.7.0' $python)) { throw 'Owned isolated helper rejected.' }; $script:passed++
+# The version mismatch is explained in English by default and in Korean on a Korean installer or Windows.
+$record=Copy-Health; $record.version='0.6.3'
+foreach ($case in @(@($false,'helper version is different'),@($true,'도우미 버전이 다릅니다'))) {
+    $useKorean=$case[0]
+    $message=$null
+    try { $null=Assert-HelperHealth $record $bridge '0.7.0' $python } catch { $message=$_.Exception.Message }
+    if (-not $message -or $message -notmatch [regex]::Escape($case[1])) { throw ('Language '+$(if ($case[0]) { 'ko' } else { 'en' })+' did not select its message: '+$message) }
+    $script:passed++
+}
+$useKorean=$false
 [PSCustomObject]@{tests=$script:passed;ownedHelperVerified=$true;foreignHelperRejected=$true;capabilitiesRequired=$true;applicationsNotLaunched=$true} | ConvertTo-Json

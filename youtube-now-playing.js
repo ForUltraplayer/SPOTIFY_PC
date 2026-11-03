@@ -19,7 +19,7 @@
     const STRINGS = {
         en: {
             panel_label: 'YouTube now playing', heading: 'Now playing', queue: 'Show queue',
-            close: 'Stop link playback', close_title: 'Stop link playback and go back to Spotify', video_base: 'YouTube video',
+            close: 'Stop YouTube link playback', close_title: 'Stop YouTube link playback and go back to Spotify', video_base: 'YouTube video',
             no_track_title: 'Pick a song', no_track_artist: 'Pick a song you want to hear from the queue.',
             modes_label: 'YouTube playback mode', mode_audio: 'Audio', mode_video: 'Video',
             mode_audio_label: 'Play audio', mode_video_label: 'Play video',

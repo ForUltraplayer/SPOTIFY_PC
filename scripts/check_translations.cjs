@@ -11,7 +11,7 @@ const vm = require('node:vm');
 const ROOT = path.join(__dirname, '..');
 // Modules whose screen text is localized. A module joins this list once its Korean text has moved into its table.
 const LOCALIZED = ['extension-player.js', 'youtube-links.js', 'youtube-player.html', 'youtube-now-playing.js',
-    'youtube-library.js', 'youtube-overlay-controls.js'];
+    'youtube-library.js', 'youtube-overlay-controls.js', 'hangul-lyrics.js', 'ivlyrics-sync.js', 'ivlyrics-sync-ui.js', 'youtube-ivlyrics.js'];
 const HANGUL = /[ᄀ-ᇿ㄰-㆏가-힣]/;
 
 // The code with comments blanked (strings, template literals and regex literals kept), offsets unchanged.

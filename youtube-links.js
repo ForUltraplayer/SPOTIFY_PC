@@ -5,17 +5,17 @@
 // Every text the link screens show. English is the default; Korean when Spotify's UI is Korean.
 const STRINGS = {
     en: {
-        default_list: 'Linked music', untitled_list: 'Playlist',
-        module_failed: "Couldn't load the YouTube modules. They are tried again on their own once the helper is ready.",
+        default_list: 'YouTube links', untitled_list: 'Playlist',
+        module_failed: "Couldn't load the YouTube link modules. They are tried again automatically once the helper is ready.",
         open_playlist_to_export: 'Open the playlist to export first.', too_many_lists: 'There are already as many lists as can be saved.',
-        panel_title: 'Linked music', collapse: 'Collapse', back_to_spotify: 'Back to Spotify', link_placeholder: 'YouTube / YouTube Music link',
+        panel_title: 'YouTube links', collapse: 'Collapse', back_to_spotify: 'Back to Spotify', link_placeholder: 'YouTube / YouTube Music link',
         new_list: 'New list', list_name_prompt: 'Playlist name', add_link: 'Add link', add_current_song: 'Add the current Spotify song',
         import_current_list: 'Import the current Spotify list',
-        panel_hint: "Only the links are saved. This list is kept in Linked music on this PC; the original list on Spotify's servers is not changed.",
-        frame_title: 'YouTube linked music player', check_mode: 'Check the playback mode.', mode_not_saved: "Couldn't save the playback mode setting.",
-        audio_error: 'The fallback audio failed to play. Play the song again.', audio_checking: 'Looking for the public audio…',
+        panel_hint: "Only the links are saved. This list is kept in YouTube links on this PC; the original list on Spotify's servers is not changed.",
+        frame_title: 'YouTube links player', check_mode: 'Check the playback mode.', mode_not_saved: "Couldn't save the playback mode setting.",
+        audio_error: 'The audio stream failed to play. Play the song again.', audio_checking: 'Looking for the public audio…',
         audio_not_found: "Couldn't find the public audio.", audio_bad_url: 'Not a valid public audio address.',
-        audio_timeout: 'Looking up the audio took too long.', audio_retry: '%1 Choose Audio again, or choose YouTube video.',
+        audio_timeout: 'Looking up the audio took too long.', audio_retry: '%1 Choose Audio again, or choose Video.',
         open_playlist_for_youtube: 'Open the Spotify playlist to add YouTube to.', remove: 'Remove', empty_list: 'Add a link or the current Spotify song.',
         read_timeout: 'Reading the Spotify list took too long. Press Reload.',
         too_long: 'A mixed list supports up to 2,000 songs for now. The original list is shown.',
@@ -24,7 +24,7 @@ const STRINGS = {
         local_label: 'Imported local playlist', play_button: '▶ Play', spotify_playlist: 'Spotify playlist', add_youtube_link: 'Add YouTube link',
         reload: 'Reload', mixed_list: 'Mixed list', edit_original: 'Edit original', spotify_order: 'Spotify order', export: 'Export', import: 'Import',
         links_saved_note: 'YouTube links are saved on this PC.', reading_list: 'Reading the Spotify list…',
-        list_counts: '%1 Spotify + %2 YouTube songs · Links are saved on this PC.', mixed_tracklist: '%1 mixed track list',
+        list_counts: '%1 Spotify + %2 YouTube songs · Links are saved on this PC.', mixed_tracklist: '%1 mixed song list',
         column_title: 'Title', column_album: 'Album / source', column_duration: 'Duration', play_item: 'Play %1',
         move_up: 'Move %1 up', move_down: 'Move %1 down', remove_link: 'Remove the %1 link', copy_title: 'Copy title',
         add_youtube_after: 'Add YouTube after this song', open_spotify_song: 'Open the Spotify song', lyric_info: 'Lyrics search info',
@@ -45,19 +45,19 @@ const STRINGS = {
         add_dialog_title: 'Add YouTube to %1', already_in_list: 'This video is already in this list.',
         youtube_info_failed: "Couldn't get the YouTube details.", select_spotify_song: 'Select a Spotify song first.',
         select_playlist_song: 'Select a song from a Spotify playlist first.', list_read_unsupported: "This Spotify version can't read lists.",
-        imported_list_name: 'List imported from Spotify', imported_notice: 'Imported %1 songs into a Linked music list. The original list stays as it is.',
+        imported_list_name: 'List imported from Spotify', imported_notice: 'Imported %1 songs into a YouTube links list. The original list stays as it is.',
         device_changed: 'The playback device changed, so mixed YouTube playback stopped. Play it again on this computer.',
         spotify_play_failed: "Couldn't play the Spotify song.", press_play: "Press the YouTube player's play button.",
-        youtube_pause: 'Pause YouTube', youtube_play: 'Play YouTube', repeat: 'Linked music repeat: %1', playlist_pause: 'Pause %1', playlist_play: 'Play %1',
-        shuffle_on: 'Linked music shuffle on', shuffle_off: 'Linked music shuffle off', plays_here: 'YouTube linked music plays on this PC.',
-        copy_link: 'Copy YouTube link', youtube_link_music: 'YouTube linked music', managed_in_list: 'YouTube videos are managed in Linked music lists.',
+        youtube_pause: 'Pause YouTube', youtube_play: 'Play YouTube', repeat: 'YouTube links repeat: %1', playlist_pause: 'Pause %1', playlist_play: 'Play %1',
+        shuffle_on: 'YouTube links shuffle on', shuffle_off: 'YouTube links shuffle off', plays_here: 'YouTube links play on this PC.',
+        copy_link: 'Copy YouTube link', youtube_link_music: 'YouTube links', managed_in_list: 'YouTube videos are managed in the YouTube links lists.',
         lyric_loading: 'Looking up lyrics…', lyric_server: 'Lyrics server answered: %1',
         lyric_not_found: 'No original lyrics were found for that title and artist.',
         lyric_timing: 'Timing follows the original song and can differ from a cover video.',
         add_youtube_menu: 'Add YouTube to playlist', no_local_lists: 'No imported local lists.', import_from_file: 'Import from a file',
         local_lists: 'Local mixed playlists', import_mixed: 'Import a mixed playlist', playback_mode: 'YouTube playback mode',
-        playback_mode_note: 'Audio uses the public audio stream. YouTube video can show ads, and it is separate from your Spotify sign-in.',
-        mode_audio: 'Audio', mode_video: 'YouTube video', no_playlist: 'No such playlist.',
+        playback_mode_note: 'Audio plays the public audio stream. Video plays in the YouTube player, which can show ads and is separate from your Spotify sign-in.',
+        mode_audio: 'Audio', mode_video: 'Video', no_playlist: 'No such playlist.',
     },
     ko: {
         default_list: '링크 음악', untitled_list: '재생목록',
@@ -174,7 +174,7 @@ if(typeof window!=='undefined')(() => {
     'use strict';
     const BASE='http://127.0.0.1:19643',KEY='spotify-hangul:link-playlists:v1',MODE_KEY='spotify-hangul:youtube-playback-mode:v1',MODEL=SpotifyHangulLinkModel;
     // The loopback helper can drop a connection while it restarts; retry a network failure twice before reporting it.
-    async function postHelper(path,body,signal){for(let attempt=0;;attempt++){try{return await fetch(BASE+path,{method:'POST',headers:{'Content-Type':'application/json','X-Hangul-Lyrics-Client':'ivlyrics'},body:JSON.stringify(body),signal});}catch(error){if(error.name==='AbortError'||attempt>=2)throw error;await new Promise(resolve=>setTimeout(resolve,400*(attempt+1)));}}}
+    async function postHelper(path,body,signal){for(let attempt=0;;attempt++){try{return await fetch(BASE+path,{method:'POST',headers:{'Content-Type':'application/json','X-Hangul-Lyrics-Client':'ivlyrics','X-Hangul-Language':language()},body:JSON.stringify(body),signal});}catch(error){if(error.name==='AbortError'||attempt>=2)throw error;await new Promise(resolve=>setTimeout(resolve,400*(attempt+1)));}}}
     function readPlaybackMode(){try{return localStorage.getItem(MODE_KEY)==='audio'?'audio':'video';}catch{return'video';}}
     let adapterLoading=false,moduleFailures=0;
     const init=()=>{
@@ -269,7 +269,7 @@ if(typeof window!=='undefined')(() => {
             frame.contentWindow?.postMessage({type:'spotify-hangul-youtube-command',session,command:'pause'},BASE);
             mediaMode='direct';pendingAudioSeek={epoch,videoId:item.videoId,seconds};state={...state,seconds};playing=false;lastError=t('audio_checking');open();renderStatus();
             try{let response,stream;for(let attempt=0;attempt<4;attempt++){
-                response=await fetch(BASE+'/youtube/stream',{method:'POST',headers:{'Content-Type':'application/json','X-Hangul-Lyrics-Client':'ivlyrics'},body:JSON.stringify({video_id:item.videoId}),signal:controller.signal});stream=await response.json();
+                response=await fetch(BASE+'/youtube/stream',{method:'POST',headers:{'Content-Type':'application/json','X-Hangul-Lyrics-Client':'ivlyrics','X-Hangul-Language':language()},body:JSON.stringify({video_id:item.videoId}),signal:controller.signal});stream=await response.json();
                 if(response.ok)break;if(attempt===3||!(response.status===429||response.status>=500))throw new Error(stream.error||t('audio_not_found'));
                 await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{controller.signal.removeEventListener('abort',cancel);resolve();},2000);const cancel=()=>{clearTimeout(timer);reject(new DOMException('Track changed','AbortError'));};if(controller.signal.aborted)cancel();else controller.signal.addEventListener('abort',cancel,{once:true});});
             }
@@ -477,7 +477,7 @@ if(typeof window!=='undefined')(() => {
             const url='https://lrclib.net/api/search?track_name='+encodeURIComponent(title)+'&artist_name='+encodeURIComponent(artist);const response=await fetch(url,{signal:controller.signal});if(!response.ok)throw new Error(t('lyric_server',response.status));const results=await response.json();const result=results.find(r=>r.syncedLyrics)||results.find(r=>r.plainLyrics);if(!result){lyricBox.textContent=t('lyric_not_found');return;}
             lyrics=(result.syncedLyrics||result.plainLyrics||'').split('\n').map(line=>{const m=line.match(/^\[(\d+):(\d+(?:\.\d+)?)\](.*)$/);return{time:m?Number(m[1])*60+Number(m[2]):null,text:(m?m[3]:line).trim()};}).filter(l=>l.text);
             const data={title,artist,text:lyrics.map(l=>l.text).join('\n'),automatic_fallback:false};
-            const read=await fetch(BASE+'/resolve',{method:'POST',headers:{'Content-Type':'application/json','X-Hangul-Lyrics-Client':'ivlyrics'},body:JSON.stringify(data),signal:controller.signal});lyricsResult=await read.json();renderLyric();
+            const read=await fetch(BASE+'/resolve',{method:'POST',headers:{'Content-Type':'application/json','X-Hangul-Lyrics-Client':'ivlyrics','X-Hangul-Language':language()},body:JSON.stringify(data),signal:controller.signal});lyricsResult=await read.json();renderLyric();
             } finally {clearTimeout(timeout);if(lyricAbort===controller)lyricAbort=null;}
         }
         function renderLyric(){if(!lyrics.length)return;const index=lyrics.findLastIndex(l=>l.time!==null&&l.time<=state.seconds);const phonetic=lyricsResult?.phonetic||[];if(lyrics.every(l=>l.time===null)){lyricBox.textContent=lyrics.map((l,i)=>l.text+(phonetic[i]?'\n'+phonetic[i]:'')).join('\n\n');return;}const at=Math.max(0,index);lyricBox.textContent=t('lyric_timing')+'\n'+lyrics[at].text+'\n'+(phonetic[at]||lyricsResult?.error||'');}

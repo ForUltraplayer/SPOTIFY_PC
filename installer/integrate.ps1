@@ -17,17 +17,21 @@ $cli = Join-Path $root 'tools\spicetify.exe'
 $state = $null
 $attempt = $null
 $spotifyStopped = $false
+# Korean on Korean Windows, English elsewhere; SPOTIFYHANGUL_LANGUAGE (ko or en) overrides it (the installer passes its language, tests pin it).
+$useKorean = if ($env:SPOTIFYHANGUL_LANGUAGE) { $env:SPOTIFYHANGUL_LANGUAGE -eq 'ko' } else { (Get-UICulture).TwoLetterISOLanguageName -eq 'ko' }
+
+function Get-Text([string]$Korean, [string]$English) { if ($useKorean) { return $Korean }; return $English }
 
 function Assert-AppDirectory {
     $forbidden = @([IO.Path]::GetPathRoot($root).TrimEnd('\'), $env:USERPROFILE, $env:LOCALAPPDATA, $env:APPDATA, $env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:SystemRoot)
-    if ($forbidden -contains $root) { throw '설치할 전용 하위 폴더를 선택해 주세요.' }
+    if ($forbidden -contains $root) { throw (Get-Text '설치할 전용 하위 폴더를 선택해 주세요.' 'Choose a dedicated subfolder to install into.') }
     if (Test-Path -LiteralPath $root) {
         $known = $false
         if (Test-Path -LiteralPath $marker) {
             $known = (Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json).app -eq 'SpotifyHangul'
         }
         if (-not $known -and @(Get-ChildItem -LiteralPath $root -Force).Count) {
-            throw '비어 있는 폴더 또는 기존 Spotify 한글 가사 설치 폴더를 선택해 주세요.'
+            throw (Get-Text '비어 있는 폴더 또는 기존 Spotify 한글 가사 설치 폴더를 선택해 주세요.' 'Choose an empty folder or an existing Spotify Hangul Lyrics installation folder.')
         }
     }
 }
@@ -39,20 +43,20 @@ function Find-Spotify {
         if ($setting) { $candidates = @((Join-Path $setting.Matches[0].Groups[1].Value 'Spotify.exe')) + $candidates }
     }
     foreach ($candidate in $candidates) { if (Test-Path -LiteralPath $candidate) { return [IO.Path]::GetFullPath($candidate) } }
-    throw 'Spotify 데스크톱 실행 파일을 찾지 못했습니다. Spotify 데스크톱 버전을 설치하고 한 번 실행한 뒤 다시 설치해 주세요.'
+    throw (Get-Text 'Spotify 데스크톱 실행 파일을 찾지 못했습니다. Spotify 데스크톱 버전을 설치하고 한 번 실행한 뒤 다시 설치해 주세요.' 'The Spotify desktop executable was not found. Install the Spotify desktop app, run it once, then install again.')
 }
 
 function Stop-OwnHelper {
     $health = $null
     try { $health = Invoke-RestMethod -Uri 'http://127.0.0.1:19643/health' -TimeoutSec 2 }
     catch [System.Net.WebException] { return }
-    if ($health.app -ne 'ivLyricsHangul') { throw '한글 가사 포트를 다른 앱이 사용하고 있습니다.' }
+    if ($health.app -ne 'ivLyricsHangul') { throw (Get-Text '한글 가사 포트를 다른 앱이 사용하고 있습니다.' 'Another app is using the lyrics helper port.') }
     $process = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $health.pid)
     $paths = @((Join-Path $root 'bridge.py'), (Join-Path $env:LOCALAPPDATA 'ivLyricsHangul\bridge.py'))
     $old = (Get-ItemProperty -LiteralPath 'HKCU:\Software\SpotifyHangul' -ErrorAction SilentlyContinue).InstallDir
     if ($old) { $paths += Join-Path $old 'bridge.py' }
     if (-not @($paths | Where-Object { $process.CommandLine -and $process.CommandLine.Contains($_) }).Count) {
-        throw '실행 중인 도우미의 설치 경로를 확인하지 못했습니다.'
+        throw (Get-Text '실행 중인 도우미의 설치 경로를 확인하지 못했습니다.' 'Could not confirm the installation path of the running helper.')
     }
     Stop-Process -Id $health.pid
 }
@@ -70,7 +74,7 @@ function Invoke-Spicetify([string[]]$Arguments) {
         & $cli @Arguments 2>&1 | Out-File -LiteralPath (Join-Path $root 'install.log') -Encoding UTF8 -Append
         $exitCode = $LASTEXITCODE
     } finally { $ErrorActionPreference = $savedPreference }
-    if ($exitCode -ne 0) { throw ('Spotify 설정 적용에 실패했습니다. install.log를 확인해 주세요. 작업: ' + ($Arguments -join ' ')) }
+    if ($exitCode -ne 0) { throw ((Get-Text 'Spotify 설정 적용에 실패했습니다. install.log를 확인해 주세요. 작업: ' 'Applying the Spotify configuration failed. Check install.log. Step: ') + ($Arguments -join ' ')) }
 }
 
 function Get-ApplyArguments([string]$SpotifyExe) {
@@ -102,7 +106,7 @@ try {
         '{"app":"SpotifyHangul","prepared":true}' | Set-Content -LiteralPath $marker -Encoding UTF8
         exit 0
     }
-    if ((Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json).app -ne 'SpotifyHangul') { throw '설치 폴더 식별자가 올바르지 않습니다.' }
+    if ((Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json).app -ne 'SpotifyHangul') { throw (Get-Text '설치 폴더 식별자가 올바르지 않습니다.' 'The installation folder marker is not valid.') }
     if (Test-Path -LiteralPath $statePath) {
         $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
         $configRoot = $state.ConfigRoot
@@ -111,7 +115,7 @@ try {
         $extension = Join-Path $configRoot 'Extensions\hangul-lyrics.js'
     }
     if ($Mode -eq 'Uninstall') {
-        if (-not $state) { throw '설치 기록을 찾지 못해 자동 제거를 중단했습니다.' }
+        if (-not $state) { throw (Get-Text '설치 기록을 찾지 못해 자동 제거를 중단했습니다.' 'The installation record was not found, so automatic removal stopped.') }
         $registered = (Get-ItemProperty -LiteralPath 'HKCU:\Software\SpotifyHangul' -ErrorAction SilentlyContinue).InstallDir
         if ($registered -and [IO.Path]::GetFullPath($registered).TrimEnd('\') -ne $root) { exit 0 }
         Stop-OwnHelper
@@ -128,7 +132,7 @@ try {
     }
     $spotifyExe = Find-Spotify
     $prefs = Join-Path $env:APPDATA 'Spotify\prefs'
-    if (-not (Test-Path -LiteralPath $prefs)) { throw '먼저 Spotify를 한 번 실행해 초기 설정을 완료해 주세요.' }
+    if (-not (Test-Path -LiteralPath $prefs)) { throw (Get-Text '먼저 Spotify를 한 번 실행해 초기 설정을 완료해 주세요.' 'Run Spotify once first to finish its initial setup.') }
     New-Item -ItemType Directory -Path $backup,(Join-Path $configRoot 'Extensions'),(Join-Path $configRoot 'CustomApps') -Force | Out-Null
     if (-not $state) {
         $state = [PSCustomObject]@{ App='SpotifyHangul'; ConfigRoot=$configRoot; SpotifyExe=$spotifyExe; ExtensionExisted=(Test-Path -LiteralPath $extension); ConfigExisted=(Test-Path -LiteralPath $configPath) }
@@ -139,7 +143,7 @@ try {
         $state | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding UTF8
     }
     & (Join-Path $root 'runtime\python.exe') -I -B -c 'import sys,pykakasi,phonetics; assert sys.flags.isolated == 1; assert phonetics.japanese_to_hangul(chr(0x9752)+chr(0x3044)+chr(0x7a7a),pykakasi.kakasi())'
-    if ($LASTEXITCODE -ne 0) { throw '앱에 포함된 실행 환경 검증에 실패했습니다.' }
+    if ($LASTEXITCODE -ne 0) { throw (Get-Text '앱에 포함된 실행 환경 검증에 실패했습니다.' 'Verifying the bundled runtime failed.') }
     # Keep the first-install baseline for removal, and an independent snapshot
     # for this update attempt so a failure cannot roll back later user changes.
     $attempt = [PSCustomObject]@{ ExtensionExisted=(Test-Path -LiteralPath $extension); ConfigExisted=(Test-Path -LiteralPath $configPath) }
@@ -155,7 +159,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $root 'hangul-lyrics.js') -Destination $extension -Force
     Invoke-Spicetify -Arguments @('config','custom_apps','ivLyrics','extensions','hangul-lyrics.js')
     Invoke-Spicetify -Arguments (Get-ApplyArguments $spotifyExe)
-    Write-Output 'Spotify 한글 가사 연결을 완료했습니다.'
+    Write-Output (Get-Text 'Spotify 한글 가사 연결을 완료했습니다.' 'Spotify Hangul Lyrics is connected.')
 } catch {
     $message = $_.Exception.Message
     if ($Mode -eq 'Install' -and $attempt) {
