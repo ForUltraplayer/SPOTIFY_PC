@@ -36,7 +36,7 @@ function Get-Sha256([string]$Path) {
 function Assert-Installation {
     $marker=Join-Path $root 'install-marker.json'
     if (-not (Test-Path -LiteralPath $marker) -or (Get-Content -LiteralPath $marker -Raw -Encoding UTF8 | ConvertFrom-Json).app -ne 'SpotifyHangul') {
-        throw (Get-Text 'Spotify 한글 가사 설치 폴더를 확인하지 못했습니다.' 'Could not confirm the Spotify Hangul Lyrics installation folder.')
+        throw (Get-Text 'Spotify-ex 설치 폴더를 확인하지 못했습니다.' 'Could not confirm the Spotify-ex installation folder.')
     }
     $forbidden=@([IO.Path]::GetPathRoot($root).TrimEnd('\'),$env:USERPROFILE,$env:LOCALAPPDATA,$env:APPDATA,$env:SystemRoot,$env:ProgramFiles)
     if ($forbidden -contains $root -or (Get-Item -LiteralPath $root).Attributes -band [IO.FileAttributes]::ReparsePoint) {
@@ -180,7 +180,7 @@ try {
         if (-not $process.WaitForExit(600000)) { Report-UpdateError (Get-Text '설치 프로그램이 제한 시간 안에 끝나지 않았습니다. 설치 창과 install.log를 확인해 주세요.' 'The installer did not finish in time. Check the installer window and install.log.'); exit 11 }
         $failure=Complete-QueuedInstaller $pending $process
         if ($failure) { Report-UpdateError $failure; if ($Interactive) { exit 1 }; exit 0 }
-        Write-Output (Get-Text ('Spotify 한글 가사를 '+$pending.version+' 버전으로 업데이트했습니다.') ('Updated Spotify Hangul Lyrics to '+$pending.version+'.'))
+        Write-Output (Get-Text ('Spotify-ex를 '+$pending.version+' 버전으로 업데이트했습니다.') ('Updated Spotify-ex to '+$pending.version+'.'))
         exit 0
     }
     if ($state.status -eq 'installing') {
@@ -283,7 +283,7 @@ try {
     while (-not $process.WaitForExit(100)) {
         if ((Get-Date) -gt $deadline) {
             Close-UpdateWindow $window; $window=$null
-            Report-UpdateError (Get-Text '설치 프로그램이 제한 시간 안에 끝나지 않았습니다. 설치가 끝난 뒤 Spotify 한글 가사를 다시 실행하고, 계속 실패하면 install.log를 확인해 주세요.' 'The installer did not finish in time. Start Spotify Hangul Lyrics again after it finishes, and check install.log if it keeps failing.')
+            Report-UpdateError (Get-Text '설치 프로그램이 제한 시간 안에 끝나지 않았습니다. 설치가 끝난 뒤 Spotify-ex를 다시 실행하고, 계속 실패하면 install.log를 확인해 주세요.' 'The installer did not finish in time. Start Spotify-ex again after it finishes, and check install.log if it keeps failing.')
             exit 11
         }
         [void](Wait-UpdateWindow $window 0)
@@ -292,9 +292,9 @@ try {
     if ($failure) {
         Close-UpdateWindow $window; $window=$null
         # The installer's own rollback restores the previous files, so the old version is started again.
-        Report-UpdateError ($failure+(Get-Text "`r`n`r`n설치 프로그램이 이전 버전 복구를 시도했습니다. 확인을 누르면 Spotify 한글 가사를 다시 실행합니다." "`r`n`r`nThe installer tried to restore the previous version. Press OK to start Spotify Hangul Lyrics again."))
+        Report-UpdateError ($failure+(Get-Text "`r`n`r`n설치 프로그램이 이전 버전 복구를 시도했습니다. 확인을 누르면 Spotify-ex를 다시 실행합니다." "`r`n`r`nThe installer tried to restore the previous version. Press OK to start Spotify-ex again."))
     } else {
-        Set-UpdateWindow $window (Get-Text ('버전 '+$asset.version+' 설치를 마쳤습니다. Spotify 한글 가사를 다시 실행합니다.') ('Version '+$asset.version+' is installed. Starting Spotify Hangul Lyrics again.')) 100
+        Set-UpdateWindow $window (Get-Text ('버전 '+$asset.version+' 설치를 마쳤습니다. Spotify-ex를 다시 실행합니다.') ('Version '+$asset.version+' is installed. Starting Spotify-ex again.')) 100
         [void](Wait-UpdateWindow $window 1500)
     }
     # Same command as the desktop shortcut: the helper and Spotify start from the new files.

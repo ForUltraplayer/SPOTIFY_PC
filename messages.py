@@ -128,8 +128,8 @@ MESSAGES = {
         'ko': 'Spotify 앨범 이미지 주소만 저장할 수 있습니다.',
         'en': 'Only Spotify album image addresses can be saved.'},
     'playlist_file_unsupported': {
-        'ko': '지원하는 Spotify 한글 혼합 목록 파일이 아닙니다.',
-        'en': 'This is not a supported Spotify Hangul mixed list file.'},
+        'ko': '지원하는 Spotify-ex 혼합 목록 파일이 아닙니다.',
+        'en': 'This is not a supported Spotify-ex mixed list file.'},
     'playlist_data_missing': {
         'ko': '플레이리스트 데이터가 없습니다.',
         'en': 'The file has no playlist data.'},

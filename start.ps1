@@ -105,7 +105,7 @@ if (Test-Path -LiteralPath $installationState) {
             Where-Object { $_.ExecutablePath -and $_.ExecutablePath -ne $spotifyExe })
         foreach ($process in $other) {
             if ($knownPrevious -contains $process.ExecutablePath) { Stop-Process -Id $process.ProcessId -ErrorAction SilentlyContinue }
-            else { throw (Get-Text '다른 위치의 Spotify가 실행 중입니다. 해당 Spotify를 종료한 뒤 한글 가사 바로가기를 다시 실행해 주세요.' 'Spotify from another location is running. Close that Spotify, then start it again from the Spotify Hangul Lyrics shortcut.') }
+            else { throw (Get-Text '다른 위치의 Spotify가 실행 중입니다. 해당 Spotify를 종료한 뒤 한글 가사 바로가기를 다시 실행해 주세요.' 'Spotify from another location is running. Close that Spotify, then start it again from the Spotify-ex shortcut.') }
         }
     }
 }
@@ -171,7 +171,7 @@ if ($installedState.ManagedClient -and (Test-Path -LiteralPath $autostartHelper)
     try { "$(Get-Date -Format o)`r`n$message" | Set-Content -LiteralPath $errorFile -Encoding UTF8 } catch { }
     if (-not $NoErrorDialog) {
         $dialog = New-Object -ComObject WScript.Shell
-        [void]$dialog.Popup($message+"`r`n`r`n"+(Get-Text '오류 기록: ' 'Error log: ')+$errorFile, 0, (Get-Text 'Spotify 한글 가사 실행 오류' 'Spotify Hangul Lyrics startup error'), 16)
+        [void]$dialog.Popup($message+"`r`n`r`n"+(Get-Text '오류 기록: ' 'Error log: ')+$errorFile, 0, (Get-Text 'Spotify-ex 실행 오류' 'Spotify-ex startup error'), 16)
     }
     throw $message
 } finally {

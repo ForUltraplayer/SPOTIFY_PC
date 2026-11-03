@@ -65,6 +65,7 @@ PC판과 안드로이드판을 고치면서 실제 환경에서만 드러난 함
 | Edge는 유럽경제지역에서 공식으로 지울 수 있음 | Edge를 쓰는 기능이 일부 PC에서 동작하지 않음 | 웹 창은 Windows 11의 일부인 WebView2 런타임을 쓴다. 런타임이 없는 일부 Windows 10에서는 Microsoft 공식 주소에서 설치 도우미를 받아 서명을 확인한 뒤 실행한다(사용권 2(b)항 때문에 동봉하지 않음) |
 | 안드로이드 저장소에서 `gh`의 기본 저장소가 원본(kota-zo/myspoti)임 | `gh release list`가 원본의 릴리스를 보여 주고, 그대로 만들면 원본에 릴리스를 만들려 함 | 두 저장소 모두 `gh ... -R ForUltraplayer/<저장소>`로 대상을 적는다 |
 | 페이지 안의 Spotify 검색 API 호출이 실패함(2026-11-02) | `CosmosAsync`의 `api.spotify.com/v1/search`가 빈 답을, GraphQL `searchModalResults`가 `HttpResponseError`를 냄 | 진단 스크립트는 `/search/<검색어>` 화면으로 이동해 `tracklist-row`의 `/track/` 링크를 읽는다 |
+| 앱 이름(바로가기 이름)을 바꾸면 기존 설치의 바로가기가 그대로 남음(0.9.0에서 「Spotify 한글 가사」를 「Spotify-ex」로 바꿈) | 옛 바로가기와 새 바로가기가 함께 남고, 설치가 실패해 되돌리면 옛 바로가기가 사라질 수 있다. 작업 표시줄 고정 아이콘은 바로가기를 복사한 별도 파일이라 설치 프로그램이 바꾸지 못한다 | 설치 중 `bootstrap.ps1`이 이 설치를 가리키는 옛 이름 바로가기만 지우고, `payload-transaction.ps1`의 복원 목록(`Get-PayloadShortcuts`)에 옛 이름과 새 이름을 모두 넣는다. 설치 파일 이름 `SpotifyHangul-<버전>-Setup.exe`와 내부 이름은 자동 업데이트가 찾는 값이라 바꾸지 않는다. 고정 아이콘은 릴리스 노트로 다시 고정하라고 안내한다 |
 
 ## 진단 절차
 

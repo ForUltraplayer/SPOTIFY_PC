@@ -11,13 +11,13 @@ CRCCheck force
 Var TransactionStarted
 Var InstallerPid
 Var InstallationMutex
-Name "Spotify 한글 가사"
+Name "Spotify-ex"
 OutFile "${OUTPUT_FILE}"
 InstallDir "$LOCALAPPDATA\Programs\SpotifyHangul"
 InstallDirRegKey HKCU "Software\SpotifyHangul" "InstallDir"
 VIProductVersion "${APP_VERSION}.0"
-VIAddVersionKey "ProductName" "Spotify Hangul Lyrics"
-VIAddVersionKey "FileDescription" "Spotify Hangul Lyrics Setup"
+VIAddVersionKey "ProductName" "Spotify-ex"
+VIAddVersionKey "FileDescription" "Spotify-ex Setup"
 VIAddVersionKey "FileVersion" "${APP_VERSION}"
 VIAddVersionKey "LegalCopyright" "2026 ForUltraplayer"
 !define MUI_ABORTWARNING
@@ -44,9 +44,12 @@ VIAddVersionKey "LegalCopyright" "2026 ForUltraplayer"
 !insertmacro MUI_LANGUAGE "Korean"
 
 LangString WelcomeText ${LANG_KOREAN} "Spotify, SpotX, Spicetify와 한글 발음 가사를 한 번에 구성합니다.$\r$\n$\r$\nPython과 Spotify를 미리 설치할 필요가 없습니다. 설치 중 인터넷 연결과 약 150 MB의 추가 다운로드가 필요합니다.$\r$\n$\r$\n기존 Spotify는 보존하고 선택한 폴더에 통합본을 설치합니다. SpotX 패치를 유지하기 위해 통합본의 Spotify 자동 업데이트를 차단합니다."
-LangString WelcomeText ${LANG_ENGLISH} "Sets up Spotify, SpotX, Spicetify and Hangul pronunciation lyrics in one go.$\r$\n$\r$\nPython and Spotify do not need to be installed first. The installation needs an internet connection and downloads about 150 MB more.$\r$\n$\r$\nYour existing Spotify is kept, and the integrated build goes into the folder you choose. Its Spotify automatic updates are blocked to keep the SpotX patches.$\r$\n$\r$\nAfterwards, start it from the $\"Spotify 한글 가사$\" desktop shortcut."
-LangString RunText ${LANG_KOREAN} "Spotify 한글 가사 실행"
-LangString RunText ${LANG_ENGLISH} "Start Spotify Hangul Lyrics"
+LangString WelcomeText ${LANG_ENGLISH} "Sets up Spotify, SpotX, Spicetify and Hangul pronunciation lyrics in one go.$\r$\n$\r$\nPython and Spotify do not need to be installed first. The installation needs an internet connection and downloads about 150 MB more.$\r$\n$\r$\nYour existing Spotify is kept, and the integrated build goes into the folder you choose. Its Spotify automatic updates are blocked to keep the SpotX patches.$\r$\n$\r$\nAfterwards, start it from the $\"Spotify-ex$\" desktop shortcut."
+LangString RunText ${LANG_KOREAN} "Spotify-ex 실행"
+LangString RunText ${LANG_ENGLISH} "Start Spotify-ex"
+; payload-transaction.ps1 lists both names among the shortcuts it restores after a failed update.
+LangString UninstallLinkName ${LANG_KOREAN} "Spotify-ex 제거"
+LangString UninstallLinkName ${LANG_ENGLISH} "Uninstall Spotify-ex"
 LangString OverlayLinkText ${LANG_KOREAN} "데스크톱 가사창(선택) 받기"
 LangString OverlayLinkText ${LANG_ENGLISH} "Get the desktop lyrics overlay (optional)"
 LangString InstallerBusy ${LANG_KOREAN} "다른 설치 또는 제거가 진행 중입니다. 완료 후 다시 실행해 주세요."
@@ -55,8 +58,8 @@ LangString NeedsX64 ${LANG_KOREAN} "이 설치본은 Windows x64용입니다."
 LangString NeedsX64 ${LANG_ENGLISH} "This installer is for Windows x64."
 LangString DirectoryNotDedicated ${LANG_KOREAN} "이 폴더에는 바로 설치할 수 없습니다.$\r$\n$\r$\n드라이브 최상위나 사용자, AppData, Program Files, Windows 폴더 자체가 아니라 그 안의 전용 하위 폴더를 골라 주세요. 예: $LOCALAPPDATA\Programs\SpotifyHangul"
 LangString DirectoryNotDedicated ${LANG_ENGLISH} "This folder can't be used directly.$\r$\n$\r$\nChoose a dedicated subfolder instead of a drive root or the user, AppData, Program Files or Windows folder itself. For example: $LOCALAPPDATA\Programs\SpotifyHangul"
-LangString DirectoryNotEmpty ${LANG_KOREAN} "선택한 폴더에 다른 파일이 들어 있습니다.$\r$\n$\r$\n비어 있는 새 폴더나 기존 Spotify 한글 가사 설치 폴더를 골라 주세요. 예: $LOCALAPPDATA\Programs\SpotifyHangul"
-LangString DirectoryNotEmpty ${LANG_ENGLISH} "The selected folder already contains other files.$\r$\n$\r$\nChoose a new empty folder or an existing Spotify Hangul Lyrics installation folder. For example: $LOCALAPPDATA\Programs\SpotifyHangul"
+LangString DirectoryNotEmpty ${LANG_KOREAN} "선택한 폴더에 다른 파일이 들어 있습니다.$\r$\n$\r$\n비어 있는 새 폴더나 기존 Spotify-ex 설치 폴더를 골라 주세요. 예: $LOCALAPPDATA\Programs\SpotifyHangul"
+LangString DirectoryNotEmpty ${LANG_ENGLISH} "The selected folder already contains other files.$\r$\n$\r$\nChoose a new empty folder or an existing Spotify-ex installation folder. For example: $LOCALAPPDATA\Programs\SpotifyHangul"
 LangString InstallFailed ${LANG_KOREAN} "설치에 실패해 이전 파일 복구를 시도했습니다.$\r$\n$\r$\n원인은 설치 창의 세부 정보에서 확인할 수 있고, 진단 기록(failure.txt)은 설치 폴더 옆의 $\".(설치 폴더 이름)-update-…$\" 폴더에 남습니다. 복구가 중단됐다면 이 설치 파일을 다시 실행해 주세요."
 LangString InstallFailed ${LANG_ENGLISH} "Installation failed, and the installer tried to restore the previous files.$\r$\n$\r$\nThe cause is shown in the installer's details, and a diagnostic record (failure.txt) is kept in the $\".(installation folder name)-update-…$\" folder next to the installation folder. If the restore was interrupted, run this installer again."
 LangString RegistrationFailed ${LANG_KOREAN} "설치 등록에 실패해 이전 설치 복구를 시도했습니다. 복구 결과는 설치 창의 세부 정보에서 확인하고, 복구가 중단됐다면 이 설치 파일을 다시 실행해 주세요."
@@ -181,7 +184,7 @@ Function DirectoryLeave
   ${EndIf}
 FunctionEnd
 
-Section "Spotify 한글 가사" SEC_MAIN
+Section "Spotify-ex" SEC_MAIN
   ; A silent install (/S /D=...) skips the directory page, so the folder is checked here too.
   Call CheckInstallDirectory
   ${If} $R9 != ""
@@ -208,7 +211,7 @@ Section "Spotify 한글 가사" SEC_MAIN
   SetOutPath "$INSTDIR"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\SpotifyHangul" "InstallDir" "$INSTDIR"
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SpotifyHangul" "DisplayName" "Spotify 한글 가사"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SpotifyHangul" "DisplayName" "Spotify-ex"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SpotifyHangul" "DisplayVersion" "${APP_VERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SpotifyHangul" "Publisher" "ForUltraplayer"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SpotifyHangul" "InstallLocation" "$INSTDIR"
@@ -216,10 +219,11 @@ Section "Spotify 한글 가사" SEC_MAIN
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SpotifyHangul" "QuietUninstallString" '$\"$INSTDIR\Uninstall.exe$\" /S'
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SpotifyHangul" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SpotifyHangul" "NoRepair" 1
-  CreateDirectory "$SMPROGRAMS\Spotify 한글 가사"
-  CreateShortcut "$DESKTOP\Spotify 한글 가사.lnk" "$SYSDIR\conhost.exe" '--headless "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\start.ps1"' "$INSTDIR\Spotify\Spotify.exe"
-  CreateShortcut "$SMPROGRAMS\Spotify 한글 가사\Spotify 한글 가사.lnk" "$SYSDIR\conhost.exe" '--headless "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\start.ps1"' "$INSTDIR\Spotify\Spotify.exe"
-  CreateShortcut "$SMPROGRAMS\Spotify 한글 가사\제거.lnk" "$INSTDIR\Uninstall.exe"
+  ; bootstrap.ps1 has removed this installation's shortcuts under the name used before 0.9.0.
+  CreateDirectory "$SMPROGRAMS\Spotify-ex"
+  CreateShortcut "$DESKTOP\Spotify-ex.lnk" "$SYSDIR\conhost.exe" '--headless "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\start.ps1"' "$INSTDIR\Spotify\Spotify.exe"
+  CreateShortcut "$SMPROGRAMS\Spotify-ex\Spotify-ex.lnk" "$SYSDIR\conhost.exe" '--headless "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$INSTDIR\start.ps1"' "$INSTDIR\Spotify\Spotify.exe"
+  CreateShortcut "$SMPROGRAMS\Spotify-ex\$(UninstallLinkName).lnk" "$INSTDIR\Uninstall.exe"
   ${If} ${Errors}
     Call RollbackInstall
     MessageBox MB_ICONSTOP "$(RegistrationFailed)" /SD IDOK
@@ -262,6 +266,7 @@ Section "Uninstall"
   ${If} $0 == $INSTDIR
     DeleteRegKey HKCU "Software\SpotifyHangul"
     DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\SpotifyHangul"
+    RMDir /r "$SMPROGRAMS\Spotify-ex"
     RMDir /r "$SMPROGRAMS\Spotify 한글 가사"
   ${EndIf}
   ; integrate.ps1 validates this exact absolute application directory and marker.

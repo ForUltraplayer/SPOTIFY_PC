@@ -129,6 +129,18 @@ function Get-ManagedApplyArguments([string]$ClientPath,[string]$ConfigPath,[stri
     return @('-n','apply')
 }
 
+# Before 0.9.0 the app was called "Spotify 한글 가사". Only shortcuts that start or remove this installation are
+# removed (a pinned taskbar copy cannot be moved over); the start-menu folder goes once it is empty.
+function Remove-LegacyShortcuts {
+    $shell=New-Object -ComObject WScript.Shell
+    $ours={ param($path) $link=$shell.CreateShortcut($path); $link.Arguments.Contains((Join-Path $root 'start.ps1')) -or $link.TargetPath -eq (Join-Path $root 'Uninstall.exe') }
+    $menu=Join-Path ([Environment]::GetFolderPath('Programs')) 'Spotify 한글 가사'
+    foreach ($path in @((Join-Path ([Environment]::GetFolderPath('Desktop')) 'Spotify 한글 가사.lnk'),(Join-Path $menu 'Spotify 한글 가사.lnk'),(Join-Path $menu '제거.lnk'))) {
+        if ((Test-Path -LiteralPath $path) -and (& $ours $path)) { Remove-Item -LiteralPath $path }
+    }
+    if ((Test-Path -LiteralPath $menu) -and -not (Get-ChildItem -LiteralPath $menu -Force)) { Remove-Item -LiteralPath $menu }
+}
+
 try {
     Assert-AppDirectory
     if ($Mode -eq 'Prepare') {
@@ -157,15 +169,13 @@ try {
             & $powershell -NoProfile -ExecutionPolicy Bypass -File $legacyHook -Mode Uninstall -InstallRoot $root -StateFile 'legacy-install-state.json'
             if ($LASTEXITCODE -ne 0) { throw (Get-Text '기존 버전의 연결 해제에 실패했습니다.' 'Disconnecting the previous version failed.') }
         }
-        $desktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'Spotify 한글 가사.lnk'
-        if (Test-Path -LiteralPath $desktop) {
-            $shell=New-Object -ComObject WScript.Shell
-            if ($shell.CreateShortcut($desktop).Arguments.Contains((Join-Path $root 'start.ps1'))) {
-                $savedShortcut=Join-Path $root 'backup\desktop.managed-before.lnk'
-                if (Test-Path -LiteralPath $savedShortcut) { Copy-Item -LiteralPath $savedShortcut -Destination $desktop -Force }
-                else { Remove-Item -LiteralPath $desktop }
-            }
-        }
+        Remove-LegacyShortcuts
+        $desktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'Spotify-ex.lnk'
+        if ((Test-Path -LiteralPath $desktop) -and (New-Object -ComObject WScript.Shell).CreateShortcut($desktop).Arguments.Contains((Join-Path $root 'start.ps1'))) { Remove-Item -LiteralPath $desktop }
+        # A shortcut of an older integration that the first managed install replaced goes back under its own name.
+        $legacyDesktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'Spotify 한글 가사.lnk'
+        $savedShortcut=Join-Path $root 'backup\desktop.managed-before.lnk'
+        if ((Test-Path -LiteralPath $savedShortcut) -and -not (Test-Path -LiteralPath $legacyDesktop)) { Copy-Item -LiteralPath $savedShortcut -Destination $legacyDesktop }
         exit 0
     }
     # NSIS runs Prepare from a temporary folder containing only this script.
@@ -267,6 +277,8 @@ try {
     [PSCustomObject]@{ App='SpotifyHangul'; ManagedClient=$true; Version=$release.version; SpotifyExe=(Join-Path $client 'Spotify.exe'); ConfigRoot=$config;
         PreviousSpotifyExe=if ($state -and $state.ManagedClient) { $state.PreviousSpotifyExe } elseif ($state) { $state.SpotifyExe } else { Join-Path $env:APPDATA 'Spotify\Spotify.exe' } } |
         ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding UTF8
+    # The installer creates the Spotify-ex shortcuts next; this installation's ones under the old name go now.
+    Remove-LegacyShortcuts
     Write-Output (Get-Text 'Spotify, SpotX, Spicetify와 한글 가사 설치를 완료했습니다.' 'Spotify, SpotX, Spicetify and Hangul lyrics are installed.')
 } catch {
     $message=$_.Exception.Message

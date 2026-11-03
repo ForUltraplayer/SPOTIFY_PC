@@ -42,7 +42,11 @@ function Get-PayloadTransactionPath([string]$Root) {
 function Get-PayloadShortcuts {
     $desktop=[Environment]::GetFolderPath('Desktop')
     $programs=[Environment]::GetFolderPath('Programs')
-    return @((Join-Path $desktop 'Spotify 한글 가사.lnk'),(Join-Path $programs 'Spotify 한글 가사\Spotify 한글 가사.lnk'),(Join-Path $programs 'Spotify 한글 가사\제거.lnk'))
+    # The current Spotify-ex shortcuts (the uninstall one is named in the installer's language), then the ones
+    # from before 0.9.0 under the old name, which an update removes: a failed update puts both back as they were.
+    return @((Join-Path $desktop 'Spotify-ex.lnk'),(Join-Path $programs 'Spotify-ex\Spotify-ex.lnk'),
+        (Join-Path $programs 'Spotify-ex\Uninstall Spotify-ex.lnk'),(Join-Path $programs 'Spotify-ex\Spotify-ex 제거.lnk'),
+        (Join-Path $desktop 'Spotify 한글 가사.lnk'),(Join-Path $programs 'Spotify 한글 가사\Spotify 한글 가사.lnk'),(Join-Path $programs 'Spotify 한글 가사\제거.lnk'))
 }
 
 function Get-PayloadRegistryPaths {
@@ -67,7 +71,7 @@ function Read-PayloadTransaction([string]$Root) {
     if ($transaction.App -ne 'SpotifyHangul' -or $transaction.Root -ne [IO.Path]::GetFullPath($Root).TrimEnd('\') -or $transaction.Directory -ne $directory -or $transaction.Schema -ne 1) { throw 'Invalid update recovery record.' }
     if ($transaction.Status -notin @('snapshotting','prepared','applying','pending-commit','committed','restoring','restored')) { throw 'Unknown update recovery status.' }
     foreach ($shortcut in @($transaction.Shortcuts)) {
-        if ($shortcut.Path -notin @(Get-PayloadShortcuts) -or $shortcut.Name -notmatch '^shortcut-[0-2]\.lnk$') { throw 'Invalid shortcut recovery target.' }
+        if ($shortcut.Path -notin @(Get-PayloadShortcuts) -or $shortcut.Name -notmatch '^shortcut-[0-6]\.lnk$') { throw 'Invalid shortcut recovery target.' }
     }
     foreach ($entry in @($transaction.Registry)) {
         if ($entry.Path -notin @(Get-PayloadRegistryPaths)) { throw 'Invalid registry recovery target.' }

@@ -16,10 +16,14 @@ if (-not $area.StartsWith($work+'\',[StringComparison]::OrdinalIgnoreCase) -or (
 [void](New-Item -ItemType Directory -Path $area)
 $nativePowerShell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $keys=@('HKCU:\Software\SpotifyHangul','HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\SpotifyHangul')
-$desktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'Spotify 한글 가사.lnk'
-$menu=Join-Path ([Environment]::GetFolderPath('Programs')) 'Spotify 한글 가사'
+# Shortcuts of both names: up to 0.8.3 "Spotify 한글 가사", from 0.9.0 "Spotify-ex".
+$desktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'Spotify-ex.lnk'
+$legacyDesktop=Join-Path ([Environment]::GetFolderPath('Desktop')) 'Spotify 한글 가사.lnk'
+$menu=Join-Path ([Environment]::GetFolderPath('Programs')) 'Spotify-ex'
+$legacyMenu=Join-Path ([Environment]::GetFolderPath('Programs')) 'Spotify 한글 가사'
 $menuExisted=Test-Path -LiteralPath $menu
-$links=@($desktop)+@('Spotify 한글 가사.lnk','제거.lnk' | ForEach-Object { Join-Path $menu $_ })
+$legacyMenuExisted=Test-Path -LiteralPath $legacyMenu
+$links=@($desktop,$legacyDesktop)+@('Spotify-ex.lnk','Uninstall Spotify-ex.lnk','Spotify-ex 제거.lnk' | ForEach-Object { Join-Path $menu $_ })+@('Spotify 한글 가사.lnk','제거.lnk' | ForEach-Object { Join-Path $legacyMenu $_ })
 $shellBefore=@{}
 $registrationBefore=@{}
 $environment=@{}
@@ -346,6 +350,7 @@ exit $LASTEXITCODE
         } catch { $restoreErrors.Add($_.Exception.Message) }
     }
     if (-not $menuExisted -and (Test-Path -LiteralPath $menu) -and -not @(Get-ChildItem -LiteralPath $menu -Force).Count) { Remove-Item -LiteralPath $menu }
+    if (-not $legacyMenuExisted -and (Test-Path -LiteralPath $legacyMenu) -and -not @(Get-ChildItem -LiteralPath $legacyMenu -Force).Count) { Remove-Item -LiteralPath $legacyMenu }
     $result.hostRestored=($restoreErrors.Count -eq 0)
     if ($restoreErrors.Count) { $result.restoreErrors=@($restoreErrors); $result.result='failed' }
     Save-Proof

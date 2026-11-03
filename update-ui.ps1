@@ -7,7 +7,7 @@ $updateUiFont=New-Object Drawing.Font('Malgun Gothic',9.75)
 
 function Show-UpdateDialog([string]$Text,[Drawing.Icon]$Icon,[string[]]$Buttons) {
     # A custom TopMost form instead of MessageBox: Spotify opens at the same time and would cover a plain box.
-    $form=New-Object Windows.Forms.Form -Property @{Text=(Get-Text 'Spotify 한글 가사 업데이트' 'Spotify Hangul Lyrics update');Font=$updateUiFont;FormBorderStyle='FixedDialog';MaximizeBox=$false;MinimizeBox=$false;StartPosition='CenterScreen';TopMost=$true;AutoSize=$true;AutoSizeMode='GrowAndShrink'}
+    $form=New-Object Windows.Forms.Form -Property @{Text=(Get-Text 'Spotify-ex 업데이트' 'Spotify-ex update');Font=$updateUiFont;FormBorderStyle='FixedDialog';MaximizeBox=$false;MinimizeBox=$false;StartPosition='CenterScreen';TopMost=$true;AutoSize=$true;AutoSizeMode='GrowAndShrink'}
     $layout=New-Object Windows.Forms.TableLayoutPanel -Property @{ColumnCount=2;RowCount=2;AutoSize=$true;AutoSizeMode='GrowAndShrink';Padding=(New-Object Windows.Forms.Padding 14)}
     $layout.Controls.Add((New-Object Windows.Forms.PictureBox -Property @{Image=$Icon.ToBitmap();SizeMode='AutoSize';Margin=(New-Object Windows.Forms.Padding 0,0,12,0)}),0,0)
     $layout.Controls.Add((New-Object Windows.Forms.Label -Property @{Text=$Text;AutoSize=$true;MaximumSize=(New-Object Drawing.Size 440,0);Margin=(New-Object Windows.Forms.Padding 0,4,0,16)}),1,0)
@@ -44,7 +44,7 @@ function Show-UpdateMessage([string]$Text,[switch]$IsError) {
 
 function Open-UpdateWindow {
     # No title bar close button: cancelling is only offered while it is still safe (download and the notice).
-    $form=New-Object Windows.Forms.Form -Property @{Text=(Get-Text 'Spotify 한글 가사 업데이트' 'Spotify Hangul Lyrics update');Font=$updateUiFont;FormBorderStyle='FixedDialog';ControlBox=$false;StartPosition='CenterScreen';TopMost=$true;ClientSize=(New-Object Drawing.Size 460,150)}
+    $form=New-Object Windows.Forms.Form -Property @{Text=(Get-Text 'Spotify-ex 업데이트' 'Spotify-ex update');Font=$updateUiFont;FormBorderStyle='FixedDialog';ControlBox=$false;StartPosition='CenterScreen';TopMost=$true;ClientSize=(New-Object Drawing.Size 460,150)}
     $status=New-Object Windows.Forms.Label -Property @{Location=(New-Object Drawing.Point 16,14);Size=(New-Object Drawing.Size 428,44)}
     $bar=New-Object Windows.Forms.ProgressBar -Property @{Location=(New-Object Drawing.Point 16,62);Size=(New-Object Drawing.Size 428,22);Maximum=1000;MarqueeAnimationSpeed=30}
     $detail=New-Object Windows.Forms.Label -Property @{Location=(New-Object Drawing.Point 16,96);Size=(New-Object Drawing.Size 320,22)}

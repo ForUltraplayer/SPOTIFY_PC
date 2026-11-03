@@ -31,7 +31,7 @@ function Assert-AppDirectory {
             $known = (Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json).app -eq 'SpotifyHangul'
         }
         if (-not $known -and @(Get-ChildItem -LiteralPath $root -Force).Count) {
-            throw (Get-Text '비어 있는 폴더 또는 기존 Spotify 한글 가사 설치 폴더를 선택해 주세요.' 'Choose an empty folder or an existing Spotify Hangul Lyrics installation folder.')
+            throw (Get-Text '비어 있는 폴더 또는 기존 Spotify-ex 설치 폴더를 선택해 주세요.' 'Choose an empty folder or an existing Spotify-ex installation folder.')
         }
     }
 }
@@ -159,7 +159,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $root 'hangul-lyrics.js') -Destination $extension -Force
     Invoke-Spicetify -Arguments @('config','custom_apps','ivLyrics','extensions','hangul-lyrics.js')
     Invoke-Spicetify -Arguments (Get-ApplyArguments $spotifyExe)
-    Write-Output (Get-Text 'Spotify 한글 가사 연결을 완료했습니다.' 'Spotify Hangul Lyrics is connected.')
+    Write-Output (Get-Text 'Spotify-ex 연결을 완료했습니다.' 'Spotify-ex is connected.')
 } catch {
     $message = $_.Exception.Message
     if ($Mode -eq 'Install' -and $attempt) {

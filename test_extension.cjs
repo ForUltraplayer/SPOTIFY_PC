@@ -782,7 +782,7 @@ test('the profile menu shows the installed version and asks the helper to check 
     const addon = h.context.window.HangulLyricsProvider.addon;
     await addon.init();
     const item = items.find(entry => entry.name.includes('Check for updates'));
-    assert.equal(item.name, 'Spotify Hangul Lyrics ' + addon.version + ' · Check for updates');
+    assert.equal(item.name, 'Spotify-ex ' + addon.version + ' · Check for updates');
     await item.onClick();
     assert.deepEqual(requests, [{ url: 'http://127.0.0.1:19643/update/check', method: 'POST', client: 'ivlyrics', language: 'en' }]);
     assert.match(h.notices.at(-1), /Checking for updates/);
@@ -804,7 +804,7 @@ test('a Korean Spotify shows the Hangul-lyrics menus, notifications and errors i
     const addon = h.context.window.HangulLyricsProvider.addon;
     assert.equal(addon.name, '기존 한글 발음 가사');
     await addon.init();
-    assert.deepEqual(items.map(entry => entry.name), ['한글 발음 자료', '현재 곡 제목 복사', 'Spotify 한글 가사 ' + addon.version + ' · 업데이트 확인']);
+    assert.deepEqual(items.map(entry => entry.name), ['한글 발음 자료', '현재 곡 제목 복사', 'Spotify-ex ' + addon.version + ' · 업데이트 확인']);
     await items[2].onClick();
     assert.deepEqual(requests, [{ url: 'http://127.0.0.1:19643/update/check', language: 'ko' }]);
     assert.equal(h.notices.at(-1), '업데이트를 확인하고 있습니다.');
