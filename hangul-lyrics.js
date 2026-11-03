@@ -570,7 +570,7 @@
         id: ID,
         name: t('provider_name'),
         author: 'ForUltraplayer',
-        version: '0.9.0',
+        version: '0.9.1',
         description: { ko: STRINGS.ko.provider_description, en: STRINGS.en.provider_description },
         supports: { pronunciation: true, translate: false, metadata: false, tmi: false,
             lyricsStudy: false, characterPronunciation: false, culturalAnnotations: false, wordSupplements: false },

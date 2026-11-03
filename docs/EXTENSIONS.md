@@ -204,7 +204,7 @@ Tidal 계열 소스(Mornye, FLAC Bridge)는 음원을 주소 대신 MPEG-DASH �
 
 ## 실행기 API
 
-도우미는 실행기를 jar가 있는 폴더에서 `java -jar extensions-pc.jar --port 0 --token <토큰> --app-version <버전>`으로 시작하고, 데이터 폴더는 환경 변수 `HANGUL_EXT_DATA`로 넘긴다(`--data <폴더>`도 받는다). Java는 Windows에서 명령줄을 시스템 코드 페이지로 읽으므로, 그 밖의 글자가 든 경로(한국어 Windows의 태국어 사용자 이름, 영어 Windows의 한글 사용자 이름)를 명령줄로 넘기면 `?`로 깨져 실행기가 시작하지 못한다(2026-11-02 재현). 도우미의 실행기 호출은 시스템이나 환경 변수의 프록시를 쓰지 않는다. 실행기가 READY 뒤 60 초 안에 끝나도 시작 실패로 세고, 실패가 이어지면 5 초, 30 초, 120 초, 그 뒤로는 30 분마다 다시 시도한다. 실행기는 준비되면 표준 출력 첫 줄에 `READY <포트>`를 쓴다. 데이터 폴더는 `%LOCALAPPDATA%\ivLyricsHangul\extensions`이며 설치한 패키지, 권한, 설정, 확장별 저장소, 소스 순서를 담는다. 모든 요청은 127.0.0.1에서만 받고 `X-Hangul-Token` 머리글이 맞아야 하며, 본문과 응답은 JSON이다. 화면 문구는 실행기가 만들지 않고 키(outcome, reason 등)만 돌려준다.
+도우미는 실행기를 jar가 있는 폴더에서 `java -jar extensions-pc.jar --port 0 --token <토큰> --app-version <버전>`으로 시작하고, 데이터 폴더는 환경 변수 `HANGUL_EXT_DATA`로 넘긴다(`--data <폴더>`도 받는다). Java는 Windows에서 명령줄을 시스템 코드 페이지로 읽으므로, 그 밖의 글자가 든 경로(한국어 Windows의 태국어 사용자 이름, 영어 Windows의 한글 사용자 이름)를 명령줄로 넘기면 `?`로 깨져 실행기가 시작하지 못한다(2026-11-02 재현). 도우미의 실행기 호출은 시스템이나 환경 변수의 프록시를 쓰지 않는다. `Connection: close` 머리글도 보내지 않는다. AdGuard의 로컬 필터링이 이 머리글이 붙은 요청의 응답을 끊거나 멈추기 때문이다(2026-11-03 재현). 실행기가 떠 있는데 응답하지 않으면 시작 실패(`runner-failed`)와 따로 `runner-no-answer`로 알린다. 실행기가 READY 뒤 60 초 안에 끝나도 시작 실패로 세고, 실패가 이어지면 5 초, 30 초, 120 초, 그 뒤로는 30 분마다 다시 시도한다. 실행기는 준비되면 표준 출력 첫 줄에 `READY <포트>`를 쓴다. 데이터 폴더는 `%LOCALAPPDATA%\ivLyricsHangul\extensions`이며 설치한 패키지, 권한, 설정, 확장별 저장소, 소스 순서를 담는다. 모든 요청은 127.0.0.1에서만 받고 `X-Hangul-Token` 머리글이 맞아야 하며, 본문과 응답은 JSON이다. 화면 문구는 실행기가 만들지 않고 키(outcome, reason 등)만 돌려준다.
 
 | 요청 | 내용 |
 |---|---|

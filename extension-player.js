@@ -110,6 +110,7 @@ const Model = (() => {
             order_spotify_detail: 'Plays when no source above it has the song', order_below: 'Not asked: Spotify is above',
             move_up: 'Move up', move_down: 'Move down',
             error_runner_missing: 'The extension runner is not installed on this PC.', error_runner_failed: "The extension runner couldn't start. Songs play from Spotify.",
+            error_runner_no_answer: "The extension runner isn't answering. An ad blocker or security program may be blocking connections within this PC. Songs play from Spotify.",
             error_network: 'The helper did not answer.', error_other: 'Not done: %1',
             check_waiting: 'An update was found: it is applied a day after it was published', check_repo_changed: 'Its repository changed: the update is refused',
             check_declined: 'You kept this version', check_source_gone: 'Its repository no longer exists: it keeps running from the copy on this PC',
@@ -198,6 +199,7 @@ const Model = (() => {
             order_spotify_detail: '위에 있는 소스에 곡이 없을 때 재생됩니다', order_below: '묻지 않음: Spotify가 위에 있습니다',
             move_up: '위로 이동', move_down: '아래로 이동',
             error_runner_missing: '이 PC에 확장 실행기가 설치되어 있지 않습니다.', error_runner_failed: '확장 실행기를 시작하지 못했습니다. 곡은 Spotify에서 재생됩니다.',
+            error_runner_no_answer: '확장 실행기가 응답하지 않습니다. 광고 차단·보안 프로그램이 이 PC 안의 연결을 막고 있는지 확인해 주세요. 곡은 Spotify에서 재생됩니다.',
             error_network: '도우미가 응답하지 않았습니다.', error_other: '처리하지 못했습니다: %1',
             check_waiting: '업데이트를 찾았습니다. 게시되고 하루 뒤에 적용됩니다', check_repo_changed: '저장소가 바뀌어 업데이트를 거부했습니다',
             check_declined: '현재 버전을 유지했습니다', check_source_gone: '저장소가 더 이상 없습니다. 이 PC에 있는 사본으로 계속 실행됩니다',
@@ -553,6 +555,7 @@ const Model = (() => {
     }
     function errorKey(status, value) {
         if (value.error === 'runner-missing') return 'error_runner_missing';
+        if (value.error === 'runner-no-answer') return 'error_runner_no_answer';
         if (value.error === 'runner-failed' || status === 503) return 'error_runner_failed';
         if (status === 0) return 'error_network';
         return 'error_other';

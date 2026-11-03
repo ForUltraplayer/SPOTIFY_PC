@@ -16,18 +16,22 @@ import extension_host
 from extension_host import ExtensionHost, RunnerUnavailable, ACCEPT, DASH_SEGMENTS, DashRefused, dash_plan
 
 FAKE_RUNNER = textwrap.dedent('''
-    import http.server, json, os, sys
+    import http.server, json, os, sys, time
     args = sys.argv[1:]
     token = args[args.index('--token') + 1]
     seen = []
     class H(http.server.BaseHTTPRequestHandler):
+        # Keeps the connection like the runner's HttpServer: the helper ends it, never `Connection: close`.
+        protocol_version = 'HTTP/1.1'
         def log_message(self, *a): pass
         def answer(self, code, value):
             data = json.dumps(value).encode()
             self.send_response(code); self.send_header('Content-Length', str(len(data))); self.end_headers(); self.wfile.write(data)
         def do_GET(self):
             if self.headers.get('X-Hangul-Token') != token: return self.answer(401, {'error': 'token'})
-            self.answer(200, {'path': self.path, 'seen': seen, 'args': args, 'data': os.environ.get('HANGUL_EXT_DATA'),
+            if self.path == '/v1/hang':
+                time.sleep(5)
+            self.answer(200, {'path': self.path, 'connection': self.headers.get('Connection'), 'seen': seen, 'args': args, 'data': os.environ.get('HANGUL_EXT_DATA'),
                               'auth': os.environ.get('HANGUL_EXT_AUTH')})
         def do_POST(self):
             if self.headers.get('X-Hangul-Token') != token: return self.answer(401, {'error': 'token'})
@@ -38,7 +42,7 @@ FAKE_RUNNER = textwrap.dedent('''
                                          'headers': {'X-Key': 'secret'}, 'codec': 'flac', 'quality': 'FLAC', 'expiresAt': 123}})
             if self.path == '/v1/audio':
                 return self.answer(200, {'found': True, 'extension': 'x', 'stream': {'url': body['track']['url'], 'headers': {'X-Key': 'secret'}, 'codec': 'flac'}})
-            self.answer(200, {'path': self.path, 'body': body})
+            self.answer(200, {'path': self.path, 'connection': self.headers.get('Connection'), 'body': body})
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), H)
     print('READY', server.server_port, flush=True)
     server.serve_forever()
@@ -327,6 +331,19 @@ class ExtensionHostTest(unittest.TestCase):
         self.assertEqual('track0000000000000000a', note['trackId'])
         self.assertEqual('Spotify', note['fallback'])
         self.assertTrue(note['open']['error'].startswith('DASH manifest not played: not a static MPD'), note)
+
+    def test_the_runner_calls_never_ask_to_close_the_connection(self):
+        # AdGuard's local filtering resets or stalls answers to `Connection: close` (2026-11-03).
+        self.assertIsNone(self.host.call('GET', '/v1/extensions')[1]['connection'])
+        self.assertIsNone(self.host.call('POST', '/v1/session', {'source': None})[1]['connection'])
+
+    def test_a_runner_that_does_not_answer_is_not_told_as_a_failed_start(self):
+        with self.assertRaises(RunnerUnavailable) as raised:
+            self.host.call('GET', '/v1/hang', timeout=1)
+        self.assertEqual('runner-no-answer', str(raised.exception))
+        self.assertEqual(0, self.host.failures)
+        self.assertTrue(self.host.running())
+        self.assertEqual(200, self.host.call('GET', '/v1/health')[0])
 
     def test_a_runner_that_never_gets_ready_backs_off(self):
         broken = self.area / 'broken.py'

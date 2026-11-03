@@ -233,6 +233,7 @@ test('order moves keep every entry, and errors map to keys', () => {
     assert.deepEqual(Model.orderMove(['c', 'spotify', 'a'], 'a', -1), ['c', 'a', 'spotify']);
     assert.deepEqual(Model.orderMove(['c', 'spotify'], 'c', -1), ['c', 'spotify']);
     assert.equal(Model.errorKey(503, { error: 'runner-missing' }), 'error_runner_missing');
+    assert.equal(Model.errorKey(503, { error: 'runner-no-answer' }), 'error_runner_no_answer', 'a runner that is up but silent is not told as a failed start');
     assert.equal(Model.errorKey(503, {}), 'error_runner_failed'); assert.equal(Model.errorKey(400, { error: 'bad-request' }), 'error_other');
     assert.equal(Model.errorKey(0, { error: 'network' }), 'error_network');
 });

@@ -2,6 +2,7 @@
 # @brief Start the Myspoti extension runner on demand, relay its API to the Spotify page and serve the audio it finds.
 import base64
 import binascii
+import http.client
 import ipaddress
 import json
 import math
@@ -46,8 +47,6 @@ RETRY_AFTER = (5, 30, 120, 1800)
 # A runner that ends within this many seconds of its start counts as a failed start.
 STABLE_AFTER = 60
 MEDIA_REDIRECTS = 5
-# The runner is on this computer: a system or environment proxy (company PCs, some antivirus) never carries it.
-LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 MEDIA_KEEP = 64
 CHUNK = 64 * 1024
 # A DASH manifest as the engine takes it (AudioStream.parse: at most 1 MB of base64), and what the helper plays of it:
@@ -383,22 +382,28 @@ class ExtensionHost:
         self.port = None
 
     def call(self, method, path, body=None, timeout=None):
-        """(status, JSON) of the runner's [path]; RunnerUnavailable when it cannot be started."""
+        """(status, JSON) of the runner's [path]; RunnerUnavailable when it cannot be started or does not answer."""
         timeout = timeout or TIMEOUTS.get(path.partition('?')[0], 25)
         port = self.ensure()
         data = None if body is None else json.dumps(body, ensure_ascii=False).encode('utf-8')
-        request = urllib.request.Request(f'http://127.0.0.1:{port}{path}', data=data, method=method,
-                                         headers={'X-Hangul-Token': self.token, 'Content-Type': 'application/json'})
+        # http.client, not urllib: urllib sends `Connection: close`, and with it AdGuard's local filtering resets or
+        # stalls the answers, large ones most (2026-11-03, measured: the same requests without the header all came back).
+        # The runner is on this computer, so no system or environment proxy is used either.
+        connection = http.client.HTTPConnection('127.0.0.1', port, timeout=timeout)
         try:
-            with LOCAL.open(request, timeout=timeout) as response:
-                return response.status, json.loads(response.read() or b'{}')
-        except urllib.error.HTTPError as error:
-            try:
-                return error.code, json.loads(error.read() or b'{}')
-            except ValueError:
-                return error.code, {'error': 'runner-error'}
-        except (OSError, ValueError):
-            raise RunnerUnavailable('runner-failed')
+            connection.request(method, path, body=data, headers={'X-Hangul-Token': self.token, 'Content-Type': 'application/json'})
+            response = connection.getresponse()
+            status, raw = response.status, response.read()
+        except (OSError, http.client.HTTPException):
+            raise RunnerUnavailable('runner-no-answer')
+        finally:
+            connection.close()
+        try:
+            return status, json.loads(raw or b'{}')
+        except ValueError:
+            if status >= 400:
+                return status, {'error': 'runner-error'}
+            raise RunnerUnavailable('runner-no-answer')
 
     def allowed(self, method, path):
         """The runner path the page may reach, or None."""
