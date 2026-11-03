@@ -20,7 +20,7 @@ No need to install Spotify, SpotX or Python first. The installer includes Python
 2. Pick an install folder (default: `%LOCALAPPDATA%\Programs\SpotifyHangul`).
 3. The installer downloads the official Spotify files (~150 MB).
 
-No admin rights needed. The beta EXE is not code-signed.
+The beta EXE is not code-signed.
 
 ## Usage
 
@@ -59,28 +59,8 @@ Per-song source URLs and automatic pronunciation are under **한글 발음 자�
 See [YouTube integration](docs/YOUTUBE_LINKS.md) and [operations](docs/OPERATIONS.md) for implementation details and limits (Korean).
 
 <details>
-<summary>0.7.x changes</summary>
+<summary>Changelog</summary>
 
-- 0.7.2: fix first YouTube audio playback failures (wait until a fresh stream URL is served, then retry once if it still fails)
-- 0.7.2: align automatic pronunciation with authored Korean conventions (long vowels dropped, sokuon as ㅅ)
-- 0.7.3: start without a helper error when the shortcut is pressed twice or right after installation
-- 0.7.3: no PowerShell window on launch, and Spotify opens sooner
-- 0.7.3: fix "Failed to fetch" and YouTube module load failures on PCs running network filters such as AdGuard
-- 0.7.3: fix missing thumbnails for YouTube videos whose ID contains "ad"
-- 0.7.4: ask before updating, then download with progress, install, and relaunch
-- 0.7.4: show the installed version and check for updates from Spotify's profile menu
-- 0.7.4: start the installed desktop overlay when lyrics open (or 「가사 열기」 on a YouTube track) while **Desktop overlay** is on
-- 0.7.5: YouTube audio mode no longer plays louder than Spotify songs; it applies the YouTube player's loudness normalization
-- 0.7.5: the volume slider now gives YouTube audio and video about the same loudness as Spotify songs at the same position
-- 0.7.5: Spotify songs and YouTube links share one volume; a change made on a YouTube link carries over to the next Spotify song
-- 0.7.6: more reliable automatic updates; new versions are still found if the release repository address changes
-- 0.7.8: fixes installs that ended with "Installation failed" on PCs with a long Windows user name, among others
-- 0.7.8: the installer and updater appear in English on Windows that is not set to Korean, and an unusable installation folder is refused as soon as it is chosen (from the 0.7.7 pre-release)
-- 0.7.10: fixes installs that failed on Windows set to a language other than Korean
-- 0.7.11: if Spotify is set to open after you log on, it now opens with Hangul lyrics at Windows startup too (once the shortcut has been used)
-- 0.7.11: ivLyrics 7.0.18; ivLyrics' own update prompt, which cannot update this installation, is no longer shown
-- 0.7.12: Android Myspoti (Myspoti-ex) extensions work on the PC: install them from the same store as Myspoti under "확장 관리" in the profile menu; the playbar shows the source and quality playing now, the source picker and why that source was chosen
-- 0.7.12: updating while Spotify runs no longer fails
 - 0.9.1: fixed the Extensions tab staying on "Reading…" and extension installs failing when AdGuard or a similar ad blocker or security program filters connections within the PC
 - 0.9.0: renamed to Spotify-ex (shortcuts and the Start menu are recreated under the new name and the old ones removed; pinned icons need pinning again)
 - 0.9.0: when Spotify is not in Korean, the Hangul lyrics settings, lyric sync, YouTube links screens and helper/installer messages are in English
@@ -90,6 +70,26 @@ See [YouTube integration](docs/YOUTUBE_LINKS.md) and [operations](docs/OPERATION
 - 0.8.0: extensions that need a sign-in page (Mornye, FLAC Bridge) connect through a WebView2 window; Tidal-style (DASH) audio plays
 - 0.8.0: the quality line says why no extension plays a song, and playback details gain "Search again"
 - 0.8.0: list files exported by the phone app (Myspoti-ex) can be imported; the extension manager no longer closes on its tabs
+- 0.7.12: Android Myspoti (Myspoti-ex) extensions work on the PC: install them from the same store as Myspoti under "확장 관리" in the profile menu; the playbar shows the source and quality playing now, the source picker and why that source was chosen
+- 0.7.12: updating while Spotify runs no longer fails
+- 0.7.11: if Spotify is set to open after you log on, it now opens with Hangul lyrics at Windows startup too (once the shortcut has been used)
+- 0.7.11: ivLyrics 7.0.18; ivLyrics' own update prompt, which cannot update this installation, is no longer shown
+- 0.7.10: fixes installs that failed on Windows set to a language other than Korean
+- 0.7.8: fixes installs that ended with "Installation failed" on PCs with a long Windows user name, among others
+- 0.7.8: the installer and updater appear in English on Windows that is not set to Korean, and an unusable installation folder is refused as soon as it is chosen (from the 0.7.7 pre-release)
+- 0.7.6: more reliable automatic updates; new versions are still found if the release repository address changes
+- 0.7.5: YouTube audio mode no longer plays louder than Spotify songs; it applies the YouTube player's loudness normalization
+- 0.7.5: the volume slider now gives YouTube audio and video about the same loudness as Spotify songs at the same position
+- 0.7.5: Spotify songs and YouTube links share one volume; a change made on a YouTube link carries over to the next Spotify song
+- 0.7.4: ask before updating, then download with progress, install, and relaunch
+- 0.7.4: show the installed version and check for updates from Spotify's profile menu
+- 0.7.4: start the installed desktop overlay when lyrics open (or 「가사 열기」 on a YouTube track) while **Desktop overlay** is on
+- 0.7.3: start without a helper error when the shortcut is pressed twice or right after installation
+- 0.7.3: no PowerShell window on launch, and Spotify opens sooner
+- 0.7.3: fix "Failed to fetch" and YouTube module load failures on PCs running network filters such as AdGuard
+- 0.7.3: fix missing thumbnails for YouTube videos whose ID contains "ad"
+- 0.7.2: fix first YouTube audio playback failures (wait until a fresh stream URL is served, then retry once if it still fails)
+- 0.7.2: align automatic pronunciation with authored Korean conventions (long vowels dropped, sokuon as ㅅ)
 
 </details>
 
@@ -116,6 +116,12 @@ Spotify's own auto-update is blocked to keep the patches. New Spotify versions c
 - The overlay bundled with 0.7.0 is removed from the install folder on update; a separately installed overlay is left alone.
 
 </details>
+
+## If it does not install or run
+
+- **Run the installer with a plain double-click, not as administrator.** "Run as administrator", or "Run this program as an administrator" on the Compatibility tab of the file's properties, makes the install fail at the Spicetify step. A PC where everything runs as administrator (for example with User Account Control turned off) may fail the same way; this is not handled yet.
+- **If the Extensions tab stays on "Reading…" or extension installs fail**, check whether an ad blocker or security program filters connections within the PC (127.0.0.1). AdGuard can stay on from 0.9.1. If another program causes the same, exclude 127.0.0.1 from its filtering.
+- **To report a problem**, open an [issue](https://github.com/ForUltraplayer/SPOTIFY_PC/issues). If the install failed, attach `failure.txt` from the `.SpotifyHangul-update-…` folder next to the installation folder (in `%LOCALAPPDATA%\Programs` for the default one). It may contain your Windows user name; you can remove it before uploading.
 
 ## Known issues
 
