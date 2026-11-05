@@ -23,13 +23,34 @@ test('mixed link lists preserve Spotify identities and discard unsupported items
     assert.deepEqual(value.playlists[0].tracks.map(t => t.kind), ['youtube', 'spotify']);
     assert.equal(value.playlists[0].tracks[1].uri, 'spotify:track:6x7SB38tuekpu4xpH9OIPY');
 });
-test('link queue has bounded end, repeat-one, repeat-all and nonrepeating shuffle contracts', () => {
-    assert.equal(linkModel.nextIndex(1, 2, 1, 'off', false), -1);
-    assert.equal(linkModel.nextIndex(1, 2, 0, 'one', false), 1);
-    assert.equal(linkModel.nextIndex(1, 2, 1, 'all', false), 0);
-    assert.equal(linkModel.nextIndex(0, 2, -1, 'all', false), 1);
-    for (let i = 0; i < 4; i++) assert.notEqual(linkModel.nextIndex(i, 4, 1, 'off', true, () => 0.5), i);
-    assert.equal(linkModel.nextIndex(0, 0, 1, 'all', true), -1);
+test('link queue has bounded end, repeat-one and repeat-all contracts', () => {
+    assert.equal(linkModel.nextIndex(1, 2, 1, 'off'), -1);
+    assert.equal(linkModel.nextIndex(1, 2, 0, 'one'), 1);
+    assert.equal(linkModel.nextIndex(1, 2, 1, 'all'), 0);
+    assert.equal(linkModel.nextIndex(0, 2, -1, 'all'), 1);
+    assert.equal(linkModel.nextIndex(0, 0, 1, 'all'), -1);
+});
+test('a shuffled list plays every song once, walks back through what played and never repeats across rounds', () => {
+    let seed = 7; const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    let plan = null, index = 3; const played = [index];
+    for (let i = 0; i < 8; i++) { const step = linkModel.shuffleStep(plan, index, 9, 1, 'off', random); plan = step.plan; index = step.index; played.push(index); }
+    assert.deepEqual([...played].sort((a, b) => a - b), [0, 1, 2, 3, 4, 5, 6, 7, 8], 'one round holds each song once');
+    const last = index;
+    const back = linkModel.shuffleStep(plan, index, 9, -1, 'off', random);
+    assert.equal(back.index, played[7], 'Previous returns to the song that played before');
+    assert.equal(linkModel.shuffleStep(back.plan, back.index, 9, 1, 'off', random).index, last, 'and Next comes forward again');
+    for (let round = 0; round < 50; round++) {
+        const order = linkModel.shuffleOrder(5, 2, random), end = { length: 5, order, position: 4 }, current = order[4];
+        const step = linkModel.shuffleStep(end, current, 5, 1, 'off', random);
+        assert.notEqual(step.index, current, 'a new round does not start with the song that just ended');
+        assert.equal(new Set(step.plan.order.slice(5)).size, 5, 'the new round holds each song once');
+        const previous = linkModel.shuffleStep(step.plan, step.index, 5, -1, 'off', random);
+        assert.equal(previous.index, current, 'Previous at the start of a round returns to the last song of the round before');
+    }
+    const stale = linkModel.shuffleStep({ length: 2, order: [0, 1], position: 0 }, 4, 6, 1, 'off', random);
+    assert.equal(stale.plan.length, 6, 'a list that changed gets a new order'); assert.equal(stale.plan.order[0], 4);
+    assert.equal(linkModel.shuffleStep(null, 2, 6, 0, 'one', random).index, 2, 'repeat one stays on the song');
+    assert.equal(linkModel.shuffleStep(null, 2, 6, -1, 'off', random).index, 2, 'Previous on the first song stays');
 });
 test('malformed persisted link lists recover without activating playback', () => {
     for (const value of [null, {}, { schema: 2, playlists: [] }, { schema: 1, playlists: [null] }]) assert.deepEqual(linkModel.library(value), { schema: 1, playlists: [{ id: 'default', name: 'YouTube links', tracks: [] }] });

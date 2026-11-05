@@ -128,7 +128,7 @@ function clickHarness(overrides = {}) {
         context = vm.createContext({
         active: true, kind: 'youtube', view: { uri: 'local:my-list', name: 'My list', mixed: [{}] },
         viewBypass: false, mixedGrid: { isConnected: true }, queueSource: 'local:my-list',
-        playing: true, repeat: 'off', shuffle: false, state: {},
+        playing: true, repeat: 'off', queue: [], shufflePlan: null, listShuffle: null, smartNoticed: false, state: {},
         open: () => calls.push('open'), toggle: () => calls.push('toggle'), startView: index => calls.push(['start', index]),
         ivLyrics: { open: () => calls.push('lyrics') }, window: {}, Spicetify: { Player: { togglePlay: () => calls.push('native-toggle') }, Platform: { History: history } },
         refreshView: () => { calls.push('refresh'); return Promise.resolve(); },
@@ -137,7 +137,7 @@ function clickHarness(overrides = {}) {
     });
     withText(context);
     // New shared header handlers are executed from the implementation when present.
-    for (const name of ['togglePlaylistPlayback', 'toggleViewPlayback', 'showQueue', 'isIvLyricsMicrophone', 'openLyrics', 'spotifyText', 'isPlaylistPlay']) {
+    for (const name of ['stateShuffleMode', 'nativeShuffleList', 'shuffleOutOfContext', 'shuffleMode', 'spotifyShuffle', 'cycleShuffle', 'readListShuffle', 'noticeSmartShuffle', 'togglePlaylistPlayback', 'toggleViewPlayback', 'showQueue', 'isIvLyricsMicrophone', 'openLyrics', 'spotifyText', 'isPlaylistPlay']) {
         const definition = functionSource(name); if (definition) vm.runInContext(definition, context);
     }
     vm.runInContext(functionSource('click'), context);
@@ -180,13 +180,10 @@ test('a different playlist header deliberately starts that playlist', () => {
     harness.invoke(button({ primary: true, inHeader: true, label: 'My list 재생하기' }));
     assert.deepEqual(harness.calls, [['start', 0]]);
 });
-test('a Spotify in another language still routes shuffle, Connect and the playlist header to the links', () => {
+test('a Spotify in another language still routes Connect and the playlist header to the links', () => {
     const english = { 'playlist.a11y.play': 'Play {0}', 'playlist.a11y.pause': 'Pause {0}', 'playback-control.connect-picker': 'Connect to a device' };
     const harness = clickHarness();
     harness.context.Spicetify.Locale = { get: (key, ...args) => (english[key] || key).replace('{0}', args[0]) };
-    harness.invoke(button({ inBar: true, leftControls: true, label: 'Enable Shuffle for My list' }));
-    assert.equal(harness.context.shuffle, true);
-    harness.calls.length = 0;
     harness.invoke(button({ id: 'control-button-skip-back', inBar: true, leftControls: true, label: 'Previous' }));
     assert.deepEqual(harness.calls, [['advance', -1]], 'Previous beside shuffle stays previous');
     harness.calls.length = 0;
@@ -199,11 +196,61 @@ test('a Spotify in another language still routes shuffle, Connect and the playli
 });
 test('a Korean Spotify gets the link messages in Korean, any other language in English', () => {
     const harness = clickHarness();
-    harness.invoke(button({ inBar: true, leftControls: true, label: 'Shuffle' }));
-    assert.deepEqual(harness.calls, [['notify', 'YouTube links shuffle on']]);
-    harness.calls.length = 0; harness.context.Spicetify.Locale = { getLocale: () => 'ko' };
-    harness.invoke(button({ inBar: true, leftControls: true, label: 'Shuffle' }));
-    assert.deepEqual(harness.calls, [['notify', '링크 음악 셔플 꺼짐']]);
+    harness.context.queue = [{}]; harness.context.Spicetify.Platform.PlayerAPI = { getState: () => ({ smartShuffle: true }) };
+    harness.context.noticeSmartShuffle();
+    assert.deepEqual(harness.calls, [['notify', 'Smart Shuffle adds no recommendations to a mixed list: only its own songs are shuffled.']]);
+    harness.calls.length = 0; harness.context.smartNoticed = false; harness.context.Spicetify.Locale = { getLocale: () => 'ko' };
+    harness.context.noticeSmartShuffle();
+    assert.deepEqual(harness.calls, [['notify', '혼합 목록에는 스마트 셔플의 추천곡이 들어오지 않고, 목록 안의 곡만 섞입니다.']]);
+});
+test('the shuffle button stays Spotify\'s own: the links read it and never intercept it', () => {
+    const harness = clickHarness();
+    const event = harness.invoke(button({ inBar: true, leftControls: true, label: 'Enable Smart Shuffle' }));
+    assert.deepEqual(harness.calls, []); assert.notEqual(event.prevented, true); assert.notEqual(event.stopped, true);
+    const state = {}; harness.context.Spicetify.Platform.PlayerAPI = { getState: () => state };
+    assert.equal(harness.context.spotifyShuffle(), false);
+    state.shuffle = true; assert.equal(harness.context.spotifyShuffle(), true);
+    state.shuffle = false; state.smartShuffle = true; assert.equal(harness.context.spotifyShuffle(), true, 'Smart Shuffle shuffles the list too');
+    state.smartShuffle = false; state.context = { metadata: { enhanced_context: 'true' } }; assert.equal(harness.context.spotifyShuffle(), true);
+});
+test('before a mixed playlist\'s first Spotify song the button sets that list\'s shuffle, not the playing list\'s', async () => {
+    const harness = clickHarness(), sets = [], list = 'spotify:playlist:0z3USrvt1edvFD2HDraWxs';
+    const player = { shuffle: true, smartShuffle: false, context: { uri: 'spotify:playlist:5C3W78fpJbRdLpbr7kvAMe', metadata: {} } };
+    harness.context.queueSource = list; harness.context.listShuffle = 0;
+    harness.context.Spicetify.Platform.PlayerAPI = { getState: () => player };
+    harness.context.Spicetify.Platform.ShuffleAPI = { getAvailableShuffleModes: async () => [0, 1, 2], setShuffle: async (uri, mode) => sets.push([uri, mode]), getShuffle: async () => 0 };
+    assert.equal(harness.context.spotifyShuffle(), false, 'the list is off although the playing list is on');
+    const event = harness.invoke(button({ inBar: true, leftControls: true, label: 'Enable Shuffle' }));
+    assert.equal(event.prevented, true); assert.equal(event.stopped, true);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(sets, [[list, 1]]); assert.equal(harness.context.spotifyShuffle(), true);
+    player.context.uri = list; player.shuffle = false; harness.context.listShuffle = 2;
+    assert.equal(harness.context.spotifyShuffle(), false, 'once the list is the playing context, the player state is its own');
+    const passed = harness.invoke(button({ inBar: true, leftControls: true, label: 'Enable Shuffle' }));
+    assert.notEqual(passed.prevented, true, 'and the button is Spotify\'s again');
+});
+test('the header play button starts a shuffled mixed playlist at a random song, from that list\'s own setting', async () => {
+    const harness = clickHarness(), list = 'spotify:playlist:0z3USrvt1edvFD2HDraWxs';
+    harness.context.view = { uri: list, name: 'My list', mixed: new Array(50).fill({}) }; harness.context.queueSource = null; harness.context.active = false; harness.context.kind = null;
+    harness.context.Spicetify.Platform.PlayerAPI = { getState: () => ({ shuffle: false, context: { uri: 'spotify:playlist:other' } }) };
+    let mode = 0; harness.context.Spicetify.Platform.ShuffleAPI = { getShuffle: async () => mode };
+    harness.context.togglePlaylistPlayback(); await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(harness.calls, [['start', 0]], 'off: from the top, even if another list is shuffled');
+    harness.calls.length = 0; mode = 1; harness.context.Math = Object.assign(Object.create(Math), { random: () => 0.5 });
+    harness.context.togglePlaylistPlayback(); await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(harness.calls, [['start', 25]]);
+});
+test('Smart Shuffle is told once for a mixed list and not at all for a Spotify list', () => {
+    const harness = clickHarness(), state = { smartShuffle: true };
+    harness.context.Spicetify.Platform.PlayerAPI = { getState: () => state };
+    harness.context.active = false; harness.context.kind = null; harness.context.queue = [];
+    harness.context.noticeSmartShuffle();
+    assert.deepEqual(harness.calls, [], 'a Spotify playlist keeps its Smart Shuffle without a word');
+    harness.context.kind = 'spotify'; harness.context.queue = [{}, {}];
+    harness.context.noticeSmartShuffle(); harness.context.noticeSmartShuffle(); harness.context.noticeSmartShuffle();
+    assert.equal(harness.calls.length, 1, 'once, not at every tick');
+    state.smartShuffle = false; harness.context.noticeSmartShuffle(); state.smartShuffle = true; harness.context.noticeSmartShuffle();
+    assert.equal(harness.calls.length, 2, 'turning it on again tells it again');
 });
 test('the actual ivLyrics microphone opens lyrics before the generic track-widget handler', () => {
     const harness = clickHarness(); const event = harness.invoke(button({ inBar: true, inWidget: true, classes: ['ivlyrics-playbar-control'] }));
