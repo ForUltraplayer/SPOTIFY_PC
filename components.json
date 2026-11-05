@@ -16,11 +16,11 @@
       "revision": "c3fd98f6fbf922ae944d1ecd64f97c380d04368e"
     },
     "ivlyrics": {
-      "version": "7.0.18",
-      "revision": "75cb5b92d04734e664f09397ae861bba016ce727",
+      "version": "7.1.2",
+      "revision": "310c93c7b621096b505ea48889c7907269cf973a",
       "repository": "ivLis-Studio/ivLyrics",
       "track": "release",
-      "source_artifact": "ivLyrics-7.0.18-source.zip"
+      "source_artifact": "ivLyrics-7.1.2-source.zip"
     },
     "spotx": {
       "revision": "3cfbdfd1fac3dc755155e434116e28b51acfec07",
@@ -219,11 +219,6 @@
       "sha256": "4f5379796280cdaeb0c2f358fd04b6a16cc4fb7dfa83b5a8c91a9d963b435231",
       "bytes": 57669336
     },
-    "ivLyrics-7.0.18-source.zip": {
-      "url": "https://codeload.github.com/ivLis-Studio/ivLyrics/zip/75cb5b92d04734e664f09397ae861bba016ce727",
-      "sha256": "4ec75c2d802a7919e9cdbc0b11eb40408c90649b2742a9f9858740bb51dbb4b0",
-      "bytes": 10384419
-    },
     "OpenJDK21U-jdk_x64_windows_hotspot_21.0.13_9.zip": {
       "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_windows_hotspot_21.0.13_9.zip",
       "sha256": "a4dbaa05fca4bd89d84584e58c459bd732efebb1722af80ab13c6516832004f9",
@@ -248,6 +243,11 @@
       "url": "https://codeload.github.com/ForUltraplayer/SPOTIFY_ANDROID/zip/ca84b1f7c22efacfc62291b3bf6e366e9757c278",
       "sha256": "f9c7c46b26a6a6c08157b7bb664a241bf57cb89842a6a1e584dbfbbb009e6ecc",
       "bytes": 4927348
+    },
+    "ivLyrics-7.1.2-source.zip": {
+      "url": "https://codeload.github.com/ivLis-Studio/ivLyrics/zip/310c93c7b621096b505ea48889c7907269cf973a",
+      "sha256": "9da595367bc743f264e585be04b497273edabe577ac9e54b7c3df4dd32885a7e",
+      "bytes": 10442617
     }
   },
   "test_fixtures": {
