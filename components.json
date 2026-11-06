@@ -16,11 +16,11 @@
       "revision": "c3fd98f6fbf922ae944d1ecd64f97c380d04368e"
     },
     "ivlyrics": {
-      "version": "7.1.2",
-      "revision": "310c93c7b621096b505ea48889c7907269cf973a",
+      "version": "7.1.4",
+      "revision": "3e4311b90e95a982b43cad62631835e5cb9c80cb",
       "repository": "ivLis-Studio/ivLyrics",
       "track": "release",
-      "source_artifact": "ivLyrics-7.1.2-source.zip"
+      "source_artifact": "ivLyrics-7.1.4-source.zip"
     },
     "spotx": {
       "revision": "3cfbdfd1fac3dc755155e434116e28b51acfec07",
@@ -244,10 +244,10 @@
       "sha256": "f9c7c46b26a6a6c08157b7bb664a241bf57cb89842a6a1e584dbfbbb009e6ecc",
       "bytes": 4927348
     },
-    "ivLyrics-7.1.2-source.zip": {
-      "url": "https://codeload.github.com/ivLis-Studio/ivLyrics/zip/310c93c7b621096b505ea48889c7907269cf973a",
-      "sha256": "9da595367bc743f264e585be04b497273edabe577ac9e54b7c3df4dd32885a7e",
-      "bytes": 10442617
+    "ivLyrics-7.1.4-source.zip": {
+      "url": "https://codeload.github.com/ivLis-Studio/ivLyrics/zip/3e4311b90e95a982b43cad62631835e5cb9c80cb",
+      "sha256": "346c2281a95dd37f87b3f80d92f089622ed55993c27c954339af63caed700dfd",
+      "bytes": 10457656
     }
   },
   "test_fixtures": {
