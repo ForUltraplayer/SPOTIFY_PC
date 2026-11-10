@@ -219,3 +219,17 @@ Windows의 설정 창 생성은 짧게 실행되는 전용 작업 스레드에�
 | 0.8.1 설치본을 이 PC에 덮어 설치 | 종료 코드 0, 설치 파일이 저장소와 같고 도우미가 0.8.1로 응답 |
 
 검사 뒤 Spotify 설정은 원래 파일로 되돌렸다(`work/spotify-lang.ps1 -Restore`). 남은 한계: 설정 창, 알림, 오버레이, 설치 오류 문구 대부분이 영어 기본값 없이 한국어로만 나온다. 비한국어 Windows에서 NSIS 설치 세부 정보 창에 PowerShell의 한국어 출력이 `?`로 보일 수 있다(추정, 확인 안 함).
+
+## Spotify 설치 파일 미러 대체 (2026-11-10)
+
+0.9.3까지는 Spotify를 버전 번호가 없는 공식 주소(`https://download.scdn.co/SpotifyFullSetupX64.exe`)에서만 내려받고, `components.json`에 고정한 1.3.6.1921의 크기와 SHA-256으로 검사했다. Spotify가 2026-11-06에 이 주소의 파일을 1.3.8.620(158,250,880 바이트)으로 바꾸면서, Spotify를 새로 내려받는 설치는 모두 `bootstrap.ps1`의 크기 검사에서 「Spotify 설치 파일 크기가 다릅니다」로 실패했다. 2026-11-10 제보자의 `failure.txt`와 서버 응답 머리글(`Last-Modified`)로 확인했다. 같은 Spotify 버전으로 이미 설치된 PC는 내려받기를 거치지 않는다(코드 흐름으로 판단, 시험 안 함).
+
+수정 후에는 공식 주소의 `Content-Length`를 먼저 보고, 고정 크기와 다르면 `components.json`의 `spotify.mirror`에서 고정 버전을 받는다. 어느 쪽에서 받든 기존 크기, SHA-256, Spotify AB 서명 검사를 그대로 거친다. 공식 파일의 크기가 같은데 내용만 다르면 이전처럼 SHA-256 검사에서 실패한다.
+
+| 검토한 방법 | 결과 |
+| --- | --- |
+| Spotify의 버전 고정 주소(`upgrade.scdn.co/.../spotify_installer-{전체 버전}-x64.exe`) | 1.3.6.1921과 1.3.8.620 모두 403, 사용 불가 |
+| SpotX가 쓰는 버전 고정 미러(`loadspot.amd64fox1.workers.dev`, 제3자 Cloudflare 워커) | Windows PowerShell 5.1 기본 설정으로 받은 1.3.6.1921이 고정 SHA-256과 일치. curl 기본 User-Agent로는 1 KB짜리 다른 응답이 옴 |
+| 고정 버전을 1.3.8.620으로 올리기 | SpotX를 1.3.8 이상 지원 커밋으로 올리고 호환성 시험이 필요하며, 공식 파일이 다시 바뀌면 같은 고장이 남. 별도 작업으로 미룸 |
+
+알려진 한계: 공식 파일이 바뀐 동안 미러가 내려가면 새 설치가 실패한다. Spotify 버전을 올릴 때는 `spotify.mirror`도 해당 버전 주소로 바꿔야 한다.

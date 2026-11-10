@@ -205,7 +205,15 @@ try {
             Write-Output (Get-Text '공식 Spotify x64 설치 파일을 내려받습니다. 약 150 MB가 필요합니다.' 'Downloading the official Spotify x64 installer. About 150 MB is needed.')
             [Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
             $ProgressPreference='SilentlyContinue'
-            Invoke-WebRequest -Uri $components.spotify.url -OutFile $download -UseBasicParsing -TimeoutSec 180
+            # Spotify replaces the file behind its unversioned URL on each release. When the size no longer matches the
+            # pinned build, take that build from the versioned mirror SpotX uses; Test-SpotifyInstaller still checks
+            # its size, SHA-256 and Spotify AB signature.
+            $url=$components.spotify.url
+            if ([long](Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -TimeoutSec 30).Headers['Content-Length'] -ne $components.spotify.bytes) {
+                Write-Output (Get-Text ('공식 주소의 Spotify가 검증 버전과 달라 미러에서 '+$components.spotify.version+' 버전을 내려받습니다.') ('The official Spotify download is not the verified version, so version '+$components.spotify.version+' is downloaded from a mirror.'))
+                $url=$components.spotify.mirror
+            }
+            Invoke-WebRequest -Uri $url -OutFile $download -UseBasicParsing -TimeoutSec 180
         }
         Test-SpotifyInstaller $download
         $extract=Join-Path $stage 'client'
