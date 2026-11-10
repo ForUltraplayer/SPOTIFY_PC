@@ -185,18 +185,19 @@ try {
     Assert-OwnedChild $config
     Assert-OwnedChild $preprocessState
     $components=(Get-Content -LiteralPath (Join-Path $root 'components.json') -Raw | ConvertFrom-Json).components
-    $reuse=(Test-Path -LiteralPath (Join-Path $client 'spotx-hangul.json'))
-    if ($reuse) {
+    # A client this app patched is replaced when Spotify or SpotX changes; any other folder content is refused.
+    $owned=(Test-Path -LiteralPath (Join-Path $client 'spotx-hangul.json'))
+    if ($owned) {
         $identity=Get-Content -LiteralPath (Join-Path $client 'spotx-hangul.json') -Raw | ConvertFrom-Json
-        $reuse=$identity.App -eq 'SpotifyHangul' -and $identity.SpotifyVersion -eq $components.spotify.version -and
-            $identity.SpotXRevision -eq $components.spotx.revision
+        $owned=$identity.App -eq 'SpotifyHangul'
     }
+    $reuse=$owned -and $identity.SpotifyVersion -eq $components.spotify.version -and $identity.SpotXRevision -eq $components.spotx.revision
     # Older releases isolated config only; Spicetify's state still used APPDATA.
     # Rebuild once from verified, SpotX-patched stock files rather than trusting
     # another client's shared Backup/Extracted directories.
     $rebuildState=$reuse -and -not (Test-Path -LiteralPath (Join-Path $preprocessState 'xpui.spa'))
     if (-not $reuse -or $rebuildState) {
-        if (-not $reuse -and (Test-Path -LiteralPath $client) -and @(Get-ChildItem -LiteralPath $client -Force).Count) { throw (Get-Text '기존 Spotify 하위 폴더의 소유권을 확인하지 못했습니다.' 'Could not confirm ownership of the existing Spotify subfolder.') }
+        if (-not $reuse -and -not $owned -and (Test-Path -LiteralPath $client) -and @(Get-ChildItem -LiteralPath $client -Force).Count) { throw (Get-Text '기존 Spotify 하위 폴더의 소유권을 확인하지 못했습니다.' 'Could not confirm ownership of the existing Spotify subfolder.') }
         $stage=Join-Path $root ('.client-stage-'+[Guid]::NewGuid().ToString('N'))
         [void](New-Item -ItemType Directory -Path $stage)
         $download=Join-Path $stage 'SpotifySetup.exe'
@@ -224,7 +225,8 @@ try {
         Invoke-SpotXPatch (Join-Path $root 'installer\spotx-patch.ps1') $extract
         if ($reuse) { $stockApps=Join-Path $extract 'Apps' }
         else {
-            if (Test-Path -LiteralPath $client) { Remove-Item -LiteralPath $client }
+            # The payload transaction keeps the previous folder and restores it if this attempt fails.
+            if (Test-Path -LiteralPath $client) { Stop-ExactSpotify (Join-Path $client 'Spotify.exe'); Remove-Item -LiteralPath $client -Recurse -Force }
             Move-Item -LiteralPath $extract -Destination $client
         }
     }
@@ -256,6 +258,8 @@ try {
     $env:SPICETIFY_CONFIG=$config
     $env:SPICETIFY_STATE=$preprocessState
     $preprocessTouched=$true
+    # Spicetify's backup of the replaced client belongs to the old Spotify; back up the new stock files instead.
+    if ($owned -and -not $reuse -and $preprocessExisted) { Remove-Item -LiteralPath $preprocessState -Recurse -Force }
     [void](New-Item -ItemType Directory -Path $preprocessState -Force)
     if ($stockApps) {
         Get-ChildItem -LiteralPath $stockApps -Filter '*.spa' -File | ForEach-Object {

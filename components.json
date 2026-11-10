@@ -2,11 +2,11 @@
   "schema": 1,
   "components": {
     "spotify": {
-      "version": "1.3.6.1921",
+      "version": "1.3.8.620",
       "url": "https://download.scdn.co/SpotifyFullSetupX64.exe",
-      "mirror": "https://loadspot.amd64fox1.workers.dev/download/spotify_installer-1.3.6.1921.g7086c071a617-x64.exe",
-      "bytes": 157180192,
-      "sha256": "e5ca46ad79de202c8deaf888c26f2a608b9e042142279e0690d589d80640591d"
+      "mirror": "https://loadspot.amd64fox1.workers.dev/download/spotify_installer-1.3.8.620.g39b276d5d7ac-x64.exe",
+      "bytes": 158250880,
+      "sha256": "a92da3465625a868187cb2cf46e7fbeb91df990c0eaaab279d04f0e14d559667"
     },
     "spicetify": {
       "version": "2.46.4",
@@ -17,17 +17,17 @@
       "revision": "c3fd98f6fbf922ae944d1ecd64f97c380d04368e"
     },
     "ivlyrics": {
-      "version": "7.1.2",
-      "revision": "310c93c7b621096b505ea48889c7907269cf973a",
+      "version": "7.1.6",
+      "revision": "5badb048185a7359ff229134c792fa12337097e1",
       "repository": "ivLis-Studio/ivLyrics",
       "track": "release",
-      "source_artifact": "ivLyrics-7.1.2-source.zip"
+      "source_artifact": "ivLyrics-7.1.6-source.zip"
     },
     "spotx": {
-      "revision": "3cfbdfd1fac3dc755155e434116e28b51acfec07",
+      "revision": "e94afec2c8a76495c3cbe997aa88f2a474453d7c",
       "repository": "SpotX-Official/SpotX",
       "track": "commit",
-      "script_sha256": "0d2a747b5c8ac07df2dd4771463ea336bbdd08153adb7043bf899ad0dd865e57"
+      "script_sha256": "a693f5a2a62d9750524e543012664658fb74267b6d136ac91130ee48e7880c44"
     },
     "python": {
       "version": "3.13.17",
@@ -245,10 +245,10 @@
       "sha256": "f9c7c46b26a6a6c08157b7bb664a241bf57cb89842a6a1e584dbfbbb009e6ecc",
       "bytes": 4927348
     },
-    "ivLyrics-7.1.2-source.zip": {
-      "url": "https://codeload.github.com/ivLis-Studio/ivLyrics/zip/310c93c7b621096b505ea48889c7907269cf973a",
-      "sha256": "9da595367bc743f264e585be04b497273edabe577ac9e54b7c3df4dd32885a7e",
-      "bytes": 10442617
+    "ivLyrics-7.1.6-source.zip": {
+      "url": "https://codeload.github.com/ivLis-Studio/ivLyrics/zip/5badb048185a7359ff229134c792fa12337097e1",
+      "sha256": "435b01ede96bef851bbe3ddb25090aac5e793027112949759be5fd23c98eeac4",
+      "bytes": 10497859
     }
   },
   "test_fixtures": {

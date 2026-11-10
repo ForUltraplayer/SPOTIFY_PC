@@ -2,7 +2,7 @@
 param
 (
     [Parameter(HelpMessage = 'Latest recommended Spotify version for Windows 10+.')]
-    [string]$latest_full = "1.3.6",
+    [string]$latest_full = "1.3.9",
 
     [Parameter(HelpMessage = 'Latest supported Spotify version for Windows 7-8.1')]
     [string]$last_win7_full = "1.2.5.1006.g22820f93",
@@ -1513,20 +1513,42 @@ function Remove-TempDirectory {
 }
 
 function DesktopFolder {
+    $methods = @(
+        { [Environment]::GetFolderPath('DesktopDirectory') },
+        {
+            $folders = Get-ItemProperty -LiteralPath 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders' -ErrorAction Stop
+            $folders.Desktop
+            $folders.'{754AC886-DF64-4CBA-86B5-F7FBF4FBCEF5}'
+        },
+        {
+            if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+                Join-Path $env:USERPROFILE 'Desktop' -ErrorAction Stop
+            }
+        }
+    )
 
-    # If the default Dekstop folder does not exist, then try to find it through the registry.
-    $ErrorActionPreference = 'SilentlyContinue'
-    if (Test-Path "$env:USERPROFILE\Desktop") {
-        $desktop_folder = "$env:USERPROFILE\Desktop"
+    foreach ($method in $methods) {
+        try { $candidates = & $method }
+        catch {
+            Write-Verbose ("Desktop folder lookup failed: {0}" -f $_.Exception.Message)
+            continue
+        }
+
+        foreach ($candidate in $candidates) {
+            if ($candidate -isnot [string] -or [string]::IsNullOrWhiteSpace($candidate)) { continue }
+            try {
+                $desktop_folder = [Environment]::ExpandEnvironmentVariables($candidate)
+                if ([IO.Path]::IsPathRooted($desktop_folder) -and
+                    (Test-Path -LiteralPath $desktop_folder -PathType Container -ErrorAction Stop)) {
+                    return $desktop_folder
+                }
+            }
+            catch {
+                Write-Verbose ("Desktop folder lookup failed: {0}" -f $_.Exception.Message)
+            }
+        }
     }
-
-    $regedit_desktop_folder = Get-ItemProperty -Path "Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders\"
-    $regedit_desktop = $regedit_desktop_folder.'{754AC886-DF64-4CBA-86B5-F7FBF4FBCEF5}'
-
-    if (!(Test-Path "$env:USERPROFILE\Desktop")) {
-        $desktop_folder = $regedit_desktop
-    }
-    return $desktop_folder
+    return $null
 }
 
 function Test-IsAdministrator {
@@ -1720,7 +1742,8 @@ function Add-SpotifyDefenderExclusions {
 
 if (-not $defender_exclusions_off) {
     try {
-        $desktopShortcut = Join-Path (DesktopFolder) 'Spotify.lnk'
+        $desktop_folder = DesktopFolder
+        $desktopShortcut = if ($desktop_folder) { Join-Path $desktop_folder 'Spotify.lnk' } else { $null }
         $currentProcess = [Diagnostics.Process]::GetCurrentProcess()
         try {
             $defenderPowerShellProcess = $currentProcess.MainModule.FileName
@@ -2198,6 +2221,10 @@ function Helper($paramname, [switch]$CheckOnly) {
             Remove-Json -j $Enable -p 'RightSidebarLyrics'
             if ($Custom.PSObject.Properties.Name -contains 'LyricsVariationsInNPV') {
                 $Custom.LyricsVariationsInNPV.value = "CONTROL"
+            }
+
+            if ([version]$offline -ge [version]'1.3.1' -and $Custom.PSObject.Properties.Name -contains 'SkipNextTooltip') {
+                $Custom.SkipNextTooltip.value = "compact"
             }
 
             if ([version]$offline -eq [version]'1.2.30.1135') { Move-Json -n 'QueueOnRightPanel' -t $Enable -f $Disable }
@@ -5446,10 +5473,6 @@ try {
         Register-SpotifyInstall -Directory $destination -InstalledVersion ([version]$offline)
     }
 
-    if ($no_shortcut) {
-        $desktop_folder = DesktopFolder
-        Remove-Item -LiteralPath (Join-Path $desktop_folder 'Spotify.lnk') -Force -ErrorAction SilentlyContinue
-    }
     if ($installSpotify -and $not_block_update -and (Test-Path -LiteralPath $exe_bak)) {
         $offline_bak = (Get-Item -LiteralPath $exe_bak -ErrorAction Stop).VersionInfo.FileVersion
         if ($offline -eq $offline_bak) {
@@ -5465,6 +5488,20 @@ catch {
 finally {
     Remove-TempDirectory -Directory $tempDirectory
     $tempDirectory = $null
+}
+
+if ($no_shortcut) {
+    try {
+        $desktop_folder = DesktopFolder
+        if (-not $desktop_folder) { throw 'Desktop folder was not found' }
+        $desktopShortcut = Join-Path $desktop_folder 'Spotify.lnk'
+        if (Test-Path -LiteralPath $desktopShortcut -ErrorAction Stop) {
+            Remove-Item -LiteralPath $desktopShortcut -Force -ErrorAction Stop
+        }
+    }
+    catch {
+        Write-Warning ("Desktop shortcut removal failed: {0}" -f $_.Exception.Message) -WarningAction Continue
+    }
 }
 
 Write-Host ($lang).ModSpoti`n
@@ -5840,18 +5877,20 @@ if ($ru) {
 $ErrorActionPreference = 'SilentlyContinue'
 
 if (!($no_shortcut)) {
-
-    $desktop_folder = DesktopFolder
-
-    If (!(Test-Path $desktop_folder\Spotify.lnk)) {
-        $source = $spotifyExecutable
-        $target = "$desktop_folder\Spotify.lnk"
-        $WorkingDir = $spotifyDirectory
-        $WshShell = New-Object -comObject WScript.Shell
-        $Shortcut = $WshShell.CreateShortcut($target)
-        $Shortcut.WorkingDirectory = $WorkingDir
-        $Shortcut.TargetPath = $source
-        $Shortcut.Save()
+    try {
+        $desktop_folder = DesktopFolder
+        if (-not $desktop_folder) { throw 'Desktop folder was not found' }
+        $target = Join-Path $desktop_folder 'Spotify.lnk'
+        if (!(Test-Path -LiteralPath $target -ErrorAction Stop)) {
+            $WshShell = New-Object -ComObject WScript.Shell -ErrorAction Stop
+            $Shortcut = $WshShell.CreateShortcut($target)
+            $Shortcut.WorkingDirectory = $spotifyDirectory
+            $Shortcut.TargetPath = $spotifyExecutable
+            $Shortcut.Save()
+        }
+    }
+    catch {
+        Write-Warning ("Desktop shortcut creation failed: {0}" -f $_.Exception.Message) -WarningAction Continue
     }
 }
 
