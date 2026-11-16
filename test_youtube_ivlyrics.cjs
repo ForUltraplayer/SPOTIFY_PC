@@ -556,13 +556,16 @@ const serviceFile = upstreamRoots.map(root => path.join(root, 'LyricsService.js'
 test('actual upstream native-art lyric payload construction is corrected at the queue boundary',
     { skip: serviceFile ? false : 'Set IVLYRICS_SOURCE_DIR to run the actual upstream lyric artwork contract' }, async () => {
         const source = fs.readFileSync(serviceFile, 'utf8'), method = source.indexOf('async sendLyrics(');
-        const queue = source.indexOf("await this.queueLyricsSend('/lyrics', trackInfo.uri", method);
+        // 7.1.11 names the endpoint through LYRICS_ENDPOINT and adds the overlay source fields.
+        const queue = [source.indexOf("await this.queueLyricsSend('/lyrics', trackInfo.uri", method),
+            source.indexOf('await this.queueLyricsSend(this.LYRICS_ENDPOINT, trackInfo.uri', method)].find(index => index >= 0) ?? -1;
         const start = source.lastIndexOf('let albumArt = null;', queue), end = source.indexOf('\n            });', queue);
         assert.ok(method >= 0 && start > method && queue > start && end > queue, 'Upstream lyric artwork payload boundary changed');
         const h = harness(), sent = [];
         h.host.Spicetify.Player.data = { item: { ...h.native, metadata: { image_xlarge_url: 'https://i.scdn.co/image/native', album_title: 'Native album' } }, isPaused: true };
         h.host.Spicetify.Player.getDuration = () => 999000;
-        h.host.OverlaySender = { queueLyricsSend: (...args) => sent.push(args) }; h.adapter.update(TRACK, { duration: 194 });
+        h.host.OverlaySender = { LYRICS_ENDPOINT: '/lyrics', getSourceFields: () => ({}), queueLyricsSend: (...args) => sent.push(args) };
+        h.adapter.update(TRACK, { duration: 194 });
         const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
         const invoke = new AsyncFunction('Spicetify', 'trackInfo', 'currentTitle', 'currentArtist', 'mappedLines', 'isSynced',
             'deliveryKey', 'deliveryGeneration', 'isReconnectCycle', 'offset', 'translatedMetadata', 'helperDebug', 'resolveSpotifyImageUrl', source.slice(start, end + '\n            });'.length));

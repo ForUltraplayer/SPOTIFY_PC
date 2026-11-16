@@ -2,32 +2,32 @@
   "schema": 1,
   "components": {
     "spotify": {
-      "version": "1.3.8.620",
+      "version": "1.3.9.2055",
       "url": "https://download.scdn.co/SpotifyFullSetupX64.exe",
-      "mirror": "https://loadspot.amd64fox1.workers.dev/download/spotify_installer-1.3.8.620.g39b276d5d7ac-x64.exe",
-      "bytes": 158250880,
-      "sha256": "a92da3465625a868187cb2cf46e7fbeb91df990c0eaaab279d04f0e14d559667"
+      "mirror": "https://loadspot.amd64fox1.workers.dev/download/spotify_installer-1.3.9.2055.g806b5b278de8-x64.exe",
+      "bytes": 161195480,
+      "sha256": "2d3bf0d79580599a7a392feb82ed11d8eaa938c3059f79b5819caea156d55368"
     },
     "spicetify": {
-      "version": "2.46.4",
+      "version": "2.46.7",
       "repository": "spicetify/cli",
       "track": "release",
-      "artifact": "spicetify-2.46.4-windows-x64.zip",
-      "source_artifact": "spicetify-2.46.4-source.zip",
-      "revision": "c3fd98f6fbf922ae944d1ecd64f97c380d04368e"
+      "artifact": "spicetify-2.46.7-windows-x64.zip",
+      "source_artifact": "spicetify-2.46.7-source.zip",
+      "revision": "867df4af012a07f0b9d5c6b4bc8d7c29badb8ca9"
     },
     "ivlyrics": {
-      "version": "7.1.6",
-      "revision": "5badb048185a7359ff229134c792fa12337097e1",
+      "version": "7.1.13",
+      "revision": "b5e377cd8099156a6423ad3cd8b2f48ce9bb2426",
       "repository": "ivLis-Studio/ivLyrics",
       "track": "release",
-      "source_artifact": "ivLyrics-7.1.6-source.zip"
+      "source_artifact": "ivLyrics-7.1.13-source.zip"
     },
     "spotx": {
-      "revision": "e94afec2c8a76495c3cbe997aa88f2a474453d7c",
+      "revision": "d85794fdc446feb2c66b62379278767bcf87dda3",
       "repository": "SpotX-Official/SpotX",
       "track": "commit",
-      "script_sha256": "a693f5a2a62d9750524e543012664658fb74267b6d136ac91130ee48e7880c44"
+      "script_sha256": "2b18131a37c0c9945174517326cd46ee63475567fdd0da946cdb3f57001fe2e5"
     },
     "python": {
       "version": "3.13.17",
@@ -57,15 +57,15 @@
       "delivery": "embedded-python-module"
     },
     "node": {
-      "version": "24.22.1",
+      "version": "24.22.3",
       "repository": "nodejs/node",
       "track": "release",
       "release_line": "24-lts",
-      "artifact": "node-v24.22.1-win-x64.zip",
-      "source_artifact": "node-v24.22.1.tar.xz",
+      "artifact": "node-v24.22.3-win-x64.zip",
+      "source_artifact": "node-v24.22.3.tar.xz",
       "license": "MIT with bundled third-party notices",
-      "binary_member": "node-v24.22.1-win-x64/node.exe",
-      "license_member": "node-v24.22.1-win-x64/LICENSE"
+      "binary_member": "node-v24.22.3-win-x64/node.exe",
+      "license_member": "node-v24.22.3-win-x64/LICENSE"
     },
     "java": {
       "version": "jdk-21.0.13+9",
@@ -180,16 +180,6 @@
       "sha256": "09b1893ee4063706574c1813abf479b8b51926633fbdb6f96aab8dc7b0976668",
       "bytes": 105870
     },
-    "spicetify-2.46.4-windows-x64.zip": {
-      "url": "https://github.com/spicetify/cli/releases/download/v2.46.4/spicetify-2.46.4-windows-x64.zip",
-      "sha256": "0490380bf59e00c94cf6cb12bfac5152791b91bb8009aceef53c49815b45a56f",
-      "bytes": 7795758
-    },
-    "spicetify-2.46.4-source.zip": {
-      "url": "https://codeload.github.com/spicetify/cli/zip/c3fd98f6fbf922ae944d1ecd64f97c380d04368e",
-      "sha256": "64a7490b4746288dc561ac6086b63e991f9a3e49d9dae6e0b05a7e6882f21469",
-      "bytes": 2184177
-    },
     "wheels/yt_dlp-2026.10.26-py3-none-any.whl": {
       "url": "https://files.pythonhosted.org/packages/7f/3d/16ea7d5638cf585991f2c5705e8083688dde633d32d0871f2404e0f4d827/yt_dlp-2026.10.26-py3-none-any.whl",
       "sha256": "a05c5b5d8562f7e8a62f5334348b406af4930d56d3a65f8021d14af0e22339ae",
@@ -210,15 +200,15 @@
       "sha256": "d5fa1639f63b5c4af8d932495f60689d5370f1a095782c944f7f62a303eb104e",
       "bytes": 96571
     },
-    "node-v24.22.1-win-x64.zip": {
-      "url": "https://nodejs.org/dist/v24.22.1/node-v24.22.1-win-x64.zip",
-      "sha256": "d2046d28c2c3dcd211ac5145c0bf30e2047ef9dfb306693c8c6e2eccd8b95fa5",
-      "bytes": 37748064
+    "node-v24.22.3-win-x64.zip": {
+      "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-win-x64.zip",
+      "sha256": "e612af99f626ab415ea225af6bce5c971feb448cb5cae250bb1c3fa50c5f7d9f",
+      "bytes": 37762649
     },
-    "node-v24.22.1.tar.xz": {
-      "url": "https://nodejs.org/dist/v24.22.1/node-v24.22.1.tar.xz",
-      "sha256": "4f5379796280cdaeb0c2f358fd04b6a16cc4fb7dfa83b5a8c91a9d963b435231",
-      "bytes": 57669336
+    "node-v24.22.3.tar.xz": {
+      "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3.tar.xz",
+      "sha256": "48ca3aa8a9b02133356922ef4fc80200e00598c80a4ef446f7c39a459222593d",
+      "bytes": 56764640
     },
     "OpenJDK21U-jdk_x64_windows_hotspot_21.0.13_9.zip": {
       "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_windows_hotspot_21.0.13_9.zip",
@@ -245,10 +235,20 @@
       "sha256": "f9c7c46b26a6a6c08157b7bb664a241bf57cb89842a6a1e584dbfbbb009e6ecc",
       "bytes": 4927348
     },
-    "ivLyrics-7.1.6-source.zip": {
-      "url": "https://codeload.github.com/ivLis-Studio/ivLyrics/zip/5badb048185a7359ff229134c792fa12337097e1",
-      "sha256": "435b01ede96bef851bbe3ddb25090aac5e793027112949759be5fd23c98eeac4",
-      "bytes": 10497859
+    "spicetify-2.46.7-windows-x64.zip": {
+      "url": "https://github.com/spicetify/cli/releases/download/v2.46.7/spicetify-2.46.7-windows-x64.zip",
+      "sha256": "c5a723d31eae529ba13f6922a7a027124238c7f3da7edd182a73eab03c447e9e",
+      "bytes": 7812363
+    },
+    "spicetify-2.46.7-source.zip": {
+      "url": "https://codeload.github.com/spicetify/cli/zip/867df4af012a07f0b9d5c6b4bc8d7c29badb8ca9",
+      "sha256": "ed058716b35c406a60929ba3879da52bc99e7ffd23e1be36be5adc1cf7396fe9",
+      "bytes": 2202107
+    },
+    "ivLyrics-7.1.13-source.zip": {
+      "url": "https://codeload.github.com/ivLis-Studio/ivLyrics/zip/b5e377cd8099156a6423ad3cd8b2f48ce9bb2426",
+      "sha256": "79c51692ef7b321ef7b0312a9e8d0929428f849b623ac36c89bfa068f72a6ed8",
+      "bytes": 10704384
     }
   },
   "test_fixtures": {

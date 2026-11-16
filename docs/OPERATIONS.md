@@ -241,3 +241,26 @@ Spotify를 1.3.6.1921에서 1.3.8.620으로, SpotX를 `3cfbdfd`에서 `e94afec`(
 Spotify 버전을 바꾸는 것은 0.6.2 이후 처음이다. 그동안 `bootstrap.ps1`은 기존 Spotify 폴더의 버전이나 SpotX 커밋이 다르면 이 앱이 패치한 폴더여도 「기존 Spotify 하위 폴더의 소유권을 확인하지 못했습니다」로 멈추고, 폴더 삭제도 `-Recurse` 없이 호출했다. 그래서 0.9.4 이하에서 버전이 바뀐 설치본으로 업데이트하면 실패하고 이전 설치로 되돌아갔을 것이다(코드 판독, 수정 전 실행 확인은 안 함). 수정 후에는 `spotx-hangul.json`의 `App`이 `SpotifyHangul`인 폴더를 이 앱 소유로 보고 새 버전으로 교체하며, 이전 Spotify의 Spicetify 백업 상태(`spicetify-state`)도 비우고 새 원본으로 다시 만든다. 다른 내용이 든 폴더는 이전처럼 거부한다. 시도가 실패하면 설치 트랜잭션이 이전 폴더 전체를 복원한다.
 
 기존 사용자는 0.9.5로 업데이트할 때 Spotify 약 150 MB를 새로 내려받고 SpotX와 Spicetify를 다시 적용한다. Spotify 계정, 설정과 캐시는 `%APPDATA%\Spotify`에 있어 교체 대상이 아니다.
+
+## 0.9.6 구성 요소 갱신과 실행 시험 (2026-11-17)
+
+Spotify를 1.3.9.2055로, SpotX를 `d85794f`(2026-11-14)로, Spicetify를 2.46.7로, ivLyrics를 7.1.13으로, Node.js를 24.22.3으로 올렸다. Spotify 공식 주소는 2026-11-12부터 1.3.9.2055(161,195,480 바이트)를 내려주며, 미러의 같은 버전 파일과 SHA-256 `2d3bf0d7…`이 같고 Spotify AB 서명이 유효했다. SpotX 최신 커밋의 권장 버전은 1.3.10이지만 1.3.10 전체 설치 파일이 공식 주소에 없고 Spicetify 2.46.7의 Windows 지원 범위가 1.3.9까지라 고르지 않았다.
+
+SpotX `d85794f`는 패치 단계 전체를 진행 표시용 `try` 블록 안으로 옮겨 들여썼다. `build_spotx_adapter.py`는 바이너리 패치 구간의 시작 문구를 줄 머리 기준으로 찾았기 때문에 경계 오류로 멈췄고, 들여쓰기를 허용하도록 고쳤다. 공백을 무시한 어댑터 차이는 crossfade 바이너리 패치의 위치 찾기 로직과 `Stop-ConsoleStage; Pause` 호출뿐이다. 이 호출은 우리 실행기에서 `$no_pause = $true`라 실행되지 않는다.
+
+ivLyrics 7.1.13 후보는 처음에 `test_youtube_ivlyrics.cjs`의 앨범 아트 전송 시험에서 떨어졌다. 7.1.11부터 가사 전송이 `'/lyrics'` 문자열 대신 `this.LYRICS_ENDPOINT`와 출처 필드(`getSourceFields`)를 쓰기 때문이다. `youtube-ivlyrics.js`가 감싸는 `queueLyricsSend(endpoint, uri, payload, deliveryContext)` 형태는 그대로라 제품 코드는 고치지 않고, 시험이 새 구조도 인식하게 했다.
+
+7.1.11은 가사창 연결 확인을 `GET /progress`(`mode: 'cors'`)로 바꿨다. 이 PC의 `lyrics-plus-overlay.exe`는 이 요청에 405와 `access-control-allow-origin: *`를 돌려주므로 ivLyrics가 연결됨, 프로토콜 1로 판단하고 기존 방식으로 전송한다(2026-11-17 확인). 가사창이 이 머리글 없이 응답하는 버전이면 연결 안 됨으로 판단해 가사를 보내지 않는다.
+
+이 PC의 실제 설치를 0.9.5에서 0.9.6으로 올려 확인한 결과는 다음과 같다.
+
+| 항목 | 결과 |
+| --- | --- |
+| 업데이트와 실행 | 설치 종료 코드 0, Spotify 1.3.9.2055 교체, 로그인과 플레이리스트 유지, 도우미 0.9.6 응답 |
+| 가사 화면 | Spotify 곡과 YouTube 곡 모두 원문 아래 한글 발음 표시, 재생 위치에 맞춰 현재 줄 강조 |
+| 데스크톱 가사창 | Spotify 곡의 제목, 노래방식 진행, 한글 발음 표시 |
+| YouTube 링크 | 혼합 플레이리스트에서 영상 모드 1080p 재생, 진행 위치 증가 |
+| 확장 음원 | Tidal 음원 재생 중 진행 위치 증가 |
+| 메뉴 | 한글 발음 자료, 업데이트 확인(0.9.6), YouTube 관련 메뉴, 확장 관리 표시 |
+
+알려진 한계: ivLyrics 가사 화면을 한 번도 열지 않은 곡은 가사창에 발음 없는 가사만 간다. 발음이 붙은 가사는 가사 화면을 열 때 전송된다. 같은 실험을 ivLyrics 7.1.6 파일로 바꿔 넣고 반복했을 때도 9 초에 발음 없는 가사 한 번만 가고 60 초 동안 재전송이 없어, 이번 갱신으로 생긴 문제가 아니다. `youtube-player.html`의 `send`는 영상 로드 직후 `getVideoData()`가 `undefined`를 돌려주면 예외를 낸다. 0.5 초 뒤 상태 메시지는 정상이고 부모가 쓰지 않는 `command` 이벤트 하나만 빠진다(0.7.0부터 있던 코드). 콘솔의 `LyricsAddonManager.register` 오류는 마켓플레이스 애드온 "No Name's Lyrics"(원본 저장소 삭제됨)의 동기 `init()` 때문이며 7.1.13도 `addon.init().catch`를 그대로 쓴다.

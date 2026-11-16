@@ -3,6 +3,7 @@
 import hashlib
 import json
 from pathlib import Path
+import re
 from dependencies import load
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -28,8 +29,11 @@ def build():
         source, 'function Get-JsonValue {', 'function Get-SpotXResources {')
     archive = 'if ($test_spa) {' + between(
         source, 'if ($test_spa) {', '# Delete all files except "en" and "ru"')
-    binary = '$ANSI = [Text.Encoding]::GetEncoding(1251)\n$old =' + between(
-        source, '$ANSI = [Text.Encoding]::GetEncoding(1251)\n$old =', '# fix login for old versions')
+    # Since d85794f the patch steps sit indented inside a progress-stage try block.
+    starts = list(re.finditer(r'\$ANSI = \[Text\.Encoding\]::GetEncoding\(1251\)\n[ \t]*\$old =', source))
+    if len(starts) != 1 or source.count('# fix login for old versions') != 1:
+        raise ValueError('Upstream section boundary changed')
+    binary = source[starts[0].start():source.index('# fix login for old versions', starts[0].end())]
     calls = archive + '\n' + binary
     calls = '\n'.join('    throw "SpotX patch stopped before completion"' if line.strip().lower() == 'exit'
                       else line for line in calls.splitlines())

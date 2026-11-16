@@ -2162,11 +2162,27 @@
                     "to": ""
                 }
             },
+            "PlaylistToolbarOnUserPlaylists": {
+                "name": "enablePlaylistToolbarOnUserPlaylists",
+                "native_description": "Enables threshold-based playlist toolbar composition on user playlists",
+                "version": {
+                    "fr": "1.3.4",
+                    "to": ""
+                }
+            },
             "PlaylistToolbarEverywhere": {
                 "name": "enablePlaylistToolbarEverywhere",
                 "native_description": "Enable Playlist Toolbar Everywhere",
                 "version": {
                     "fr": "1.3.9",
+                    "to": "1.3.9"
+                }
+            },
+            "PlaylistToolbarOnSpotifySets": {
+                "name": "enablePlaylistToolbarOnSpotifySets",
+                "native_description": "Move Spotify-made playlist controls into the playlist toolbar",
+                "version": {
+                    "fr": "1.3.10",
                     "to": ""
                 }
             }

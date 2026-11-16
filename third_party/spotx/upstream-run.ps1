@@ -2,7 +2,7 @@
 param
 (
     [Parameter(HelpMessage = 'Latest recommended Spotify version for Windows 10+.')]
-    [string]$latest_full = "1.3.9",
+    [string]$latest_full = "1.3.10",
 
     [Parameter(HelpMessage = 'Latest supported Spotify version for Windows 7-8.1')]
     [string]$last_win7_full = "1.2.5.1006.g22820f93",
@@ -372,11 +372,203 @@ if ($psv -ge 7) {
 # add Tls12
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12;
 
+function Start-ConsoleStage {
+    param([string]$Message, [string]$Version)
+
+    $animate = $Host.Name -eq 'ConsoleHost' -and ![Console]::IsOutputRedirected
+    if ($animate -and !('SpotX.ConsoleStage' -as [type])) {
+        try {
+            Add-Type -ErrorAction Stop -TypeDefinition @'
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Threading;
+
+namespace SpotX
+{
+    public sealed class ConsoleStage : IDisposable
+    {
+        [StructLayout(LayoutKind.Sequential)]
+        private struct Coord
+        {
+            public short X;
+            public short Y;
+
+            public Coord(int x, int y)
+            {
+                X = (short)x;
+                Y = (short)y;
+            }
+        }
+
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetStdHandle(int handle);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+        private static extern bool ReadConsoleOutputCharacterW(
+            IntPtr output, [Out] char[] text, int length, Coord position, out int read);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+        private static extern bool WriteConsoleOutputCharacterW(
+            IntPtr output, string text, int length, Coord position, out int written);
+
+        private const int DotCount = 3;
+        private readonly object sync = new object();
+        private readonly IntPtr output = GetStdHandle(-11);
+        private readonly int width;
+        private readonly Coord anchor;
+        private readonly Coord dots;
+        private readonly string labelSuffix;
+        private readonly Timer timer;
+        private string frame = new string(' ', DotCount);
+        private int visibleDots;
+        private bool paused;
+        private bool stopped;
+
+        public ConsoleStage(int column, int row, int bufferWidth)
+        {
+            width = bufferWidth;
+            dots = new Coord(column, row);
+            anchor = new Coord(Math.Max(0, column - 16), row);
+            labelSuffix = Read(anchor, dots.X - anchor.X);
+            if (!String.IsNullOrWhiteSpace(labelSuffix) && Read(dots, DotCount) == frame)
+            {
+                timer = new Timer(Tick, null, Timeout.Infinite, Timeout.Infinite);
+                timer.Change(350, 350);
+            }
+        }
+
+        private string Read(Coord position, int length)
+        {
+            var text = new char[length];
+            int read;
+            return ReadConsoleOutputCharacterW(output, text, length, position, out read) && read == length
+                ? new string(text)
+                : null;
+        }
+
+        private bool Draw(string nextFrame)
+        {
+            // Leave concurrent console output alone if the status row has moved or been overwritten
+            try
+            {
+                if (Console.BufferWidth != width || Read(anchor, dots.X - anchor.X) != labelSuffix ||
+                    Read(dots, DotCount) != frame)
+                    return false;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+
+            int written;
+            if (!WriteConsoleOutputCharacterW(output, nextFrame, DotCount, dots, out written) || written != DotCount)
+                return false;
+
+            frame = nextFrame;
+            return true;
+        }
+
+        private void Tick(object state)
+        {
+            lock (sync)
+            {
+                if (stopped || paused)
+                    return;
+
+                visibleDots = (visibleDots + 1) % (DotCount + 1);
+                if (!Draw(new string('.', visibleDots).PadRight(DotCount)))
+                    Dispose();
+            }
+        }
+
+        public void Pause()
+        {
+            lock (sync)
+            {
+                if (stopped || paused || timer == null)
+                    return;
+
+                paused = true;
+                timer.Change(Timeout.Infinite, Timeout.Infinite);
+                if (frame[0] == '.' && !Draw(new string(' ', DotCount)))
+                    Dispose();
+                visibleDots = 0;
+            }
+        }
+
+        public void Resume()
+        {
+            lock (sync)
+            {
+                if (stopped || !paused || timer == null)
+                    return;
+
+                paused = false;
+                timer.Change(350, 350);
+            }
+        }
+
+        public void Dispose()
+        {
+            lock (sync)
+            {
+                if (stopped)
+                    return;
+
+                stopped = true;
+                if (timer != null)
+                {
+                    timer.Dispose();
+                    if (frame[0] == '.')
+                        Draw(new string(' ', DotCount));
+                }
+            }
+        }
+    }
+}
+'@
+        }
+        catch {
+            $animate = $false
+        }
+    }
+
+    if ($Version) {
+        Write-Host "$Message " -NoNewline
+        Write-Host $Version -ForegroundColor Green -NoNewline:$animate
+    }
+    else {
+        Write-Host $Message -NoNewline:$animate
+    }
+
+    if ($animate) {
+        $rawUI = $Host.UI.RawUI
+        try { $column = $rawUI.CursorPosition.X }
+        catch { return }
+        finally { Write-Host }
+
+        try {
+            $row = $rawUI.CursorPosition.Y - 1
+            $width = $rawUI.BufferSize.Width
+            if ($column -gt 0 -and ($column + 3) -le $width -and $row -ge 0) {
+                return [SpotX.ConsoleStage]::new($column, $row, $width)
+            }
+        }
+        catch { return }
+    }
+}
+
+function Stop-ConsoleStage {
+    if ($stageStatus) { $stageStatus.Dispose() }
+}
+
 function Stop-Script {
     param(
         [string]$Message = ($lang).StopScript
     )
 
+    Stop-ConsoleStage
     Write-Host $Message
 
     if (-not $no_pause) {
@@ -774,17 +966,30 @@ function Get-PatchesJson {
 
 
 function incorrectValue {
+    Write-Host "$($lang.Incorrect.TrimEnd()) " -ForegroundColor Red -NoNewline
+    Write-Host "$($lang.Incorrect2.TrimEnd()) " -NoNewline
 
-    Write-Host ($lang).Incorrect"" -ForegroundColor Red -NoNewline
-    Write-Host ($lang).Incorrect2"" -NoNewline
-    Start-Sleep -Milliseconds 1000
-    Write-Host "3" -NoNewline
-    Start-Sleep -Milliseconds 1000
-    Write-Host " 2" -NoNewline
-    Start-Sleep -Milliseconds 1000
-    Write-Host " 1"
-    Start-Sleep -Milliseconds 1000
-    Clear-Host
+    $consoleHost = $Host.Name -eq 'ConsoleHost'
+    $redirected = $consoleHost -and [Console]::IsOutputRedirected
+    $position = $null
+    if ($consoleHost -and !$redirected) {
+        try { $position = $Host.UI.RawUI.CursorPosition }
+        catch { }
+    }
+
+    Write-Host '3' -NoNewline:($null -ne $position)
+    foreach ($seconds in 2, 1) {
+        Start-Sleep -Seconds 1
+        if ($null -ne $position) {
+            try {
+                $Host.UI.RawUI.CursorPosition = $position
+                Write-Host $seconds -NoNewline
+            }
+            catch { $position = $null }
+        }
+    }
+    Start-Sleep -Seconds 1
+    if (!$redirected) { Clear-Host }
 }
 
 function Unlock-Folder {
@@ -1143,8 +1348,16 @@ function Invoke-DownloadMethodWithRetries {
             if ($attempt -eq 1) {
                 Write-Host ($lang).Download $FileName -ForegroundColor RED
                 Write-DownloadFailureDetails -Method $DownloadMethod -Exception $lastError
-                Write-Host ($lang).Download2`n
-                Start-Sleep -Milliseconds 5000
+                if ($stageStatus) { $stageStatus.Pause() }
+                $retryStatus = Start-ConsoleStage -Message ([string]$lang.Download2).TrimEnd('.', [char]0x2026)
+                try {
+                    Write-Host
+                    Start-Sleep -Seconds 5
+                }
+                finally {
+                    if ($retryStatus) { $retryStatus.Dispose() }
+                    if ($stageStatus) { $stageStatus.Resume() }
+                }
             }
         }
     }
@@ -4663,27 +4876,48 @@ function Find-X64CrossfadeEnabledBinaryPatchLocation {
 
     $gateContextPattern = Convert-HexStringToBytes '48 8B 0B 00 00 00 00 00 88 45 00 48 8D 4D 00 E8'
     $gateContextMask = Convert-HexStringToBytes 'FF FF FF 00 00 00 00 00 FF FF 00 FF FF FF 00 FF'
-    $extendedGateContextPattern = Convert-HexStringToBytes '48 8B 0B 00 00 00 00 00 88 45 00 48 8B 0B E8 00 00 00 00 88 45 00 48 8D 4D 00 E8'
-    $extendedGateContextMask = Convert-HexStringToBytes 'FF FF FF 00 00 00 00 00 FF FF 00 FF FF FF FF 00 00 00 00 FF FF 00 FF FF FF 00 FF'
+    $equalizerKey = [Text.Encoding]::ASCII.GetBytes("use_playback_settings_equalizer`0")
+    $equalizerKeyOffset = [BinaryScannerV3]::FindBytes($Bytes, $equalizerKey, 0)
+    $equalizerKeyRva = if ($equalizerKeyOffset -ge 0 -and
+        [BinaryScannerV3]::FindBytes($Bytes, $equalizerKey, $equalizerKeyOffset + 1) -lt 0) {
+        Get-PERvaFromOffset -Sections $PeInfo.Sections -Offset $equalizerKeyOffset
+    }
+
+    $twoReadsPattern = Convert-HexStringToBytes '48 8B 0B 00 00 00 00 00 88 45 00 48 8B 0B E8 00 00 00 00 88 45 00'
+    $twoReadsMask = Convert-HexStringToBytes 'FF FF FF 00 00 00 00 00 FF FF 00 FF FF FF FF 00 00 00 00 FF FF 00'
     $hasGateContext = {
         param([int]$Candidate)
 
-        $contextLength = if ([BinaryScannerV3]::MatchMaskedBytes($Bytes, $Candidate - 3, $gateContextPattern, $gateContextMask)) {
-            $gateContextPattern.Length
-        }
-        elseif ([BinaryScannerV3]::MatchMaskedBytes($Bytes, $Candidate - 3, $extendedGateContextPattern, $extendedGateContextMask)) {
-            $extendedGateContextPattern.Length
-        }
-        else {
+        $legacyContext = [BinaryScannerV3]::MatchMaskedBytes($Bytes, $Candidate - 3, $gateContextPattern, $gateContextMask)
+        if (-not $legacyContext -and ($null -eq $equalizerKeyRva -or
+            -not [BinaryScannerV3]::MatchMaskedBytes($Bytes, $Candidate - 3, $twoReadsPattern, $twoReadsMask))) {
             return $false
         }
+        $contextLength = if ($legacyContext) { $gateContextPattern.Length } else { $twoReadsPattern.Length }
         $candidateRva = Get-PERvaFromOffset -Sections $PeInfo.Sections -Offset $Candidate
         if ($null -eq $candidateRva) { return $false }
         $callerRange = Get-BinaryPatchFunctionRange -Bytes $Bytes -PeInfo $PeInfo -Context $context -Rva $candidateRva
-        return $callerRange.Length -eq 2 -and ([int64]$candidateRva - 3) -ge [int64]$callerRange[0] -and
-            ([int64]$candidateRva - 3 + $contextLength) -le [int64]$callerRange[1]
+        if ($callerRange.Length -ne 2 -or ($candidateRva - 3) -lt $callerRange[0] -or
+            ($candidateRva - 3 + $contextLength) -gt $callerRange[1]) { return $false }
+        if ($legacyContext) { return $true }
+
+        # Resolve the second call and look for the equalizer key inside its target function
+        $equalizerCallDelta = 11
+        $equalizerDisplacement = [BitConverter]::ToInt32($Bytes, $Candidate + $equalizerCallDelta + 1)
+        $equalizerRva = $candidateRva + $equalizerCallDelta + 5 + $equalizerDisplacement
+        $equalizerRange = Get-BinaryPatchFunctionRange -Bytes $Bytes -PeInfo $PeInfo -Context $context -Rva $equalizerRva
+        if ($equalizerRange.Length -ne 2 -or $equalizerRange[0] -ne $equalizerRva) { return $false }
+        $equalizerOffset = Get-PEOffsetFromRva -Sections $PeInfo.Sections -Rva $equalizerRva
+        $equalizerLength = $equalizerRange[1] - $equalizerRva
+        if ($null -eq $equalizerOffset -or $equalizerOffset + $equalizerLength -gt $textEnd) { return $false }
+
+        return [BinaryScannerV3]::FindRipLeaRefs(
+            $Bytes, [int]$equalizerOffset, [int]$equalizerLength, $equalizerKeyRva,
+            $context.RawPtrs, $context.RawSizes, $context.VirtualAddresses
+        ).Length -gt 0
     }
 
+    $textEnd = [int64]$context.Text.RawPtr + [int64]$context.Text.RawSize
     $originalCandidates = @([BinaryScannerV3]::FindCrossfadeGateCallsToRva(
         $Bytes,
         [int]$context.Text.RawPtr,
@@ -4696,7 +4930,6 @@ function Find-X64CrossfadeEnabledBinaryPatchLocation {
 
     $patchedBytes = Convert-HexStringToBytes 'B0 01 90 90 90'
     $patchedCandidates = @()
-    $textEnd = [int64]$context.Text.RawPtr + [int64]$context.Text.RawSize
     $searchOffset = [int]$context.Text.RawPtr
     while ($searchOffset -lt $textEnd) {
         $candidate = [BinaryScannerV3]::FindBytes($Bytes, $patchedBytes, $searchOffset)
@@ -5404,6 +5637,7 @@ function Register-SpotifyInstall {
     }
 }
 
+$stageStatus = $null
 try {
     $tempDirectory = Join-Path ([IO.Path]::GetTempPath()) ('SpotX_Temp-' + [Guid]::NewGuid().ToString('N'))
     $null = New-Item -ItemType Directory -Path $tempDirectory -ErrorAction Stop
@@ -5413,28 +5647,33 @@ try {
     $ru = $null -ne $webjsonru
 
     if ($installSpotify) {
-        Write-Host ($lang).DownSpoti"" -NoNewline
-        Write-Host $online -ForegroundColor Green
-        Write-Host ($lang).DownSpoti2`n
+        $stageStatus = Start-ConsoleStage -Message $lang.DownSpoti -Version $online
         $architecture = Get-SpotifyInstallerArchitecture -SystemArchitecture $systemArchitecture `
             -SpotifyVersion ([version]$online) -LastX86SupportedVersion $last_x86
         downloadSp -DownloadFolder $tempDirectory
+        Stop-ConsoleStage
+        Write-Host
     }
 
     # Store detection runs before /extract in the Spotify installer
     if ($uninstallStoreSpotify) {
         Kill-Spotify
         $previousProgressPreference = $ProgressPreference
+        $uninstallMessage = if ($confirm_uninstall_ms_spoti) { $lang.MsSpoti3 } else { $lang.MsSpoti4 }
         try {
             $ProgressPreference = 'SilentlyContinue'
-            if ($confirm_uninstall_ms_spoti) { Write-Host ($lang).MsSpoti3`n }
-            else { Write-Host ($lang).MsSpoti4`n }
+            $stageStatus = Start-ConsoleStage -Message ([string]$uninstallMessage).TrimEnd('.', [char]0x2026)
+            Write-Host
             Get-AppxPackage -Name SpotifyAB.SpotifyMusic | Remove-AppxPackage -ErrorAction Stop
         }
-        finally { $ProgressPreference = $previousProgressPreference }
+        finally {
+            Stop-ConsoleStage
+            $ProgressPreference = $previousProgressPreference
+        }
     }
 
     if ($installSpotify) {
+        $stageStatus = Start-ConsoleStage -Message $lang.InstallSpoti
         $preparedClient = Expand-SpotifyInstaller -DownloadFolder $tempDirectory `
             -ExpectedVersion ([version]$online) -ExpectedArchitecture $architecture
         Write-Host
@@ -5445,8 +5684,19 @@ try {
     if ($installSpotify) {
         $null = Unlock-Folder
         if ($uninstallSpotify) {
-            Write-Host ($lang).DelSpotify`n
-            Invoke-SpotifyUninstall -InstalledVersion $installedVersion
+            if ($stageStatus) { $stageStatus.Pause() }
+            $installStatus = $stageStatus
+            $stageStatus = $null
+            try {
+                $stageStatus = Start-ConsoleStage -Message ([string]$lang.DelSpotify).TrimEnd('.', [char]0x2026)
+                Write-Host
+                Invoke-SpotifyUninstall -InstalledVersion $installedVersion
+            }
+            finally {
+                Stop-ConsoleStage
+                $stageStatus = $installStatus
+            }
+            if ($stageStatus) { $stageStatus.Resume() }
         }
         $destination = [IO.Path]::GetFullPath($spotifyDirectory)
         $destinationPrefix = $destination.TrimEnd('\') + '\'
@@ -5471,6 +5721,7 @@ try {
         }
         $offline = (Get-Item -LiteralPath $spotifyExecutable -ErrorAction Stop).VersionInfo.FileVersion
         Register-SpotifyInstall -Directory $destination -InstalledVersion ([version]$offline)
+        Stop-ConsoleStage
     }
 
     if ($installSpotify -and $not_block_update -and (Test-Path -LiteralPath $exe_bak)) {
@@ -5482,10 +5733,12 @@ try {
     }
 }
 catch {
+    Stop-ConsoleStage
     Write-Warning $_.Exception.Message
     Stop-Script
 }
 finally {
+    Stop-ConsoleStage
     Remove-TempDirectory -Directory $tempDirectory
     $tempDirectory = $null
 }
@@ -5503,8 +5756,6 @@ if ($no_shortcut) {
         Write-Warning ("Desktop shortcut removal failed: {0}" -f $_.Exception.Message) -WarningAction Continue
     }
 }
-
-Write-Host ($lang).ModSpoti`n
 
 $xpui_js_patch = Join-Path (Join-Path (Join-Path $spotifyDirectory 'Apps') 'xpui') 'xpui.js'
 $test_spa = Test-Path -Path $xpui_spa_patch
@@ -5538,457 +5789,464 @@ if (!($test_js) -and !($test_spa)) {
     Stop-Script
 }
 
-if ($test_spa) {
+$stageStatus = Start-ConsoleStage -Message ([string]$lang.ModSpoti).TrimEnd('.', [char]0x2026)
+Write-Host
+try {
+    if ($test_spa) {
 
-    Add-Type -Assembly 'System.IO.Compression.FileSystem'
+        Add-Type -Assembly 'System.IO.Compression.FileSystem'
 
-    # Check for the presence of xpui.js in the xpui.spa archive
+        # Check for the presence of xpui.js in the xpui.spa archive
 
-    $archive_spa = $null
-    $xpuiJsEntry = $null
-    $v8_snapshot = $null
-    $archiveError = $null
-
-    try {
-        $archive_spa = [System.IO.Compression.ZipFile]::OpenRead($xpui_spa_patch)
-        $xpuiJsEntry = $archive_spa.GetEntry('xpui.js')
-        $xpuiSnapshotEntry = $archive_spa.GetEntry('xpui-snapshot.js')
-
-        if (($null -eq $xpuiJsEntry) -and ($null -ne $xpuiSnapshotEntry)) {
-
-            $snapshot_x64 = Join-Path $spotifyDirectory 'v8_context_snapshot.bin'
-            $snapshot_arm64 = Join-Path $spotifyDirectory 'v8_context_snapshot.arm64.bin'
-
-            $v8_snapshot = switch ($true) {
-                { Test-Path $snapshot_x64 } { $snapshot_x64; break }
-                { Test-Path $snapshot_arm64 } { $snapshot_arm64; break }
-                default { $null }
-            }
-
-            if ($v8_snapshot) {
-                $modules = Extract-WebpackModules -InputFile $v8_snapshot
-
-                $archive_spa.Dispose()
-                $archive_spa = [System.IO.Compression.ZipFile]::Open($xpui_spa_patch, [System.IO.Compression.ZipArchiveMode]::Update)
-
-                Update-ZipEntry -archive $archive_spa -entryName 'xpui-snapshot.js' -prepend $modules -newEntryName 'xpui.js' -Verbose:$VerbosePreference
-
-                Update-ZipEntry -archive $archive_spa -entryName 'xpui-snapshot.css' -newEntryName 'xpui.css' -Verbose:$VerbosePreference
-
-                Update-ZipEntry -archive $archive_spa -entryName 'index.html' -contentTransform {
-                    param($c)
-                    $c = $c -replace 'xpui-snapshot.js', 'xpui.js'
-                    $c = $c -replace 'xpui-snapshot.css', 'xpui.css'
-                    return $c
-                } -Verbose:$VerbosePreference
-            }
-
-        }
-    }
-    catch {
-        $archiveError = $_.Exception
-    }
-    finally {
-        if ($null -ne $archive_spa) {
-            $archive_spa.Dispose()
-        }
-    }
-
-    if ($archiveError) {
-        Stop-BrokenSpotifyFiles -Details "Error: $($archiveError.Message)"
-    }
-
-    if (-not $v8_snapshot -and $null -eq $xpuiJsEntry) {
-        Write-Warning "v8_context_snapshot file not found, cannot create xpui.js"
-        Stop-Script
-    }
-
-    $bak_spa = Join-Path (Join-Path $spotifyDirectory 'Apps') 'xpui.bak'
-    $test_bak_spa = Test-Path -Path $bak_spa
-
-    # Make a backup copy of xpui.spa if it is original
-    $zip = $null
-    $reader = $null
-
-    try {
-        $zip = [System.IO.Compression.ZipFile]::Open($xpui_spa_patch, 'update')
-        $entry = $zip.GetEntry('xpui.js')
-        if ($null -eq $entry) { throw "Archive entry not found: xpui.js" }
-
-        $reader = New-Object System.IO.StreamReader($entry.Open())
-        $patched_by_spotx = $reader.ReadToEnd()
-    }
-    catch {
-        Stop-BrokenSpotifyFiles -Details "Error: $($_.Exception.Message)"
-    }
-    finally {
-        if ($null -ne $reader) { $reader.Dispose() }
-        if ($null -ne $zip) { $zip.Dispose() }
-    }
-
-
-    if ($offline -ge [version]'1.2.70.253') {
-
-        $spotify_binary_bak = $dll_bak
-        $spotify_binary = $spotifyDll
-    }
-    else {
-        $spotify_binary_bak = $exe_bak
-        $spotify_binary = $spotifyExecutable
-    }
-
-    If ($patched_by_spotx -match 'patched by spotx') {
-        if ($test_bak_spa) {
-            Remove-Item $xpui_spa_patch -Recurse -Force
-            Rename-Item $bak_spa $xpui_spa_patch
-
-            if (Test-Path -Path $spotify_binary_bak) {
-                Remove-Item $spotify_binary -Recurse -Force
-                Rename-Item $spotify_binary_bak $spotify_binary
-            }
-            if ($spotify_binary_bak -eq $dll_bak) {
-
-                if (Test-Path -Path $exe_bak) {
-                    Remove-Item $spotifyExecutable -Recurse -Force
-                    Rename-Item $exe_bak $spotifyExecutable
-                }
-                else {
-                    $binary_exe_bak = [System.IO.Path]::GetFileName($exe_bak)
-                    Write-Warning ("Backup copy {0} not found. Please reinstall Spotify and run SpotX again" -f $binary_exe_bak)
-                    if (-not $no_pause) { Pause }
-                    Exit
-                }
-
-                if (Test-Path -Path $chrome_elf_bak) {
-                    Remove-Item $chrome_elf -Recurse -Force
-                    Rename-Item $chrome_elf_bak $chrome_elf
-                }
-                else {
-                    $binary_chrome_elf_bak = [System.IO.Path]::GetFileName($chrome_elf_bak)
-                    Write-Warning ("Backup copy {0} not found. Please reinstall Spotify and run SpotX again" -f $binary_chrome_elf_bak)
-                    if (-not $no_pause) { Pause }
-                    Exit
-                }
-
-            }
-        }
-        else {
-            Write-Host ($lang).NoRestore`n
-            if (-not $no_pause) { Pause }
-            Exit
-        }
-
-    }
-    Copy-Item $xpui_spa_patch $bak_spa
-
-    if ($spotify_binary_bak -eq $dll_bak) {
-        Copy-Item $spotifyExecutable $exe_bak
-        Copy-Item $chrome_elf $chrome_elf_bak
-
-    }
-
-    # Remove all languages except En and Ru from xpui.spa
-    if ($ru) {
-        $null = [Reflection.Assembly]::LoadWithPartialName('System.IO.Compression')
-        $stream = $null
-        $zip_xpui = $null
+        $archive_spa = $null
+        $xpuiJsEntry = $null
+        $v8_snapshot = $null
+        $archiveError = $null
 
         try {
-            $stream = New-Object IO.FileStream($xpui_spa_patch, [IO.FileMode]::Open)
-            $mode = [IO.Compression.ZipArchiveMode]::Update
-            $zip_xpui = New-Object IO.Compression.ZipArchive($stream, $mode)
+            $archive_spa = [System.IO.Compression.ZipFile]::OpenRead($xpui_spa_patch)
+            $xpuiJsEntry = $archive_spa.GetEntry('xpui.js')
+            $xpuiSnapshotEntry = $archive_spa.GetEntry('xpui-snapshot.js')
 
-            ($zip_xpui.Entries | Where-Object { $_.FullName -match "i18n" -and $_.FullName -inotmatch "(ru|en.json|longest)" }) | foreach { $_.Delete() }
+            if (($null -eq $xpuiJsEntry) -and ($null -ne $xpuiSnapshotEntry)) {
+
+                $snapshot_x64 = Join-Path $spotifyDirectory 'v8_context_snapshot.bin'
+                $snapshot_arm64 = Join-Path $spotifyDirectory 'v8_context_snapshot.arm64.bin'
+
+                $v8_snapshot = switch ($true) {
+                    { Test-Path $snapshot_x64 } { $snapshot_x64; break }
+                    { Test-Path $snapshot_arm64 } { $snapshot_arm64; break }
+                    default { $null }
+                }
+
+                if ($v8_snapshot) {
+                    $modules = Extract-WebpackModules -InputFile $v8_snapshot
+
+                    $archive_spa.Dispose()
+                    $archive_spa = [System.IO.Compression.ZipFile]::Open($xpui_spa_patch, [System.IO.Compression.ZipArchiveMode]::Update)
+
+                    Update-ZipEntry -archive $archive_spa -entryName 'xpui-snapshot.js' -prepend $modules -newEntryName 'xpui.js' -Verbose:$VerbosePreference
+
+                    Update-ZipEntry -archive $archive_spa -entryName 'xpui-snapshot.css' -newEntryName 'xpui.css' -Verbose:$VerbosePreference
+
+                    Update-ZipEntry -archive $archive_spa -entryName 'index.html' -contentTransform {
+                        param($c)
+                        $c = $c -replace 'xpui-snapshot.js', 'xpui.js'
+                        $c = $c -replace 'xpui-snapshot.css', 'xpui.css'
+                        return $c
+                    } -Verbose:$VerbosePreference
+                }
+
+            }
+        }
+        catch {
+            $archiveError = $_.Exception
+        }
+        finally {
+            if ($null -ne $archive_spa) {
+                $archive_spa.Dispose()
+            }
+        }
+
+        if ($archiveError) {
+            Stop-BrokenSpotifyFiles -Details "Error: $($archiveError.Message)"
+        }
+
+        if (-not $v8_snapshot -and $null -eq $xpuiJsEntry) {
+            Write-Warning "v8_context_snapshot file not found, cannot create xpui.js"
+            Stop-Script
+        }
+
+        $bak_spa = Join-Path (Join-Path $spotifyDirectory 'Apps') 'xpui.bak'
+        $test_bak_spa = Test-Path -Path $bak_spa
+
+        # Make a backup copy of xpui.spa if it is original
+        $zip = $null
+        $reader = $null
+
+        try {
+            $zip = [System.IO.Compression.ZipFile]::Open($xpui_spa_patch, 'update')
+            $entry = $zip.GetEntry('xpui.js')
+            if ($null -eq $entry) { throw "Archive entry not found: xpui.js" }
+
+            $reader = New-Object System.IO.StreamReader($entry.Open())
+            $patched_by_spotx = $reader.ReadToEnd()
         }
         catch {
             Stop-BrokenSpotifyFiles -Details "Error: $($_.Exception.Message)"
         }
         finally {
-            if ($null -ne $zip_xpui) { $zip_xpui.Dispose() }
-            if ($null -ne $stream) { $stream.Dispose() }
+            if ($null -ne $reader) { $reader.Dispose() }
+            if ($null -ne $zip) { $zip.Dispose() }
         }
-    }
 
-    # Full screen mode activation and removing "Upgrade to premium" menu, upgrade button, disabling a playlist sponsor
-    if (!($premium)) {
-        extract -counts 'one' -method 'zip' -name 'xpui.js' -helper 'OffadsonFullscreen'
-    }
 
-    # Forced exp
-    extract -counts 'one' -method 'zip' -name 'xpui.js' -helper 'ForcedExp' -add $webjson.others.byspotx.add
+        if ($offline -ge [version]'1.2.70.253') {
 
-    # Send new versions
-    if (!($sendversion_off)) {
-        $checkVersion = $resources.CheckVersion
-
-        if ($checkVersion -ne $null) {
-            injection -p $xpui_spa_patch -f "spotx-helper" -n "checkVersion.js" -c $checkVersion
+            $spotify_binary_bak = $dll_bak
+            $spotify_binary = $spotifyDll
         }
-    }
+        else {
+            $spotify_binary_bak = $exe_bak
+            $spotify_binary = $spotifyExecutable
+        }
 
-    # Hiding Ad-like sections or turn off podcasts from the homepage
-    if ($podcast_off -or $adsections_off -or $canvashome_off) {
+        If ($patched_by_spotx -match 'patched by spotx') {
+            if ($test_bak_spa) {
+                Remove-Item $xpui_spa_patch -Recurse -Force
+                Rename-Item $bak_spa $xpui_spa_patch
 
-        $section = $resources.Section
+                if (Test-Path -Path $spotify_binary_bak) {
+                    Remove-Item $spotify_binary -Recurse -Force
+                    Rename-Item $spotify_binary_bak $spotify_binary
+                }
+                if ($spotify_binary_bak -eq $dll_bak) {
 
-        if ($section -ne $null) {
+                    if (Test-Path -Path $exe_bak) {
+                        Remove-Item $spotifyExecutable -Recurse -Force
+                        Rename-Item $exe_bak $spotifyExecutable
+                    }
+                    else {
+                        $binary_exe_bak = [System.IO.Path]::GetFileName($exe_bak)
+                        Write-Warning ("Backup copy {0} not found. Please reinstall Spotify and run SpotX again" -f $binary_exe_bak)
+                        if (-not $no_pause) { Stop-ConsoleStage; Pause }
+                        Exit
+                    }
 
-            $calltype = switch ($true) {
-                ($podcast_off -and $adsections_off -and $canvashome_off) { "'all'"; break }
-                ($podcast_off -and $adsections_off) { "['podcast', 'section']"; break }
-                ($podcast_off -and $canvashome_off) { "['podcast', 'canvas']"; break }
-                ($adsections_off -and $canvashome_off) { "['section', 'canvas']"; break }
-                $podcast_off { "'podcast'"; break }
-                $adsections_off { "'section'"; break }
-                $canvashome_off { "'canvas'"; break }
-                default { $null }
+                    if (Test-Path -Path $chrome_elf_bak) {
+                        Remove-Item $chrome_elf -Recurse -Force
+                        Rename-Item $chrome_elf_bak $chrome_elf
+                    }
+                    else {
+                        $binary_chrome_elf_bak = [System.IO.Path]::GetFileName($chrome_elf_bak)
+                        Write-Warning ("Backup copy {0} not found. Please reinstall Spotify and run SpotX again" -f $binary_chrome_elf_bak)
+                        if (-not $no_pause) { Stop-ConsoleStage; Pause }
+                        Exit
+                    }
+
+                }
+            }
+            else {
+                Write-Host ($lang).NoRestore`n
+                if (-not $no_pause) { Stop-ConsoleStage; Pause }
+                Exit
             }
 
-            if (!($calltype -eq "'canvas'" -and [version]$offline -le [version]"1.2.44.405")) {
-                $section = $section -replace "sectionBlock\(data, ''\)", "sectionBlock(data, $calltype)"
-                injection -p $xpui_spa_patch -f "spotx-helper" -n "sectionBlock.js" -c $section
+        }
+        Copy-Item $xpui_spa_patch $bak_spa
+
+        if ($spotify_binary_bak -eq $dll_bak) {
+            Copy-Item $spotifyExecutable $exe_bak
+            Copy-Item $chrome_elf $chrome_elf_bak
+
+        }
+
+        # Remove all languages except En and Ru from xpui.spa
+        if ($ru) {
+            $null = [Reflection.Assembly]::LoadWithPartialName('System.IO.Compression')
+            $stream = $null
+            $zip_xpui = $null
+
+            try {
+                $stream = New-Object IO.FileStream($xpui_spa_patch, [IO.FileMode]::Open)
+                $mode = [IO.Compression.ZipArchiveMode]::Update
+                $zip_xpui = New-Object IO.Compression.ZipArchive($stream, $mode)
+
+                ($zip_xpui.Entries | Where-Object { $_.FullName -match "i18n" -and $_.FullName -inotmatch "(ru|en.json|longest)" }) | foreach { $_.Delete() }
+            }
+            catch {
+                Stop-BrokenSpotifyFiles -Details "Error: $($_.Exception.Message)"
+            }
+            finally {
+                if ($null -ne $zip_xpui) { $zip_xpui.Dispose() }
+                if ($null -ne $stream) { $stream.Dispose() }
             }
         }
 
-    }
+        # Full screen mode activation and removing "Upgrade to premium" menu, upgrade button, disabling a playlist sponsor
+        if (!($premium)) {
+            extract -counts 'one' -method 'zip' -name 'xpui.js' -helper 'OffadsonFullscreen'
+        }
 
-    # goofy History
-    if ($urlform_goofy -and $idbox_goofy) {
+        # Forced exp
+        extract -counts 'one' -method 'zip' -name 'xpui.js' -helper 'ForcedExp' -add $webjson.others.byspotx.add
 
-        $goofy = $resources.Goofy
+        # Send new versions
+        if (!($sendversion_off)) {
+            $checkVersion = $resources.CheckVersion
 
-        if ($goofy -ne $null) {
+            if ($checkVersion -ne $null) {
+                injection -p $xpui_spa_patch -f "spotx-helper" -n "checkVersion.js" -c $checkVersion
+            }
+        }
 
-            injection -p $xpui_spa_patch -f "spotx-helper" -n "goofyHistory.js" -c $goofy
+        # Hiding Ad-like sections or turn off podcasts from the homepage
+        if ($podcast_off -or $adsections_off -or $canvashome_off) {
+
+            $section = $resources.Section
+
+            if ($section -ne $null) {
+
+                $calltype = switch ($true) {
+                    ($podcast_off -and $adsections_off -and $canvashome_off) { "'all'"; break }
+                    ($podcast_off -and $adsections_off) { "['podcast', 'section']"; break }
+                    ($podcast_off -and $canvashome_off) { "['podcast', 'canvas']"; break }
+                    ($adsections_off -and $canvashome_off) { "['section', 'canvas']"; break }
+                    $podcast_off { "'podcast'"; break }
+                    $adsections_off { "'section'"; break }
+                    $canvashome_off { "'canvas'"; break }
+                    default { $null }
+                }
+
+                if (!($calltype -eq "'canvas'" -and [version]$offline -le [version]"1.2.44.405")) {
+                    $section = $section -replace "sectionBlock\(data, ''\)", "sectionBlock(data, $calltype)"
+                    injection -p $xpui_spa_patch -f "spotx-helper" -n "sectionBlock.js" -c $section
+                }
+            }
+
+        }
+
+        # goofy History
+        if ($urlform_goofy -and $idbox_goofy) {
+
+            $goofy = $resources.Goofy
+
+            if ($goofy -ne $null) {
+
+                injection -p $xpui_spa_patch -f "spotx-helper" -n "goofyHistory.js" -c $goofy
+            }
+        }
+
+        # Static color for lyrics
+        if ($lyrics_stat -and $resources.LyricsRules -and $resources.LyricsColors) {
+            $rulesContent = $resources.LyricsRules
+            $colorsContent = $resources.LyricsColors
+
+            $colorsContent = $colorsContent -replace '{{past}}', "$($webjson.others.themelyrics.theme.$lyrics_stat.pasttext)"
+            $colorsContent = $colorsContent -replace '{{current}}', "$($webjson.others.themelyrics.theme.$lyrics_stat.current)"
+            $colorsContent = $colorsContent -replace '{{next}}', "$($webjson.others.themelyrics.theme.$lyrics_stat.next)"
+            $colorsContent = $colorsContent -replace '{{hover}}', "$($webjson.others.themelyrics.theme.$lyrics_stat.hover)"
+            $colorsContent = $colorsContent -replace '{{background}}', "$($webjson.others.themelyrics.theme.$lyrics_stat.background)"
+            $colorsContent = $colorsContent -replace '{{musixmatch}}', "$($webjson.others.themelyrics.theme.$lyrics_stat.maxmatch)"
+
+            injection -p $xpui_spa_patch -f "spotx-helper/lyrics-color" -n @("rules.css", "colors.css") -c @($rulesContent, $colorsContent) -i "rules.css"
+
+        }
+        extract -counts 'one' -method 'zip' -name 'home-v2.js' -helper 'HomeV2-js'
+        extract -counts 'one' -method 'zip' -name 'xpui-pip-mini-player.js' -helper 'Fixjs'
+        extract -counts 'one' -method 'zip' -name 'xpui.js' -helper 'VariousofXpui-js'
+
+        if ([version]$offline -ge [version]"1.1.85.884" -and [version]$offline -le [version]"1.2.57.463") {
+
+            if ([version]$offline -ge [version]"1.2.45.454") { $typefile = "xpui.js" }
+
+            else { $typefile = "xpui-routes-search.js" }
+
+            extract -counts 'one' -method 'zip' -name $typefile -helper "Fixjs"
+        }
+
+
+        if ($devtools -and [version]$offline -ge [version]"1.2.35.663") {
+            extract -counts 'one' -method 'zip' -name 'xpui-routes-desktop-settings.js' -helper 'Dev'
+        }
+
+        # Hide Collaborators icon
+        if (!($hide_col_icon_off) -and !($exp_spotify)) {
+            extract -counts 'one' -method 'zip' -name 'xpui-routes-playlist.js' -helper 'Collaborators'
+        }
+
+        # Add discriptions (xpui-desktop-modals.js)
+        extract -counts 'one' -method 'zip' -name 'xpui-desktop-modals.js' -helper 'Discriptions'
+
+        # Disable Sentry
+        if ( [version]$offline -le [version]"1.2.56.502" ) {
+            $fileName = 'vendor~xpui.js'
+
+        }
+        else { $fileName = 'xpui.js' }
+
+        extract -counts 'one' -method 'zip' -name $fileName -helper 'DisableSentry'
+
+        # Minification of all *.js
+        extract -counts 'more' -name '*.js' -helper 'MinJs'
+
+        # xpui.css
+        if (!($premium)) {
+            # Hide download block
+            if ([version]$offline -ge [version]"1.2.30.1135") {
+                $css += $webjson.others.downloadquality.add
+            }
+            # Hide download icon on different pages
+            $css += $webjson.others.downloadicon.add
+            # Hide submenu item "download"
+            $css += $webjson.others.submenudownload.add
+            # Hide very high quality streaming
+            if ([version]$offline -le [version]"1.2.29.605") {
+                $css += $webjson.others.veryhighstream.add
+            }
+        }
+        # block subfeeds
+        if ($calltype -match "all" -or $calltype -match "podcast") {
+            $css += $webjson.others.block_subfeeds.add
+        }
+        # scrollbar indent fixes
+        $css += $webjson.others.'fix-scrollbar'.add
+
+        if ($null -ne $css ) { extract -counts 'one' -method 'zip' -name 'xpui.css' -add $css }
+
+        # Old UI fix
+        extract -counts 'one' -method 'zip' -name 'xpui.css' -helper "FixCss"
+
+        # Remove RTL and minification of all *.css
+        extract -counts 'more' -name '*.css' -helper 'Cssmin'
+
+        # Licenses HTML minification
+
+        $licensesFileName = if ([version]$offline -ge [version]'1.2.93') { 'ui-licenses.html' } else { 'licenses.html' }
+        extract -counts 'one' -method 'zip' -name $licensesFileName -helper 'HtmlLicMin'
+        # blank.html minification
+        extract -counts 'one' -method 'zip' -name 'blank.html' -helper 'HtmlBlank'
+
+        if ($ru) {
+            # Additional translation of the ru.json file
+            extract -counts 'more' -name '*ru.json' -helper 'RuTranslate'
+        }
+        # Minification of all *.json
+        extract -counts 'more' -name '*.json' -helper 'MinJson'
+
+        if ($patched_by_spotx.StartsWith('var __webpack_modules__={')) {
+            # Skip snapshot creation in Spicetify
+            Get-ChildItem -LiteralPath $spotifyDirectory -Filter 'v8_context_snapshot*.bin' -File |
+                Rename-Item -NewName { 'V' + $_.Name.Substring(1) } -ErrorAction Stop
         }
     }
 
-    # Static color for lyrics
-    if ($lyrics_stat -and $resources.LyricsRules -and $resources.LyricsColors) {
-        $rulesContent = $resources.LyricsRules
-        $colorsContent = $resources.LyricsColors
-
-        $colorsContent = $colorsContent -replace '{{past}}', "$($webjson.others.themelyrics.theme.$lyrics_stat.pasttext)"
-        $colorsContent = $colorsContent -replace '{{current}}', "$($webjson.others.themelyrics.theme.$lyrics_stat.current)"
-        $colorsContent = $colorsContent -replace '{{next}}', "$($webjson.others.themelyrics.theme.$lyrics_stat.next)"
-        $colorsContent = $colorsContent -replace '{{hover}}', "$($webjson.others.themelyrics.theme.$lyrics_stat.hover)"
-        $colorsContent = $colorsContent -replace '{{background}}', "$($webjson.others.themelyrics.theme.$lyrics_stat.background)"
-        $colorsContent = $colorsContent -replace '{{musixmatch}}', "$($webjson.others.themelyrics.theme.$lyrics_stat.maxmatch)"
-
-        injection -p $xpui_spa_patch -f "spotx-helper/lyrics-color" -n @("rules.css", "colors.css") -c @($rulesContent, $colorsContent) -i "rules.css"
-
-    }
-    extract -counts 'one' -method 'zip' -name 'home-v2.js' -helper 'HomeV2-js'
-    extract -counts 'one' -method 'zip' -name 'xpui-pip-mini-player.js' -helper 'Fixjs'
-    extract -counts 'one' -method 'zip' -name 'xpui.js' -helper 'VariousofXpui-js'
-
-    if ([version]$offline -ge [version]"1.1.85.884" -and [version]$offline -le [version]"1.2.57.463") {
-
-        if ([version]$offline -ge [version]"1.2.45.454") { $typefile = "xpui.js" }
-
-        else { $typefile = "xpui-routes-search.js" }
-
-        extract -counts 'one' -method 'zip' -name $typefile -helper "Fixjs"
-    }
-
-
-    if ($devtools -and [version]$offline -ge [version]"1.2.35.663") {
-        extract -counts 'one' -method 'zip' -name 'xpui-routes-desktop-settings.js' -helper 'Dev'
-    }
-
-    # Hide Collaborators icon
-    if (!($hide_col_icon_off) -and !($exp_spotify)) {
-        extract -counts 'one' -method 'zip' -name 'xpui-routes-playlist.js' -helper 'Collaborators'
-    }
-
-    # Add discriptions (xpui-desktop-modals.js)
-    extract -counts 'one' -method 'zip' -name 'xpui-desktop-modals.js' -helper 'Discriptions'
-
-    # Disable Sentry
-    if ( [version]$offline -le [version]"1.2.56.502" ) {
-        $fileName = 'vendor~xpui.js'
-
-    }
-    else { $fileName = 'xpui.js' }
-
-    extract -counts 'one' -method 'zip' -name $fileName -helper 'DisableSentry'
-
-    # Minification of all *.js
-    extract -counts 'more' -name '*.js' -helper 'MinJs'
-
-    # xpui.css
-    if (!($premium)) {
-        # Hide download block
-        if ([version]$offline -ge [version]"1.2.30.1135") {
-            $css += $webjson.others.downloadquality.add
-        }
-        # Hide download icon on different pages
-        $css += $webjson.others.downloadicon.add
-        # Hide submenu item "download"
-        $css += $webjson.others.submenudownload.add
-        # Hide very high quality streaming
-        if ([version]$offline -le [version]"1.2.29.605") {
-            $css += $webjson.others.veryhighstream.add
-        }
-    }
-    # block subfeeds
-    if ($calltype -match "all" -or $calltype -match "podcast") {
-        $css += $webjson.others.block_subfeeds.add
-    }
-    # scrollbar indent fixes
-    $css += $webjson.others.'fix-scrollbar'.add
-
-    if ($null -ne $css ) { extract -counts 'one' -method 'zip' -name 'xpui.css' -add $css }
-
-    # Old UI fix
-    extract -counts 'one' -method 'zip' -name 'xpui.css' -helper "FixCss"
-
-    # Remove RTL and minification of all *.css
-    extract -counts 'more' -name '*.css' -helper 'Cssmin'
-
-    # Licenses HTML minification
-
-    $licensesFileName = if ([version]$offline -ge [version]'1.2.93') { 'ui-licenses.html' } else { 'licenses.html' }
-    extract -counts 'one' -method 'zip' -name $licensesFileName -helper 'HtmlLicMin'
-    # blank.html minification
-    extract -counts 'one' -method 'zip' -name 'blank.html' -helper 'HtmlBlank'
-
+    # Delete all files except "en" and "ru"
     if ($ru) {
-        # Additional translation of the ru.json file
-        extract -counts 'more' -name '*ru.json' -helper 'RuTranslate'
+        $patch_lang = "$spotifyDirectory\locales"
+        Remove-Item $patch_lang -Exclude *en*, *ru* -Recurse
     }
-    # Minification of all *.json
-    extract -counts 'more' -name '*.json' -helper 'MinJson'
 
-    if ($patched_by_spotx.StartsWith('var __webpack_modules__={')) {
-        # Skip snapshot creation in Spicetify
-        Get-ChildItem -LiteralPath $spotifyDirectory -Filter 'v8_context_snapshot*.bin' -File |
-            Rename-Item -NewName { 'V' + $_.Name.Substring(1) } -ErrorAction Stop
-    }
-}
+    # Create a desktop shortcut
+    $ErrorActionPreference = 'SilentlyContinue'
 
-# Delete all files except "en" and "ru"
-if ($ru) {
-    $patch_lang = "$spotifyDirectory\locales"
-    Remove-Item $patch_lang -Exclude *en*, *ru* -Recurse
-}
-
-# Create a desktop shortcut
-$ErrorActionPreference = 'SilentlyContinue'
-
-if (!($no_shortcut)) {
-    try {
-        $desktop_folder = DesktopFolder
-        if (-not $desktop_folder) { throw 'Desktop folder was not found' }
-        $target = Join-Path $desktop_folder 'Spotify.lnk'
-        if (!(Test-Path -LiteralPath $target -ErrorAction Stop)) {
-            $WshShell = New-Object -ComObject WScript.Shell -ErrorAction Stop
-            $Shortcut = $WshShell.CreateShortcut($target)
-            $Shortcut.WorkingDirectory = $spotifyDirectory
-            $Shortcut.TargetPath = $spotifyExecutable
-            $Shortcut.Save()
+    if (!($no_shortcut)) {
+        try {
+            $desktop_folder = DesktopFolder
+            if (-not $desktop_folder) { throw 'Desktop folder was not found' }
+            $target = Join-Path $desktop_folder 'Spotify.lnk'
+            if (!(Test-Path -LiteralPath $target -ErrorAction Stop)) {
+                $WshShell = New-Object -ComObject WScript.Shell -ErrorAction Stop
+                $Shortcut = $WshShell.CreateShortcut($target)
+                $Shortcut.WorkingDirectory = $spotifyDirectory
+                $Shortcut.TargetPath = $spotifyExecutable
+                $Shortcut.Save()
+            }
+        }
+        catch {
+            Write-Warning ("Desktop shortcut creation failed: {0}" -f $_.Exception.Message) -WarningAction Continue
         }
     }
-    catch {
-        Write-Warning ("Desktop shortcut creation failed: {0}" -f $_.Exception.Message) -WarningAction Continue
-    }
-}
 
-# Create shortcut in start menu
-If (!(Test-Path $start_menu)) {
-    $source = $spotifyExecutable
-    $target = $start_menu
-    $WorkingDir = $spotifyDirectory
-    $WshShell = New-Object -comObject WScript.Shell
-    $Shortcut = $WshShell.CreateShortcut($target)
-    $Shortcut.WorkingDirectory = $WorkingDir
-    $Shortcut.TargetPath = $source
-    $Shortcut.Save()
-}
-
-$ANSI = [Text.Encoding]::GetEncoding(1251)
-$old = [IO.File]::ReadAllText($spotify_binary, $ANSI)
-
-$regex1 = $old -notmatch $webjson.others.binary.block_update.add
-$regex2 = $old -notmatch $webjson.others.binary.block_slots.add
-$regex3 = $old -notmatch $webjson.others.binary.block_slots_2.add
-$regex4 = $old -notmatch $webjson.others.binary.block_slots_3.add
-$regex5 = $old -notmatch $(
-    if ([version]$offline -gt [version]'1.2.73.474') { $webjson.others.binary.block_gabo2.add }
-    else { $webjson.others.binary.block_gabo.add }
-)
-
-if ($regex1 -and $regex2 -and $regex3 -and $regex4 -and $regex5) {
-
-    if (Test-Path -LiteralPath $spotify_binary_bak) {
-        Remove-Item $spotify_binary_bak -Recurse -Force
-        Start-Sleep -Milliseconds 150
-    }
-    copy-Item $spotify_binary $spotify_binary_bak
-}
-
-if (-not (Test-Path -LiteralPath $spotify_binary_bak)) {
-    $name_binary = [System.IO.Path]::GetFileName($spotify_binary_bak)
-    Write-Warning ("Backup copy {0} not found. Please reinstall Spotify and run SpotX again" -f $name_binary)
-    if (-not $no_pause) { Pause }
-    Exit
-}
-
-# disable signature verification
-if ($spotify_binary_bak -eq $dll_bak) {
-    Reset-Dll-Sign -FilePath $spotifyDll
-
-    $files = @("Spotify.dll", "Spotify.exe", "chrome_elf.dll")
-    Remove-Signature-FromFiles $files
-}
-
-# binary patch
-extract -counts 'exe' -helper 'Binary'
-
-if ($spotify_binary_bak -eq $dll_bak -and !$premium -and [version]$offline -ge [version]'1.2.94') {
-    $null = Set-BlockSlotsBinaryPatch -FilePath $spotifyDll
-}
-
-if ($spotify_binary_bak -eq $dll_bak -and !$premium -and [version]$offline -ge [version]'1.2.89') {
-    $null = Set-CrossfadeEnabledBinaryPatch -FilePath $spotifyDll -TargetVersion ([version]$offline)
-}
-
-# fix login for old versions
-if ([version]$offline -ge [version]"1.1.87.612" -and [version]$offline -le [version]"1.2.5.1006") {
-    $login_spa = Join-Path (Join-Path $spotifyDirectory 'Apps') 'login.spa'
-    [IO.File]::WriteAllBytes($login_spa, $resources.Login)
-}
-
-# Disable Startup client
-if ($DisableStartup) {
-    $prefsPath = Join-Path $spotifyDirectory 'prefs'
-    $keyPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
-    $keyName = "Spotify"
-
-    # delete key in registry
-    if (Get-ItemProperty -Path $keyPath -Name $keyName -ErrorAction SilentlyContinue) {
-        Remove-ItemProperty -Path $keyPath -Name $keyName -Force
+    # Create shortcut in start menu
+    If (!(Test-Path $start_menu)) {
+        $source = $spotifyExecutable
+        $target = $start_menu
+        $WorkingDir = $spotifyDirectory
+        $WshShell = New-Object -comObject WScript.Shell
+        $Shortcut = $WshShell.CreateShortcut($target)
+        $Shortcut.WorkingDirectory = $WorkingDir
+        $Shortcut.TargetPath = $source
+        $Shortcut.Save()
     }
 
-    # create new prefs
-    if (-not (Test-Path $prefsPath)) {
-        $content = @"
+    $ANSI = [Text.Encoding]::GetEncoding(1251)
+    $old = [IO.File]::ReadAllText($spotify_binary, $ANSI)
+
+    $regex1 = $old -notmatch $webjson.others.binary.block_update.add
+    $regex2 = $old -notmatch $webjson.others.binary.block_slots.add
+    $regex3 = $old -notmatch $webjson.others.binary.block_slots_2.add
+    $regex4 = $old -notmatch $webjson.others.binary.block_slots_3.add
+    $regex5 = $old -notmatch $(
+        if ([version]$offline -gt [version]'1.2.73.474') { $webjson.others.binary.block_gabo2.add }
+        else { $webjson.others.binary.block_gabo.add }
+    )
+
+    if ($regex1 -and $regex2 -and $regex3 -and $regex4 -and $regex5) {
+
+        if (Test-Path -LiteralPath $spotify_binary_bak) {
+            Remove-Item $spotify_binary_bak -Recurse -Force
+            Start-Sleep -Milliseconds 150
+        }
+        copy-Item $spotify_binary $spotify_binary_bak
+    }
+
+    if (-not (Test-Path -LiteralPath $spotify_binary_bak)) {
+        $name_binary = [System.IO.Path]::GetFileName($spotify_binary_bak)
+        Write-Warning ("Backup copy {0} not found. Please reinstall Spotify and run SpotX again" -f $name_binary)
+        if (-not $no_pause) { Stop-ConsoleStage; Pause }
+        Exit
+    }
+
+    # disable signature verification
+    if ($spotify_binary_bak -eq $dll_bak) {
+        Reset-Dll-Sign -FilePath $spotifyDll
+
+        $files = @("Spotify.dll", "Spotify.exe", "chrome_elf.dll")
+        Remove-Signature-FromFiles $files
+    }
+
+    # binary patch
+    extract -counts 'exe' -helper 'Binary'
+
+    if ($spotify_binary_bak -eq $dll_bak -and !$premium -and [version]$offline -ge [version]'1.2.94') {
+        $null = Set-BlockSlotsBinaryPatch -FilePath $spotifyDll
+    }
+
+    if ($spotify_binary_bak -eq $dll_bak -and !$premium -and [version]$offline -ge [version]'1.2.89') {
+        $null = Set-CrossfadeEnabledBinaryPatch -FilePath $spotifyDll -TargetVersion ([version]$offline)
+    }
+
+    # fix login for old versions
+    if ([version]$offline -ge [version]"1.1.87.612" -and [version]$offline -le [version]"1.2.5.1006") {
+        $login_spa = Join-Path (Join-Path $spotifyDirectory 'Apps') 'login.spa'
+        [IO.File]::WriteAllBytes($login_spa, $resources.Login)
+    }
+
+    # Disable Startup client
+    if ($DisableStartup) {
+        $prefsPath = Join-Path $spotifyDirectory 'prefs'
+        $keyPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+        $keyName = "Spotify"
+
+        # delete key in registry
+        if (Get-ItemProperty -Path $keyPath -Name $keyName -ErrorAction SilentlyContinue) {
+            Remove-ItemProperty -Path $keyPath -Name $keyName -Force
+        }
+
+        # create new prefs
+        if (-not (Test-Path $prefsPath)) {
+            $content = @"
 app.autostart-configured=true
 app.autostart-mode="off"
 "@
-        [System.IO.File]::WriteAllLines($prefsPath, $content, [System.Text.UTF8Encoding]::new($false))
-    }
-
-    # update prefs
-    else {
-        $content = [System.IO.File]::ReadAllText($prefsPath)
-        if (-not $content.EndsWith("`n")) {
-            $content += "`n"
+            [System.IO.File]::WriteAllLines($prefsPath, $content, [System.Text.UTF8Encoding]::new($false))
         }
-        $content += 'app.autostart-mode="off"'
-        [System.IO.File]::WriteAllText($prefsPath, $content, [System.Text.UTF8Encoding]::new($false))
-    }
 
+        # update prefs
+        else {
+            $content = [System.IO.File]::ReadAllText($prefsPath)
+            if (-not $content.EndsWith("`n")) {
+                $content += "`n"
+            }
+            $content += 'app.autostart-mode="off"'
+            [System.IO.File]::WriteAllText($prefsPath, $content, [System.Text.UTF8Encoding]::new($false))
+        }
+
+    }
+}
+finally {
+    Stop-ConsoleStage
 }
 
 # Start Spotify
