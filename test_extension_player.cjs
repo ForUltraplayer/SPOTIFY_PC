@@ -310,7 +310,7 @@ function fakeMediaSource(supported) {
 function harness({ answers = {}, engine = {}, remote = false, linkBusy = false, again = missing, probeStatus = 206, routes = () => undefined, platform = {}, supported = () => true } = {}) {
     const { window } = parseHTML('<!doctype html><html><head></head><body><div data-testid="now-playing-bar"><div class="playback-bar">'
         + '<div data-testid="playback-position">0:00</div><div data-testid="progress-bar"></div><div data-testid="playback-duration">3:20</div></div>'
-        + '<div class="right"><button data-testid="control-button-playpause"><svg></svg></button><div data-testid="volume-bar"></div></div></div></body></html>');
+        + '<div class="right"><button data-testid="control-button-playpause"><svg viewBox="0 0 16 16"><path d="M4 2v12l10-6z"></path></svg></button><div data-testid="volume-bar"></div></div></div></body></html>');
     const calls = [], requests = [], events = {}, timers = [], clocks = [], intervals = [], modals = [];
     const state = { playing: true, position: 0, repeat: 0, ...engine };
     class FakeAudio extends EventTarget {
@@ -401,6 +401,16 @@ test('an answer while Spotify plays is handed over in step, then the playbar, ly
     assert.deepEqual(plain(h.clocks.at(-1)), { uri: A, seconds: 42, duration: 200, playing: true });
     assert.equal(h.window.document.querySelector('[data-testid="playback-position"]').textContent, '0:42');
     assert.equal(h.Player.isPlaying(), true, 'Spicetify reports the extension audio'); assert.equal(h.Player.getProgress(), 42000);
+    const playButton = h.window.document.querySelector('[data-testid="control-button-playpause"]');
+    const pauseIcon = 'M3 2h4v12H3zM9 2h4v12H9z';
+    assert.equal(playButton.querySelector('path').getAttribute('d'), pauseIcon);
+    playButton.querySelector('svg').outerHTML = '<svg viewBox="0 0 16 16"><path d="M4 2v12l10-6z"></path></svg>';
+    playButton.setAttribute('aria-label', '재생');
+    const redrawnIcon = playButton.querySelector('path');
+    h.tick();
+    assert.equal(playButton.getAttribute('aria-label'), '일시정지');
+    assert.equal(redrawnIcon.getAttribute('d'), pauseIcon, 'Spotify can redraw the icon while the button and audio state stay the same');
+    assert.equal(playButton.querySelector('path'), redrawnIcon, 'the native icon node remains available for Spotify’s renderer');
     h.Player.togglePlay();
     assert.equal(audio.paused, true); assert.ok(!h.calls.includes('engine-toggle'), 'the engine stays paused');
     h.window.document.querySelector('[data-testid="control-button-playpause"]').dispatchEvent(new h.window.Event('click', { bubbles: true }));
@@ -408,6 +418,7 @@ test('an answer while Spotify plays is handed over in step, then the playbar, ly
     h.Player.seek(90000); assert.equal(audio.currentTime, 90);
     h.Player.back(); assert.equal(audio.currentTime, 0, 'past 3 s, previous restarts the song');
     h.cleanup();
+    assert.equal(redrawnIcon.getAttribute('d'), 'M4 2v12l10-6z', 'dispose restores the icon Spotify rendered');
     assert.deepEqual(h.calls.filter(c => Array.isArray(c) && c[0] === 'engine-seek').at(-1), ['engine-seek', 0], 'disposing gives the song back where it played');
     assert.equal(h.clocks.at(-1), null);
 });

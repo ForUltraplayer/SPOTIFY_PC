@@ -925,6 +925,7 @@ function create(host, options = {}) {
         enginePause(); intent = playing; mode = 'extension';
         transitionUntil = now() + P.transitionMs; pinUntil = transitionUntil;
         syncVolume(); audio.muted = false;
+        updateBar();
         render();
     }
 
@@ -1090,8 +1091,8 @@ function create(host, options = {}) {
 
     // ── Native playbar ──
     const rememberNode = node => {
-        if (node && !savedNodes.has(node)) savedNodes.set(node, { text: node.textContent, html: node.namespaceURI === 'http://www.w3.org/2000/svg' ? node.innerHTML : null,
-            viewBox: node.getAttribute('viewBox'), label: node.getAttribute('aria-label'), valueText: node.getAttribute('aria-valuetext'),
+        if (!savedNodes.has(node)) savedNodes.set(node, { text: node.textContent, svg: node.namespaceURI === 'http://www.w3.org/2000/svg',
+            path: node.getAttribute('d'), viewBox: node.getAttribute('viewBox'), label: node.getAttribute('aria-label'), valueText: node.getAttribute('aria-valuetext'),
             max: node.getAttribute('max'), value: node.value, style: node.getAttribute('style') });
         return node;
     };
@@ -1099,11 +1100,9 @@ function create(host, options = {}) {
     function restoreBar() {
         savedNodes.forEach((old, node) => {
             if (!node.isConnected) return;
-            if (old.html !== null) { node.innerHTML = old.html; if (old.viewBox === null) node.removeAttribute('viewBox'); else node.setAttribute('viewBox', old.viewBox); }
-            else if (node.tagName === 'INPUT') { node.max = old.max; node.value = old.value; }
-            else if (node.tagName !== 'BUTTON' && node.getAttribute('data-testid') !== 'progress-bar') node.textContent = old.text;
-            delete node.dataset.hangulExtState;
-            [['aria-label', 'label'], ['aria-valuetext', 'valueText'], ['style', 'style']].forEach(([attr, key]) => {
+            if (node.tagName === 'INPUT') { node.max = old.max; node.value = old.value; }
+            else if (!old.svg && node.tagName !== 'BUTTON' && node.getAttribute('data-testid') !== 'progress-bar') node.textContent = old.text;
+            [['d', 'path'], ['viewBox', 'viewBox'], ['aria-label', 'label'], ['aria-valuetext', 'valueText'], ['style', 'style']].forEach(([attr, key]) => {
                 if (old[key] === null) node.removeAttribute(attr); else node.setAttribute(attr, old[key]);
             });
         });
@@ -1115,13 +1114,16 @@ function create(host, options = {}) {
         const playing = !audio.paused, seconds = extSeconds(), duration = extDuration();
         const play = bar.querySelector('[data-testid="control-button-playpause"]');
         if (play) {
-            rememberNode(play); play.setAttribute('aria-label', t(playing ? 'pause' : 'play'));
-            const svg = play.querySelector('svg');
-            if (svg && play.dataset.hangulExtState !== String(playing)) {
-                rememberNode(svg); svg.setAttribute('viewBox', '0 0 16 16');
-                svg.innerHTML = playing ? '<path d="M3 2h4v12H3zM9 2h4v12H9z"/>' : '<path d="M4 2v12l10-6z"/>';
+            const label = t(playing ? 'pause' : 'play');
+            if (play.getAttribute('aria-label') !== label) rememberNode(play).setAttribute('aria-label', label);
+            // Spotify can redraw its icon without remounting the button. Check the rendered icon
+            // each time and keep the SVG nodes that Spotify's renderer owns.
+            const svg = play.querySelector('svg'), path = svg?.querySelector('path');
+            const icon = playing ? 'M3 2h4v12H3zM9 2h4v12H9z' : 'M4 2v12l10-6z';
+            if (path) {
+                if (svg.getAttribute('viewBox') !== '0 0 16 16') rememberNode(svg).setAttribute('viewBox', '0 0 16 16');
+                if (path.getAttribute('d') !== icon) rememberNode(path).setAttribute('d', icon);
             }
-            play.dataset.hangulExtState = String(playing);
         }
         const progress = bar.querySelector('.playback-bar');
         if (!progress || dragging) return;
