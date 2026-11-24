@@ -52,5 +52,31 @@ class DependenciesTest(unittest.TestCase):
             with self.assertRaises(ValueError): stage('spicetify', 'v0.0.1', Path('unused'))
             api.assert_not_called()
 
+    def test_manifest_enforces_max_version(self):
+        data = copy.deepcopy(load())
+        with tempfile.TemporaryDirectory() as area:
+            path = Path(area, 'components.json')
+            data['components']['ivlyrics']['version'] = '7.1.18'
+            path.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, 'license limit'): load(path)
+            data['components']['ivlyrics']['version'] = '7.1.17'
+            path.write_text(json.dumps(data))
+            self.assertEqual('7.1.17', load(path)['components']['ivlyrics']['version'])
+
+    def test_check_blocks_release_above_max_version(self):
+        data = {'components': {'ivlyrics': {'repository': 'a/b', 'version': '7.1.14', 'max_version': '7.1.17', 'max_version_reason': 'r'}}}
+        blocked = check(data, get=lambda _: {'tag_name': 'v7.1.18', 'html_url': 'u'})['components'][0]
+        self.assertEqual('license-blocked', blocked['status'])
+        self.assertEqual('7.1.17', blocked['max_version'])
+        self.assertEqual('r', blocked['reason'])
+        allowed = check(data, get=lambda _: {'tag_name': 'v7.1.17', 'html_url': 'u'})['components'][0]
+        self.assertEqual('candidate', allowed['status'])
+        self.assertNotIn('max_version', allowed)
+
+    def test_license_blocked_candidate_is_rejected_before_network_access(self):
+        with patch('upstream_updates.api') as api:
+            with self.assertRaisesRegex(ValueError, 'license limit'): stage('ivlyrics', 'v7.1.18', Path('unused'))
+            api.assert_not_called()
+
 
 if __name__ == '__main__': unittest.main()

@@ -29,6 +29,19 @@ def fence(text, limit):
 def report(row, item, get=api):
     """(title prefix, title, body) for one component whose upstream moved."""
     name = NAMES[row['component']]
+    if row.get('status') == 'license-blocked':
+        title = '라이선스 상한: '+name+' '+row['max_version']+' 이후 버전은 반영 불가'
+        current = item.get('version') or row.get('current', '')
+        latest = row['latest']+(' ('+row['url']+')' if row.get('url') else '')
+        text = ('**'+name+'** 최신 원본 버전 '+row['latest']+' 확인 — 라이선스 상한 '+row['max_version']+' 초과\n\n'
+                '| 항목 | 내용 |\n| --- | --- |\n'
+                +('| 현재 버전 | '+current+' |\n' if current else '')
+                +'| 라이선스 상한 | '+row['max_version']+' |\n'
+                +'| 최신 원본 | '+latest+' |\n'
+                +'| 사유 | '+row['reason']+' |\n\n'
+                '자동 스테이징과 초안 릴리스는 라이선스 상한을 넘는 버전을 거부한다. '
+                '원본 라이선스가 바뀌지 않는 한 배포판은 현재 버전으로 유지한다.\n')
+        return title, title, text
     if row['component'] == 'spotify':
         return ('원본 업데이트: Spotify ', '원본 업데이트: Spotify 설치 파일 '+str(row['bytes'])+' 바이트',
                 '공식 설치 파일의 크기가 '+str(item['bytes'])+' 바이트에서 '+str(row['bytes'])+' 바이트로 바뀌었다. '
@@ -71,7 +84,7 @@ def publish(prefix, title, text, run=gh):
 
 def main():
     data = load()
-    rows = [row for row in check(data)['components'] if row['status'] == 'candidate' and row['component'] in NAMES]
+    rows = [row for row in check(data)['components'] if row['status'] in ('candidate', 'license-blocked') and row['component'] in NAMES]
     if rows: gh('label', 'create', LABEL, '--repo', REPO, '--color', '0E8A16', '--description', '원본 구성 요소 변경 알림', '--force')
     for row in rows:
         prefix, title, text = report(row, data['components'][row['component']])

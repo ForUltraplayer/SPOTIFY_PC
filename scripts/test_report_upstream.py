@@ -53,6 +53,18 @@ class ReportUpstreamTest(unittest.TestCase):
         # A closed older issue is not reopened; the new version gets its own issue.
         self.assertEqual('created', self.run_publish([{'number': 1, 'title': '원본 업데이트: SpotX aaaaaaa', 'state': 'CLOSED'}])[0])
 
+    def test_license_blocked_report_uses_fixed_title_and_explains_limit(self):
+        row = {'component': 'ivlyrics', 'status': 'license-blocked', 'current': '7.1.14', 'latest': '7.1.18',
+               'max_version': '7.1.17', 'reason': 'Source-Available License 1.0',
+               'url': 'https://github.com/ivLis-Studio/ivLyrics/releases/tag/v7.1.18'}
+        prefix, title, text = report_upstream.report(row, {'repository': 'ivLis-Studio/ivLyrics', 'version': '7.1.14'},
+                                                     get=lambda _: self.fail('no network expected'))
+        expected = '라이선스 상한: ivLyrics 7.1.17 이후 버전은 반영 불가'
+        self.assertEqual((expected, expected), (prefix, title))
+        self.assertIn('7.1.18', text)
+        self.assertIn('7.1.17', text)
+        self.assertIn('Source-Available License 1.0', text)
+
 
 if __name__ == '__main__':
     unittest.main()

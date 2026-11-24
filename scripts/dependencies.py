@@ -24,6 +24,9 @@ def load(path=None):
         for field in ('artifact', 'source_artifact'):
             if field in component and component[field] not in data['artifacts']:
                 raise ValueError('Component references an unknown artifact')
+    for name, component in data['components'].items():
+        if 'max_version' in component and tuple(map(int, component['version'].split('.'))) > tuple(map(int, component['max_version'].split('.'))):
+            raise ValueError('Component version exceeds its license limit: '+name+' '+component['version']+' > '+component['max_version'])
     return data
 
 

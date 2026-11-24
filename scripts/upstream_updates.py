@@ -41,6 +41,8 @@ def check(data, get=api, head=None):
                 url = latest['html_url']
             result = {'component': name, 'current': current, 'latest': version,
                       'status': 'current' if current == version else 'candidate', 'url': url}
+            if item.get('track') != 'commit' and 'max_version' in item and tuple(map(int, version.split('.'))) > tuple(map(int, item['max_version'].split('.'))):
+                result.update(status='license-blocked', max_version=item['max_version'], reason=item.get('max_version_reason', ''))
             if item.get('watch_prereleases'):
                 beta = next((r for r in get(repo+'/releases?per_page=20') if r['prerelease'] and not r['draft']), None)
                 if beta: result['beta'] = {'tag': beta['tag_name'], 'url': beta['html_url']}
@@ -85,6 +87,8 @@ def stage(component, tag, output):
     version = tag.removeprefix('v')
     if tuple(map(int, version.split('.'))) <= tuple(map(int, item['version'].split('.'))):
         raise ValueError('Candidate must be newer than the selected version')
+    if 'max_version' in item and tuple(map(int, version.split('.'))) > tuple(map(int, item['max_version'].split('.'))):
+        raise ValueError('Candidate exceeds license limit: '+component+' '+version+' > '+item['max_version'])
     release = api(repo+'/releases/tags/'+tag)
     if release['draft'] or release['prerelease']: raise ValueError('Not a stable release')
     revision = api(repo+'/commits/'+tag)['sha']
