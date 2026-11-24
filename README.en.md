@@ -96,7 +96,7 @@ See [YouTube integration](docs/YOUTUBE_LINKS.md) and [operations](docs/OPERATION
 - 0.9.3: fixed shuffle in mixed lists: they follow Spotify's shuffle setting and play every song once before shuffling again. Smart Shuffle only shuffles a mixed list's own songs, with a one-time notice
 - 0.9.2: ivLyrics 7.1.2
 - 0.9.7: ivLyrics 7.1.14. Fixed the Spotify playbar showing a paused state while an extension is playing
-- 0.9.8: ivLyrics 7.1.17 (its last LGPL-2.1 release) and yt-dlp 2026.11.23. After the ivLyrics license change, no later ivLyrics version is bundled
+- 0.9.8: ivLyrics 7.1.17 (last LGPL-2.1 release) and yt-dlp 2026.11.23; later ivLyrics versions not bundled due to the license change
 
 </details>
 
