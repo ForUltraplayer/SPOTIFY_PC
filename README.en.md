@@ -4,11 +4,11 @@
 
 Shows the Korean (Hangul) pronunciation of Japanese songs in the Spotify desktop lyrics view. Pronunciation is pulled from Haneum and Namuwiki and matched line by line against Spotify's lyrics. YouTube links can also play in the same playlists as Spotify tracks.
 
-Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Public version: 0.9.8.
+Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics). Public version: 0.9.9.
 
 > An unofficial hobby project. Maintenance and updates are not guaranteed, so please read the [Disclaimer](#disclaimer) first.
 
-**[⬇ Download (v0.9.8)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.9.8)** · [Release history](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)
+**[⬇ Download (v0.9.9)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.9.9)** · [Release history](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)
 
 > From 0.9.0 the app is called **Spotify-ex**. The update recreates the desktop and Start menu shortcuts under the new name, but icons pinned to the taskbar or Start must be pinned again from the new **Spotify-ex** shortcut.
 
@@ -16,7 +16,7 @@ Built on [SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://
 
 No need to install Spotify, SpotX or Python first. The installer includes Python and Node.
 
-1. Download and run `SpotifyHangul-0.9.8-Setup.exe`.
+1. Download and run `SpotifyHangul-0.9.9-Setup.exe`.
 2. Pick an install folder (default: `%LOCALAPPDATA%\Programs\SpotifyHangul`).
 3. The installer downloads the official Spotify files (~150 MB).
 
@@ -97,6 +97,7 @@ See [YouTube integration](docs/YOUTUBE_LINKS.md) and [operations](docs/OPERATION
 - 0.9.2: ivLyrics 7.1.2
 - 0.9.7: ivLyrics 7.1.14. Fixed the Spotify playbar showing a paused state while an extension is playing
 - 0.9.8: ivLyrics 7.1.17 (last LGPL-2.1 release) and yt-dlp 2026.11.23; later ivLyrics versions not bundled due to the license change
+- 0.9.9: Better Hangul reading lookup: readings written with the long-vowel mark (ー), "Title(Artist)" documents first, titles without a bracketed suffix, romanized titles (e.g. Gira Gira) matched against the artist's song list, older automatic readings looked up once more
 
 </details>
 
@@ -109,7 +110,7 @@ The original overlay repository does not declare a license. See [THIRD_PARTY_NOT
 ## Update / Uninstall
 
 - **Automatic updates**: the shortcut checks for new versions when launched, at least 4 hours after the previous check. If one is found it asks first; on Yes it downloads, closes Spotify, installs, and relaunches. The profile menu entry 「업데이트 확인」 checks right away.
-- **Manual install / update**: close Spotify and the overlay, then run `SpotifyHangul-0.9.8-Setup.exe` into the same folder.
+- **Manual install / update**: close Spotify and the overlay, then run `SpotifyHangul-0.9.9-Setup.exe` into the same folder.
 - **Uninstall**: Windows Settings > Apps > Installed apps > **Spotify-ex**. Your existing Spotify and pronunciation cache are kept.
 
 Spotify's own auto-update is blocked to keep the patches. New Spotify versions come with new installer releases.

@@ -5,8 +5,9 @@ import json
 import unittest
 import threading
 from pathlib import Path
-from bridge import (LyricDocument, extract_pairs, align_lines, match_pairs, Reader, allowed_url,
-                    pykakasi, monitor_lifetime, title_candidates, lyric_search_queries, HaneumDocument, SupersededLookup)
+from bridge import (MATCHING_VERSION, LyricDocument, extract_pairs, align_lines, match_pairs, Reader, allowed_url,
+                    pykakasi, monitor_lifetime, title_candidates, lyric_search_queries, HaneumDocument, SupersededLookup,
+                    title_match_key)
 from phonetics import kana_to_hangul, japanese_to_hangul
 import urllib.parse
 from unittest.mock import Mock, MagicMock, patch
@@ -292,6 +293,34 @@ class ReaderTests(unittest.TestCase):
         document.feed(HTML.replace("月", "<ruby>月<rt>つき</rt></ruby>").replace("<br>", "<a href='#fn-1'>[1]</a><br>"))
         self.assertEqual(extract_pairs(document), PAIRS)
 
+    def test_long_vowel_mark_in_reading_and_meaning_keeps_the_row(self):
+        document = LyricDocument()
+        document.feed('<p>伸びた爪と高層ビルを<br>노비타 츠메토 코ー소ー비루오<br>길게 자란 손톱과 고층빌딩을</p>'
+                      '<p>歌いたい<br>우타이타이<br>「네ー에」</p>')
+        # The author's ー stays in the displayed reading.
+        self.assertEqual(extract_pairs(document), [('伸びた爪と高層ビルを', '노비타 츠메토 코ー소ー비루오'),
+                                                   ('歌いたい', '우타이타이')])
+
+    def test_kana_reading_is_still_rejected(self):
+        document = LyricDocument()
+        document.feed('<p>歌いたい<br>うたいたい 우타<br>노래하고 싶어</p>'
+                      '<p>歌いたい<br>우타이타이<br>うたいたい 노래</p>')
+        self.assertEqual(extract_pairs(document), [])
+
+    def test_unrecognised_bracket_suffix_also_tries_the_base_title(self):
+        candidates = title_candidates('モニタリング (セカイver.)', 'ワンダーランズ×ショウタイム')
+        self.assertEqual(candidates[0], 'モニタリング (セカイver.)')
+        self.assertIn('モニタリング', candidates[:3])
+
+    @unittest.skipUnless(pykakasi, 'pykakasi is required')
+    def test_romanized_spotify_titles_share_a_key_with_their_document_names(self):
+        # Real Spotify names (Ado, ZUTOMAYO); doubled letters and long vowels must collapse on both sides.
+        for title, document in [('Gira Gira', 'ギラギラ'), ('Seigi', '正義'), ('Konnakoto Soudou', 'こんなこと騒動'),
+                                ('Ashura-chan', '阿修羅ちゃん')]:
+            with self.subTest(title=title):
+                self.assertEqual(title_match_key(title), title_match_key(document))
+        self.assertEqual(title_match_key('Kettobashita'), title_match_key('Ketobashita'))
+
     def test_translation_only_is_not_a_pronunciation(self):
         document = LyricDocument()
         document.feed("".join(f"<p>{original}<br>한국어 해석입니다</p>" for original, _ in PAIRS))
@@ -367,8 +396,10 @@ class ReaderTests(unittest.TestCase):
 
     def test_bilingual_spotify_title_uses_japanese_document_name(self):
         reader = Reader('unused-test-state', lambda _: ('<html></html>', 'https://namu.wiki/'))
+        bare = 'https://namu.wiki/w/%E3%83%94%E3%83%BC%E3%82%B9%E3%82%B5%E3%82%A4%E3%83%B3'
         first = next(reader.candidates('ピースサイン - Peace Sign', 'Kenshi Yonezu'))
-        self.assertTrue(first.endswith('%E3%83%94%E3%83%BC%E3%82%B9%E3%82%B5%E3%82%A4%E3%83%B3'))
+        self.assertTrue(first.startswith(bare + '%28'))
+        self.assertIn(bare, reader.candidates('ピースサイン - Peace Sign', 'Kenshi Yonezu'))
 
     def test_cover_titles_keep_the_song_and_remove_performer_metadata(self):
         cases = [
@@ -395,11 +426,13 @@ class ReaderTests(unittest.TestCase):
         calls = []
         def fetch(url):
             calls.append(url)
+            if url.startswith('https://namu.wiki/w/Test%20Song%28'):
+                raise OSError('no Title(Artist) document')
             return HTML, url
         with tempfile.TemporaryDirectory() as directory:
             result = Reader(directory, fetch).resolve(dict(title='Test Song (Original Artist cover)', artist='Cover Artist', text=TEXT))
         self.assertTrue(result['valid'])
-        self.assertTrue(any(url.endswith('/Test%20Song') for url in calls))
+        self.assertIn('https://namu.wiki/w/Test%20Song', calls)
         self.assertEqual(result['artist'], 'Cover Artist')
         self.assertEqual(result['phonetic'], [reading for _, reading in PAIRS])
 
@@ -431,12 +464,14 @@ class ReaderTests(unittest.TestCase):
         calls = []
         def fetch(url):
             calls.append(url)
+            if '%28Other' in url:
+                raise OSError('missing')
             if url.endswith('/TestSong'):
                 return '<a href="/w/TestSong(OriginalArtist)">동명의 원곡</a>', url
             return HTML, url
         with tempfile.TemporaryDirectory() as directory:
             result = Reader(directory, fetch).resolve(dict(title='TestSong (cover)', artist='Other Singer', text=TEXT))
-        self.assertEqual(len([url for url in calls if url.startswith('https://namu.wiki/')]), 2)
+        self.assertEqual(len([url for url in calls if url.startswith('https://namu.wiki/')]), 3)
         self.assertTrue(result['source_url'].endswith('/TestSong(OriginalArtist)'))
         self.assertEqual(result['matched'], 5)
 
@@ -485,7 +520,7 @@ class ReaderTests(unittest.TestCase):
             for _ in range(2):
                 with self.assertRaises(LookupError):
                     reader.resolve(dict(title='test', artist='artist', text=TEXT))
-            self.assertEqual(len(calls), 4)  # Haneum, direct title, title search, body-title search; first request only.
+            self.assertEqual(len(calls), 6)  # Title(Artist), direct title, artist document, Haneum, title search, body-title search; first request only.
 
     def test_original_title_in_body_finds_translated_korean_document_and_learns_alias(self):
         calls = []
@@ -523,6 +558,38 @@ class ReaderTests(unittest.TestCase):
             (Path(directory) / 'aliases.json').write_text(json.dumps({key: {
                 'source_url': 'https://namu.wiki/w/Stale', 'checked_at': 1}}), encoding='utf-8')
             self.assertFalse(next(Reader(directory, reader.fetcher).candidates('Test', 'Artist')).endswith('/Stale'))
+
+    def artist_page_fetcher(self, links, calls):
+        def fetch(url):
+            calls.append(url)
+            if url == 'https://namu.wiki/w/Ado':
+                return ''.join(f'<a href="{link}">x</a>' for link in links), url
+            if urllib.parse.unquote(url).startswith('https://namu.wiki/w/ギラギラ'):
+                return HTML, url
+            raise OSError('not found')
+        return fetch
+
+    def test_romanized_title_finds_song_document_through_artist_document(self):
+        calls = []
+        fetch = self.artist_page_fetcher(['/w/%E3%82%AE%E3%83%A9%E3%82%AE%E3%83%A9', '/w/Unrelated', '/w/%EC%9D%8C%EC%95%85'], calls)
+        with tempfile.TemporaryDirectory() as directory:
+            result = Reader(directory, fetch).resolve(dict(title='Gira Gira', artist='Ado', text=TEXT))
+        self.assertEqual(urllib.parse.unquote(result['source_url']), 'https://namu.wiki/w/ギラギラ')
+        self.assertEqual(result['phonetic'], [reading for _, reading in PAIRS])
+        self.assertNotIn('https://namu.wiki/w/Unrelated', calls)
+
+    def test_japanese_title_does_not_fetch_artist_document(self):
+        calls = []
+        fetch = self.artist_page_fetcher(['/w/%E3%82%AE%E3%83%A9%E3%82%AE%E3%83%A9'], calls)
+        list(Reader(tempfile.gettempdir(), fetch).candidates('ギラギラ', 'Ado'))
+        self.assertNotIn('https://namu.wiki/w/Ado', calls)
+
+    def test_low_scoring_artist_document_link_is_not_requested(self):
+        calls = []
+        fetch = self.artist_page_fetcher(['/w/%E3%82%AE%E3%83%A9%E3%82%AE%E3%83%A9', '/w/%E5%A4%9C%E3%81%AE%E3%83%94%E3%82%A8%E3%83%AD'], calls)
+        urls = list(Reader(tempfile.gettempdir(), fetch).candidates('Gira Gira', 'Ado'))
+        self.assertIn('https://namu.wiki/w/%E3%82%AE%E3%83%A9%E3%82%AE%E3%83%A9', urls)
+        self.assertNotIn('https://namu.wiki/w/%E5%A4%9C%E3%81%AE%E3%83%94%E3%82%A8%E3%83%AD', urls)
 
     def test_haneum_paragraph_order_and_meaning_validation(self):
         document = HaneumDocument()
@@ -594,6 +661,26 @@ class ReaderTests(unittest.TestCase):
                 reader.resolve(params)
 
     @unittest.skipUnless(pykakasi, 'Local dictionary is required')
+    def test_not_found_automatic_result_carries_the_matching_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            reader = Reader(directory, lambda url: ('<html>자료 없음</html>', url))
+            result = reader.resolve(dict(title='Test', artist='Artist', text=TEXT, automatic_fallback=True))
+        self.assertEqual(result['reading_kind'], 'automatic')
+        self.assertEqual(result['matching_version'], MATCHING_VERSION)
+
+    def test_title_with_artist_document_is_tried_before_the_bare_title(self):
+        requested = []
+        def fetch(url):
+            requested.append(url)
+            raise OSError('missing')
+        with tempfile.TemporaryDirectory() as directory:
+            reader = Reader(directory, fetch)
+            with self.assertRaises(LookupError):
+                reader.resolve(dict(title='MAGIC', artist='Ado', text=TEXT))
+        self.assertIn('https://namu.wiki/w/MAGIC%28Ado%29', requested)
+        self.assertLess(requested.index('https://namu.wiki/w/MAGIC%28Ado%29'), requested.index('https://namu.wiki/w/MAGIC'))
+
+    @unittest.skipUnless(pykakasi, 'Local dictionary is required')
     def test_automatic_missing_rows_never_overwrite_authored_cache(self):
         text = TEXT + '\n' + TEXT + '\n新しい世界'
         with tempfile.TemporaryDirectory() as directory:
@@ -649,7 +736,7 @@ class ReaderTests(unittest.TestCase):
         entered, proceed = threading.Event(), threading.Event()
         outcome = []
         def fetch(url):
-            if url.endswith('/Old'):
+            if url.startswith('https://namu.wiki/w/Old'):
                 entered.set()
                 if not proceed.wait(2):
                     raise AssertionError('test synchronization timed out')
@@ -707,6 +794,9 @@ class ReaderTests(unittest.TestCase):
             second = reader.resolve(params)
             self.assertTrue(second['refresh_failed'])
             self.assertEqual(first['phonetic'], second['phonetic'])
+            # The client keeps a response checked under the current rules instead of looking it up on every play.
+            self.assertEqual(second['matching_version'], MATCHING_VERSION)
+            self.assertNotIn('matching_version', record)
 
     def test_japanese_alias_follows_observed_hangul_redirect_name(self):
         calls = []
@@ -714,6 +804,8 @@ class ReaderTests(unittest.TestCase):
             calls.append(url)
             if '/songs?' in url:
                 return '<html></html>', url
+            if url.endswith(urllib.parse.quote('別名(Cover Artist)', safe='')):
+                raise OSError('missing')
             if url.endswith('/' + urllib.parse.quote('別名')):
                 return '<a href="/w/한글제목(원곡)">원곡</a>', 'https://namu.wiki/w/한글제목?from=別名'
             return HTML, url

@@ -360,7 +360,7 @@ test('default request uses authored readings and does not enable automatic gener
 });
 
 test('authored cache with a missing line is retried only when automatic fallback is enabled', async () => {
-    const record = { phonetic: ['기존 발음', '(발음 자료 없음)'], hangulReading: { matching_version: '0.3.1' } };
+    const record = { phonetic: ['기존 발음', '(발음 자료 없음)'], hangulReading: { matching_version: '0.3.2' } };
     const cache = loadExtension(record);
     assert.ok(await cache.getTranslation('test', 'ko', true, 'web-hangul'));
     cache.harness.values.set('ivLyrics:hangul-web:automatic-fallback', 'true');
@@ -368,6 +368,17 @@ test('authored cache with a missing line is retried only when automatic fallback
     const other = loadExtension({ phonetic: ['다른 제공자의 발음', '(발음 자료 없음)'] });
     other.harness.values.set('ivLyrics:hangul-web:automatic-fallback', 'true');
     assert.ok(await other.getTranslation('test', 'ko', true, 'other-provider'));
+});
+
+test('cached all-automatic readings from older matching rules are looked up once more', async () => {
+    const automaticRecord = version => ({ phonetic: ['츠키노미치'], hangulReading: {
+        generated_lines: [0], phonetics_version: '2', ...(version && { matching_version: version }) } });
+    for (const [version, kept] of [[undefined, false], ['0.3.1', false], ['0.3.2', true]]) {
+        const cache = loadExtension(automaticRecord(version));
+        cache.harness.values.set('ivLyrics:hangul-web:automatic-fallback', 'true');
+        const result = await cache.getTranslation('test', 'ko', true, 'web-hangul');
+        assert.equal(result !== null, kept, `matching_version ${version}`);
+    }
 });
 
 test('partial results from an older matcher are retried without deleting other providers', async () => {

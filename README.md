@@ -4,11 +4,11 @@
 
 Spotify 데스크톱 가사 화면에 일본어 노래의 한글 발음을 같이 띄워 줍니다. 한음, 나무위키에 올라와 있는 한글 발음을 가져와 Spotify 가사와 줄 단위로 맞춥니다. YouTube 링크도 Spotify 곡과 같은 목록에서 재생할 수 있습니다.
 
-[SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) 기반이고, 현재 공개 버전은 0.9.8입니다.
+[SpotX](https://github.com/SpotX-Official/SpotX) + [Spicetify](https://github.com/spicetify/cli) + [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) 기반이고, 현재 공개 버전은 0.9.9입니다.
 
 > 개인이 취미로 만든 비공식 프로젝트입니다. 유지보수와 업데이트를 보장하지 않으니 [면책](#면책) 내용을 먼저 읽어 주세요.
 
-**[⬇ 다운로드 (v0.9.8)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.9.8)** · [버전별 변경 내역](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)
+**[⬇ 다운로드 (v0.9.9)](https://github.com/ForUltraplayer/SPOTIFY_PC/releases/tag/v0.9.9)** · [버전별 변경 내역](https://github.com/ForUltraplayer/SPOTIFY_PC/releases)
 
 > 0.9.0부터 앱 이름이 **Spotify-ex**로 바뀌었습니다. 바탕화면과 시작 메뉴의 바로가기는 업데이트 때 새로 만들어지지만, 작업 표시줄이나 시작 화면에 고정한 아이콘은 새 **Spotify-ex** 바로가기로 다시 고정해 주세요.
 
@@ -16,7 +16,7 @@ Spotify 데스크톱 가사 화면에 일본어 노래의 한글 발음을 같�
 
 Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다. 설치 파일에 Python과 Node가 들어 있습니다.
 
-1. `SpotifyHangul-0.9.8-Setup.exe`를 받아 실행합니다.
+1. `SpotifyHangul-0.9.9-Setup.exe`를 받아 실행합니다.
 2. 설치 폴더를 고릅니다. 기본값은 `%LOCALAPPDATA%\Programs\SpotifyHangul`입니다.
 3. 설치 중에 공식 Spotify 파일(약 150 MB)을 내려받습니다.
 
@@ -97,6 +97,7 @@ Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다. 설치 파일�
 - 0.9.2: ivLyrics 7.1.2 적용
 - 0.9.7: ivLyrics 7.1.14 적용. 확장 음원으로 전환한 뒤 하단 재생바가 실제 재생 상태를 표시하도록 수정
 - 0.9.8: ivLyrics 7.1.17(마지막 LGPL-2.1 릴리스)과 yt-dlp 2026.11.23 적용, 라이선스 변경으로 이후 ivLyrics 버전 미포함
+- 0.9.9: 한글 발음 자료 조회 개선. 장음 기호(ー)가 든 발음 인식, 「제목(가수)」 문서 우선 조회, 괄호 꼬리표 제외 제목 조회, 로마자 제목(예: Gira Gira)과 가수 문서 곡명 대조, 예전 자동 발음 결과 1회 재조회
 
 </details>
 
@@ -109,7 +110,7 @@ Spotify, SpotX, Python을 미리 깔아 둘 필요 없습니다. 설치 파일�
 ## 업데이트 / 제거
 
 - **자동 업데이트**: 바로가기로 실행하면 새 버전을 확인합니다 (마지막 확인에서 4 시간 이후 재조회). 새 버전이 있으면 업데이트할지 묻고, 「예」를 누르면 내려받은 뒤 Spotify를 닫고 설치해 다시 실행합니다. 프로필 메뉴의 「업데이트 확인」으로 바로 확인할 수도 있습니다.
-- **직접 설치 / 업데이트**: Spotify와 가사창을 종료하고 `SpotifyHangul-0.9.8-Setup.exe`를 같은 폴더에 다시 설치합니다.
+- **직접 설치 / 업데이트**: Spotify와 가사창을 종료하고 `SpotifyHangul-0.9.9-Setup.exe`를 같은 폴더에 다시 설치합니다.
 - **제거**: Windows 설정 > 앱 > 설치된 앱에서 **Spotify-ex**를 제거합니다. 기존 Spotify와 발음 캐시는 남습니다.
 
 통합 Spotify 자체의 자동 업데이트는 패치 유지를 위해 막아 둡니다. Spotify 버전은 새 설치본으로 올라갑니다.
